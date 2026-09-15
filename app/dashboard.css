@@ -1,0 +1,149 @@
+.dashboard-theme {
+  --dashboard-title-size: 0.875rem;
+  --dashboard-title-weight: 600;
+  --dashboard-meta-size: 0.75rem;
+  --dashboard-motion-fast: 140ms;
+  --dashboard-motion-base: 180ms;
+  --dashboard-motion-slow: 220ms;
+  --dashboard-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --dashboard-focus-ring: rgba(var(--river-rgb), 0.34);
+  --dashboard-z-content: 0;
+  --dashboard-z-sticky: 20;
+  --dashboard-z-dropdown: 30;
+  --dashboard-z-popover: 40;
+  --dashboard-z-backdrop: 80;
+  --dashboard-z-dialog: 90;
+  --dashboard-z-notification: 110;
+}
+
+.dashboard-panel-title {
+  color: var(--quiet);
+  font-size: var(--dashboard-title-size);
+  font-weight: var(--dashboard-title-weight);
+  line-height: 1.35;
+}
+
+.dashboard-meta {
+  color: var(--muted);
+  font-size: var(--dashboard-meta-size);
+  line-height: 1.45;
+}
+
+.dashboard-tooltip-layer,
+.dashboard-metric-cell {
+  z-index: var(--dashboard-z-content);
+}
+
+.dashboard-tooltip-layer:hover,
+.dashboard-tooltip-layer:focus-within,
+.dashboard-metric-cell:hover,
+.dashboard-metric-cell:focus-within {
+  z-index: var(--dashboard-z-popover);
+}
+
+.dashboard-theme .button:active,
+.dashboard-theme .dashboard-icon-button:active,
+.dashboard-theme .dashboard-nav-icon-link:active {
+  transform: scale(0.96);
+}
+
+.dashboard-theme .button,
+.dashboard-theme .dashboard-icon-button,
+.dashboard-theme .dashboard-nav-icon-link {
+  transition-duration: var(--dashboard-motion-fast);
+  transition-timing-function: var(--dashboard-ease-out);
+}
+
+/* Keep feedback immediate and consistent across the dashboard, including the
+   compact text controls that intentionally do not use the shared button skin. */
+.dashboard-theme :where(button, a, input, select, textarea) {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dashboard-theme :where(button, a, input, select, textarea):focus-visible {
+  outline: 2px solid var(--dashboard-focus-ring);
+  outline-offset: 2px;
+}
+
+.dashboard-theme button:not(:disabled):active {
+  transform: scale(0.985);
+}
+
+.dashboard-theme :where(button, a) {
+  touch-action: manipulation;
+}
+
+/* A card is a stable information surface, not a floating control. The border
+   is the only hover signal, which preserves the existing flat direction. */
+.dashboard-theme .dashboard-card {
+  transition: border-color var(--dashboard-motion-base) var(--dashboard-ease-out);
+}
+
+@media (hover: hover) {
+  .dashboard-theme .dashboard-card:hover {
+    border-color: rgba(18, 18, 22, 0.14) !important;
+  }
+}
+
+.dashboard-mobile-bar {
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.dashboard-mobile-nav {
+  overscroll-behavior-inline: contain;
+  scroll-snap-type: inline proximity;
+  scrollbar-width: none;
+}
+
+.dashboard-mobile-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.dashboard-mobile-nav > a {
+  scroll-snap-align: start;
+  transition:
+    background-color var(--dashboard-motion-fast) var(--dashboard-ease-out),
+    color var(--dashboard-motion-fast) var(--dashboard-ease-out);
+}
+
+/* Loading conveys progress without creating continuous motion for people who
+   have asked the system to reduce it. */
+.dashboard-theme .animate-ping {
+  animation-duration: 1.25s;
+}
+
+.dashboard-theme .dashboard-icon-button,
+.dashboard-theme .dashboard-nav-icon-link {
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-theme .button,
+  .dashboard-theme .dashboard-icon-button,
+  .dashboard-theme .dashboard-nav-icon-link,
+  .dashboard-theme .dashboard-card,
+  .dashboard-mobile-nav > a {
+    transition-duration: 0.01ms !important;
+    transform: none !important;
+  }
+
+  .dashboard-theme .animate-ping {
+    animation: none !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .dashboard-mobile-bar {
+    background-color: #fff !important;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .dashboard-theme .dashboard-card {
+    border-color: rgba(18, 18, 22, 0.24) !important;
+  }
+}
