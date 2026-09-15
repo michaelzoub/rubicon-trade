@@ -52,3 +52,14 @@ describe("dispatcher", () => {
     expect(report.deferred).toBe(1);
   });
 });
+
+it("prioritizes never-run and oldest agents when a batch exceeds the budget", async () => {
+  let clock = 0;
+  const execute = vi.fn(async (job: RunJob) => { clock += 100; return ok(job); });
+  const report = await dispatchScheduledRuns({
+    store: { dueAgents: async () => [due("recent", { lastStartedAt: "2026-09-15T09:30:00Z" }), due("old", { lastStartedAt: "2026-09-14T09:30:00Z" }), due("new")] },
+    execute, now: () => new Date(NOW.getTime() + clock), budgetMs: 210, perRunTimeoutMs: 100, concurrency: 1,
+  });
+  expect(execute.mock.calls.map(([job]) => job.agentId)).toEqual(["new", "old"]);
+  expect(report.results.find(r => r.agentId === "recent")?.status).toBe("deferred");
+});

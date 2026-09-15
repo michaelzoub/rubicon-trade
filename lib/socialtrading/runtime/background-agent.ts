@@ -114,10 +114,12 @@ export async function runBackgroundAgent<S>(job: RunJob, deps: BackgroundAgentDe
     const maxRounds = deps.maxRounds ?? 5;
 
     for (let round = 0; round < maxRounds; round++) {
+      deps.signal?.throwIfAborted();
       const reply = await model.complete({ messages, tools, toolChoice: round === maxRounds - 1 ? "none" : "auto", signal: deps.signal });
       if (!reply.toolCalls.length) { summary = reply.content.trim(); break; }
       messages.push({ role: "assistant", content: reply.content || null, tool_calls: reply.toolCalls });
       for (const call of reply.toolCalls) {
+        deps.signal?.throwIfAborted();
         const name = call.function.name, args = parseArgs(call.function.arguments);
         let result: unknown;
         if (name === NOTIFY_TOOL) {
@@ -144,6 +146,7 @@ export async function runBackgroundAgent<S>(job: RunJob, deps: BackgroundAgentDe
         messages.push({ role: "tool", tool_call_id: call.id, name, content: JSON.stringify(result).slice(0, 12_000) });
       }
     }
+    deps.signal?.throwIfAborted();
     if (!summary) summary = notify ? `Reached out about ${notify.title}.` : "Checked the market; nothing worth surfacing.";
     summary = summary.slice(0, 600);
 

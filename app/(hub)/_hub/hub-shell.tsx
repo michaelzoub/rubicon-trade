@@ -5,7 +5,9 @@ import { ArrowLeftRight, Bot, Clock, Compass, MessageCircle, UserRound } from "l
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { CreditsChip } from "./limits-ui";
+import { AccountMenu } from "./account-menu";
+import { HoverTooltips } from "../../_components/hover-tooltips";
+import { planName } from "./limits-ui";
 import { SiteHeader } from "../../_components/site-header";
 import { SignInScene } from "../../_components/sign-in";
 import { LoadingState } from "../../_components/ui";
@@ -16,7 +18,7 @@ import type { HubState } from "@/lib/socialtrading/types";
 import type { AccountSummary } from "@/lib/socialtrading/plans";
 import { gsap, useGSAP, rubiconMotion } from "../../_components/motion";
 import { ProfileFlow } from "../social-trading";
-import { ProfileCard } from "../profile-card";
+import { learnedThemes, ProfileCard } from "../profile-card";
 import { hubApi, HubRequestError } from "./client";
 import { HubProvider, useHub } from "./hub-provider";
 import "../socialtrading.css";
@@ -32,7 +34,7 @@ export const NAV = [
 ] as const;
 
 function Frame({ children, wide = false, accountStatus }: { children: ReactNode; wide?: boolean; accountStatus?: ReactNode }) {
-  return <div className="landing-page socialtrading-page"><SiteHeader accountStatus={accountStatus} /><main className={`container socialtrading-main${wide ? " is-hub" : ""}`}><div className="dashboard-theme socialtrading-flow">{children}</div></main></div>;
+  return <div className="landing-page socialtrading-page"><HoverTooltips /><SiteHeader accountStatus={accountStatus} session={!accountStatus} /><main className={`container socialtrading-main${wide ? " is-hub" : ""}`}><div className="dashboard-theme socialtrading-flow">{children}</div></main></div>;
 }
 
 export function HubShell({ children }: { children: ReactNode }) {
@@ -148,7 +150,7 @@ export function Hub({ children, path, resolveHref = href => href }: {
   const routePath = usePathname();
   const pathname = path ?? routePath;
   const router = useRouter();
-  const { state, name, error, clearError, lastChange, account } = useHub();
+  const { state, name, userId, error, clearError, lastChange, account } = useHub();
   const showCard = pathname !== "/profile" && pathname !== "/agents" && pathname !== "/trade";
   const stage = useRef<HTMLDivElement>(null);
   const previousPath = useRef(pathname);
@@ -186,7 +188,7 @@ export function Hub({ children, path, resolveHref = href => href }: {
   });
 
   return (
-    <Frame wide accountStatus={<CreditsChip account={account} className="hub-header-credits" />}>
+    <Frame wide accountStatus={<AccountMenu userId={userId} name={name} planName={planName(account)} account={account} themes={state.profile.themes} learned={learnedThemes(state.inferred, state.profile.themes)} profileHref={resolveHref("/profile")} preview={path !== undefined} />}>
       <div className={`hub-layout${showCard ? "" : " is-solo"}`}>
         <TabBar pathname={pathname} onNavigate={navigate} resolveHref={resolveHref} />
         <div ref={stage} className="hub-stage">

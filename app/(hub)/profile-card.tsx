@@ -96,7 +96,7 @@ export function ProfileCard({ profile, name, agentName, inferred = [], compact =
           {(themes.length > 0 || profile.step > 2) && <ProfileDetail label="Core interests" value={[...profile.themes, "|", ...learned].join(",")}>
             {themes.length || learned.length ? <div className="socialtrading-profile-interests socialtrading-profile-themes">
               {themes.map(theme => <span key={theme.id} style={{ color: theme.dark, background: theme.light }}>{theme.name}</span>)}
-              {learned.map(id => { const theme = THEMES.find(t => t.id === id)!; return <span key={id} className="is-learned" style={{ color: theme.dark }} title="Inferred from your activity">{theme.name}</span>; })}
+              {learned.map(id => { const theme = THEMES.find(t => t.id === id)!; return <span key={id} className="is-learned" style={{ color: theme.dark }} data-tooltip="Inferred from your activity">{theme.name}</span>; })}
             </div> : <span className="is-empty">Keeping an open mind</span>}
           </ProfileDetail>}
           {(profile.step >= 3 || profile.interests.length > 0) && <ProfileDetail label="Paying attention to" value={profile.interests.map(i => i.id).join(",")}>

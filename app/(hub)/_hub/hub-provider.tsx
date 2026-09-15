@@ -115,6 +115,14 @@ export function HubProvider({ userId, name, initial, initialAccount = null, api:
     try { absorb(await api.load(token, activeId.current)); } catch { /* the next state response refreshes it */ }
   }, [api, token, absorb]);
 
+  // Background checks spend credits even while this page is idle.
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === "visible") void refreshAccount(); };
+    const timer = window.setInterval(refresh, 60_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", refresh); };
+  }, [refreshAccount]);
+
   const reload = useCallback(async () => {
     try { const { state: fresh } = absorb(await api.load(token, activeId.current)); if (fresh && (fresh.agent?.id ?? "default") === activeId.current) { revision.current = fresh.revision; setState(fresh); } }
     catch (e) { setError(e instanceof Error ? e.message : "Your workspace could not be refreshed."); }

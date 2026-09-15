@@ -147,3 +147,17 @@
     border-color: rgba(18, 18, 22, 0.24) !important;
   }
 }
+
+/* Shared surface for hover hints, chart values, and account popups. */
+.rubicon-hover-surface {
+  background: #111;
+  color: #fff;
+  border: 1px solid #292929;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px #0002;
+  font-family: var(--font-sans), sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+}
+.rubicon-tooltip { position: fixed; z-index: 1000; width: min(280px, calc(100vw - 24px)); padding: 10px 12px; pointer-events: none; }

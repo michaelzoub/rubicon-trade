@@ -34,6 +34,8 @@ Entry points: `app/api/cron/agents` (cron), `app/api/trade/agents/run` (manual �
 - **Idempotent slots.** A cron run carries `slot = floor(now, 30 min)`; `(user_id, agent_id, slot)` is unique, so re-invoking the cron in the same slot skips instead of repeating.
 - **Read-only toward money and profile.** `WRITE_TOOLS` (`update_profile`, `propose_trade`, `propose_crypto_swap`, `quote_crypto_swap`, `get_crypto_wallets`) are never offered and are refused if requested. Capabilities the agent has disabled are not offered either; `CapabilityRegistry.execute` checks again.
 - **Policy outside the model.** Relevance threshold, per-day cap, and dedupe keys are enforced by the runtime from the agent’s `notifications` preferences. The model only proposes.
+- **Fair dispatch.** Never-run agents go first, then the agents whose last scheduled check is oldest. Agents deferred by the time budget move ahead of recently checked agents on the next tick.
+- **Timeouts.** Aborted runs stop before another tool call or notification delivery, including when a provider returns late.
 - **Failure isolation.** Each run is wrapped; a model or provider error finishes that run as `failed` and the dispatcher continues. Save conflicts retry once after reloading; the notification row persists either way.
 - **Vercel limits.** The cron route sets `maxDuration = 300` (Pro). The dispatcher runs three agents at a time with a 90-second per-run timeout and stops launching when fewer than 90 seconds remain, reporting the rest as `deferred`. To move work to a queue, replace `execute` in the route with an enqueue and run `runBackgroundAgent` in the worker; nothing else changes.
 
@@ -54,3 +56,9 @@ curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3001/api/cron/agen
 ```
 
 The response is the dispatch report. From the UI, “Run now” on the agents page triggers a `manual` run and shows the outcome; `/preview?view=agents` renders the page against fixtures without a database.
+
+## Verifying scheduling
+
+A successful cron response with `considered: 0` confirms that authorization and the database RPC work, but means there are no enabled agents. Turn on an agent in Manage agents before expecting scheduled checks. A real check should appear in its recent runs with trigger `cron`.
+
+`npm run dev` serves the cron endpoint but does not schedule it. Automatic half-hourly invocation comes from the deployed Vercel project and `vercel.json`; configure `CRON_SECRET` in that project's environment as well as locally. A local secret is not synchronized to Vercel. Verify the deployed cron invocation logs and a recorded scheduled run before treating production scheduling as operational.

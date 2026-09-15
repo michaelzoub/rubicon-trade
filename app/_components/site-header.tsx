@@ -6,7 +6,8 @@ import Link from "next/link";
 import { usePrivyConfigured } from "../providers";
 import { RubiconBrand } from "./rubicon-brand";
 
-export function SiteHeader({ accountStatus }: { accountStatus?: ReactNode }) {
+/** `session` shows the plain Sign in / Sign out button; the hub passes false because its account menu carries sign-out. */
+export function SiteHeader({ accountStatus, session = true }: { accountStatus?: ReactNode; session?: boolean }) {
   const configured = usePrivyConfigured();
   return (
     <header className="site-header">
@@ -15,7 +16,7 @@ export function SiteHeader({ accountStatus }: { accountStatus?: ReactNode }) {
           <RubiconBrand className="site-header-brand site-header-brand--new" src="/Header-logo_w.svg" />
         </Link>
         <div className="site-header-links" />
-        <div className="site-header-actions">{accountStatus}{configured && <Session />}</div>
+        <div className="site-header-actions">{accountStatus}{session && configured && <Session />}</div>
       </nav>
     </header>
   );

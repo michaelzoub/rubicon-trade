@@ -71,7 +71,7 @@ export function AssetCard({ asset, dense = false }: { asset: Asset; dense?: bool
         <RelevanceLabel asset={asset} />
         {!dense && asset.reason && <p className="hub-asset-reason">{asset.reason}</p>}
         <div className="hub-asset-actions">
-          <button type="button" className="hub-chip-button" onClick={() => signal(watched ? "removed" : "watched", asset)} aria-pressed={watched} title={watched ? undefined : follow.title} aria-disabled={!watched && !follow.room}>
+          <button type="button" className="hub-chip-button" onClick={() => signal(watched ? "removed" : "watched", asset)} aria-pressed={watched} data-tooltip={watched ? undefined : follow.title} aria-disabled={!watched && !follow.room}>
             {watched ? <><EyeOff size={12} aria-hidden="true" />Watching</> : <><Eye size={12} aria-hidden="true" />Watch</>}
           </button>
           <button type="button" className="hub-chip-button" disabled={busy} onClick={() => { signal("followup", asset); void send(`Why did you surface ${asset.symbol}?`); }}><HelpCircle size={12} aria-hidden="true" />Why this?</button>
@@ -109,9 +109,9 @@ function DiscoveryCard({ asset }: { asset: Asset }) {
       {asset.description && <p className="hub-discovery-description">{asset.description}</p>}
     </Link>
     <div className="hub-discovery-actions">
-      <button type="button" className="hub-chip-button" disabled={pending || busy || (!watched && !follow.room)} title={follow.title} aria-pressed={watched} onClick={() => void act(watched ? "removed" : "watched")}>{watched ? <Check size={14} /> : <Eye size={14} />}{watched ? "Watching" : "Watch"}</button>
+      <button type="button" className="hub-chip-button" disabled={pending || busy || (!watched && !follow.room)} data-tooltip={follow.title} aria-pressed={watched} onClick={() => void act(watched ? "removed" : "watched")}>{watched ? <Check size={14} /> : <Eye size={14} />}{watched ? "Watching" : "Watch"}</button>
       <button type="button" className="hub-chip-button" disabled={busy || pending} onClick={() => { router.push("/"); void send(`Tell me about ${asset.name} (${asset.symbol}) and why it might interest me.`); }}>Ask agent</button>
-      <button type="button" className="hub-discovery-dismiss" disabled={pending || busy} title="Not for me" aria-label={`Not interested in ${asset.symbol}`} onClick={() => void act("dismissed")}><X size={15} /></button>
+      <button type="button" className="hub-discovery-dismiss" disabled={pending || busy} data-tooltip="Not for me" aria-label={`Not interested in ${asset.symbol}`} onClick={() => void act("dismissed")}><X size={15} /></button>
     </div>
   </article>;
 }

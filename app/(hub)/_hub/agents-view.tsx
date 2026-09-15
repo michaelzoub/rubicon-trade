@@ -98,7 +98,7 @@ export function AgentsView() {
             </li>;
           })}
         </ul>
-        <button type="button" className={`hub-agent-new${mode === "create" ? " is-active" : ""}`} disabled={busy || agentCount.atLimit} onClick={startCreate} title={agentCount.atLimit ? `You have ${agentCount.limit} agents, the most the ${planName} plan allows. Delete one to create another.` : undefined}><Plus size={15} aria-hidden="true" />New agent<UsagePill limits={limits} limit="agents" used={agents.length} className="hub-agent-new-count" /></button>
+        <button type="button" className={`hub-agent-new${mode === "create" ? " is-active" : ""}`} disabled={busy || agentCount.atLimit} onClick={startCreate} data-tooltip={agentCount.atLimit ? `You have ${agentCount.limit} agents, the most the ${planName} plan allows. Delete one to create another.` : undefined}><Plus size={15} aria-hidden="true" />New agent<UsagePill limits={limits} limit="agents" used={agents.length} className="hub-agent-new-count" /></button>
         <LimitHint limits={limits} limit="agents" used={agents.length} near={<>Room for {agentCount.remaining} more {agentCount.remaining === 1 ? "agent" : "agents"} on the {planName} plan.</>} full={<>That’s {agentCount.limit} agents, the most the {planName} plan allows. Delete one to create another.</>} />
         <p className="hub-agents-hint">Up to {MAX_ENABLED_AGENTS} agents run in the background at once. Paused agents keep their history and still answer in the conversation.</p>
         <nav className="hub-agents-toc" aria-label="Settings sections">
@@ -114,7 +114,7 @@ export function AgentsView() {
             <p className={`hub-agent-summary-status${mode === "edit" && current.enabled ? " is-running" : ""}`}>{statusLine}</p>
           </div>
           {mode === "edit" && <div className="hub-agent-summary-actions">
-            <button type="button" className="button button-secondary" disabled={busy} onClick={() => void setAgentEnabled(current.id, !current.enabled)} title={!current.enabled && running >= MAX_ENABLED_AGENTS ? "Pause another agent first." : undefined}>{current.enabled ? "Pause" : "Turn on"}</button>
+            <button type="button" className="button button-secondary" disabled={busy} onClick={() => void setAgentEnabled(current.id, !current.enabled)} data-tooltip={!current.enabled && running >= MAX_ENABLED_AGENTS ? "Pause another agent first." : undefined}>{current.enabled ? "Pause" : "Turn on"}</button>
             <button type="button" className="button button-primary hub-agent-run" disabled={busy} onClick={() => void run()}><Play size={14} aria-hidden="true" />{busy ? "Working…" : "Run now"}</button>
           </div>}
         </header>
@@ -223,7 +223,7 @@ function Section({ id, title, lead, tone, children }: { id: SectionId; title: st
 }
 
 function Switch({ checked, disabled, label, hint, onChange }: { checked: boolean; disabled?: boolean; label: string; hint?: string; onChange: (next: boolean) => void }) {
-  return <button type="button" role="switch" aria-checked={checked} aria-label={label} title={hint ?? label} disabled={disabled} className="hub-switch" onClick={() => onChange(!checked)}><span className="hub-switch-knob" aria-hidden="true" /></button>;
+  return <button type="button" role="switch" aria-checked={checked} aria-label={label} data-tooltip={hint ?? label} disabled={disabled} className="hub-switch" onClick={() => onChange(!checked)}><span className="hub-switch-knob" aria-hidden="true" /></button>;
 }
 
 function Watchlist({ items, limits, onChange, onBlocked }: { items: Interest[]; limits: PlanLimits; onChange: (next: Interest[]) => void; onBlocked: (message: string) => void }) {

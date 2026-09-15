@@ -54,6 +54,8 @@ export async function dispatchScheduledRuns(options: DispatchOptions): Promise<D
     if (isDue(agent, now())) queue.push(agent);
     else results.push({ userId: agent.userId, agentId: agent.agentId, status: "not_due" });
   }
+  // Oldest first: a saturated invocation must not repeatedly defer the same agents.
+  queue.sort((a, b) => (a.lastStartedAt ? Date.parse(a.lastStartedAt) : 0) - (b.lastStartedAt ? Date.parse(b.lastStartedAt) : 0));
   const started = { count: 0 };
   async function worker() {
     for (;;) {

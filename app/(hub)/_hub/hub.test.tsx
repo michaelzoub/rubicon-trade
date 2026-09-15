@@ -4,13 +4,13 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { ChatEvent, HubState } from "@/lib/socialtrading/types";
-import { PREVIEW_ACCOUNT, PREVIEW_CHAT, PREVIEW_STATE, PREVIEW_TOKENS, PREVIEW_WALLET } from "../../preview/fixture";
+import { PREVIEW_ACCOUNT, PREVIEW_ASSETS, PREVIEW_CHAT, PREVIEW_STATE, PREVIEW_TOKENS, PREVIEW_WALLET } from "../../preview/fixture";
 import { newChat } from "@/lib/socialtrading/chats";
 
 const events = vi.hoisted(() => ({ script: [] as ChatEvent[], posted: [] as unknown[] }));
-const privy = vi.hoisted(() => ({ sendTransaction: vi.fn(), linkWallet: vi.fn(), connectWallet: vi.fn(), createWallet: vi.fn(), switchChain: vi.fn() }));
+const privy = vi.hoisted(() => ({ sendTransaction: vi.fn(), linkWallet: vi.fn(), connectWallet: vi.fn(), createWallet: vi.fn(), switchChain: vi.fn(), logout: vi.fn() }));
 vi.mock("@privy-io/react-auth", () => ({
-  usePrivy: () => ({ getAccessToken: async () => "token", ready: true, authenticated: true, user: { id: "preview-user", linkedAccounts: [{ type: "wallet", chainType: "ethereum", address: "0x1111111111111111111111111111111111111111", walletClientType: "privy" }] }, linkWallet: privy.linkWallet, connectWallet: privy.connectWallet, createWallet: privy.createWallet }),
+  usePrivy: () => ({ getAccessToken: async () => "token", ready: true, authenticated: true, user: { id: "preview-user", linkedAccounts: [{ type: "wallet", chainType: "ethereum", address: "0x1111111111111111111111111111111111111111", walletClientType: "privy" }] }, linkWallet: privy.linkWallet, connectWallet: privy.connectWallet, createWallet: privy.createWallet, logout: privy.logout }),
   useWallets: () => ({ ready: true, wallets: [{ address: "0x1111111111111111111111111111111111111111", walletClientType: "privy", switchChain: privy.switchChain, getEthereumProvider: async () => ({ request: privy.sendTransaction }) }] }),
   useLoginWithEmail: () => ({ sendCode: vi.fn(), loginWithCode: vi.fn(), state: { status: "initial" } }),
 }));
@@ -38,6 +38,7 @@ import { Hub } from "./hub-shell";
 import { HubProvider } from "./hub-provider";
 import { HomeView } from "./home-view";
 import { TradeView } from "./trade-view";
+import { AssetGrid } from "./parts";
 import { ProfileView } from "./profile-view";
 import type { AccountSummary } from "@/lib/socialtrading/plans";
 
@@ -164,7 +165,7 @@ it("shows chat threads with a quiet count, starts a new chat through the server,
   await render({ ...PREVIEW_STATE, chats: [...PREVIEW_STATE.chats, second] }, <HomeView />, { ...PREVIEW_ACCOUNT, usage: { ...PREVIEW_ACCOUNT.usage, chats: 17 } });
   expect(container.querySelector(".hub-chat-title")?.textContent).toContain("what happened with VRT today?");
   expect(container.querySelector(".hub-usage")?.textContent).toBe("17 of 20 chats");
-  expect(container.querySelector(".site-header-actions .hub-credits")?.textContent).toBe("$4.61 credits");
+  expect(container.querySelector(".site-header-actions .hub-account-credits")?.textContent).toBe("$4.61");
   await act(async () => (container.querySelector(".hub-chat-title") as HTMLButtonElement).click());
   const options = Array.from(container.querySelectorAll(".hub-chat-item strong")).map(n => n.textContent);
   expect(options).toEqual(["what happened with VRT today?", "Nuclear names"]);
@@ -178,7 +179,7 @@ it("shows chat threads with a quiet count, starts a new chat through the server,
   await render(PREVIEW_STATE, <HomeView />, { ...PREVIEW_ACCOUNT, usage: { ...PREVIEW_ACCOUNT.usage, chats: 20 } });
   const full = Array.from(container.querySelectorAll("button")).find(b => b.textContent === "New chat") as HTMLButtonElement;
   expect(full.disabled).toBe(true);
-  expect(full.title).toMatch(/Delete an old chat/);
+  expect(full.dataset.tooltip).toMatch(/Delete an old chat/);
   expect(container.querySelector(".hub-usage")?.classList.contains("is-full")).toBe(true);
 });
 
@@ -186,7 +187,8 @@ it("disables the composer plainly when credits run out", async () => {
   await render(PREVIEW_STATE, <HomeView />, { ...PREVIEW_ACCOUNT, credits: { ...PREVIEW_ACCOUNT.credits, balanceMicros: 1_000 } });
   expect((container.querySelector("textarea") as HTMLTextAreaElement).disabled).toBe(true);
   expect(container.querySelector(".hub-composer-meta")?.textContent).toMatch(/used your Free plan credits/);
-  expect(container.querySelector(".site-header-actions .hub-credits")?.textContent).toBe("< $0.01 credits · empty");
+  expect(container.querySelector(".site-header-actions .hub-account-credits")?.textContent).toBe("< $0.01");
+  expect(container.querySelector(".site-header-actions .hub-account-credits")?.classList.contains("is-empty")).toBe(true);
 });
 
 it("counts follows and learned assets on the profile and explains the cap with what to do", async () => {
@@ -199,9 +201,49 @@ it("counts follows and learned assets on the profile and explains the cap with w
   const hints = Array.from(container.querySelectorAll(".hub-limit-hint.is-full")).map(n => n.textContent ?? "");
   expect(hints.some(h => /follow 5 assets.*Unfollow one/.test(h))).toBe(true);
   expect(hints.some(h => /remember 25 assets.*paused learning/.test(h))).toBe(true);
-  expect(container.querySelector(".hub-plan-note")?.textContent).toMatch(/follow up to 5 assets/);
+  expect(container.querySelectorAll("details[name=profile-settings]").length).toBeGreaterThan(3);
   const inputs = Array.from(container.querySelectorAll<HTMLInputElement>(".hub-chiplist input"));
   expect(inputs[0].disabled).toBe(true);
   expect(inputs[1].disabled).toBe(false);
   expect(container.querySelector(".hub-plan-summary")?.textContent).toMatch(/Free plan · \$4\.61 credits left/);
+});
+
+
+it("dismisses a discovery card after saving the preference and links directly to its details", async () => {
+  await render(PREVIEW_STATE, <AssetGrid assets={[PREVIEW_ASSETS.OKLO]} discovery />);
+  expect(container.querySelector(".hub-discovery-main")?.getAttribute("href")).toBe("/explore/stock/OKLO");
+  expect(container.querySelector(".hub-discovery-price")?.textContent).toContain("market cap");
+  await act(async () => (container.querySelector(".hub-discovery-dismiss") as HTMLButtonElement).click());
+  expect(events.posted).toContainEqual(expect.objectContaining({ action: "signal", signal: "dismissed", target: "OKLO" }));
+  expect(container.querySelector(".hub-discovery-card")).toBeNull();
+});
+
+it("opens one account menu on hover with credits, wallet balances, then sign out last", async () => {
+  privy.sendTransaction.mockImplementation(async ({ method }: { method: string }) => method === "eth_chainId" ? "0x2105" : method === "eth_call" ? "0x17d7840" : "0xde0b6b3a7640000");
+  await render(PREVIEW_STATE, <HomeView />, PREVIEW_ACCOUNT);
+  expect(container.querySelectorAll(".site-header-actions > *").length).toBe(1);
+  expect(container.querySelector(".site-nav-cta")).toBeNull();
+  const account = container.querySelector(".hub-account") as HTMLElement;
+  const trigger = account.querySelector(".hub-account-trigger") as HTMLButtonElement;
+  expect(trigger.textContent).toContain("Michael");
+  const menu = account.querySelector(".hub-account-menu") as HTMLElement;
+  expect(menu.hidden).toBe(true);
+  await act(async () => trigger.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
+  await act(async () => { await new Promise(r => setTimeout(r, 10)); });
+  expect(menu.hidden).toBe(false);
+  expect(trigger.getAttribute("aria-expanded")).toBe("true");
+  const sections = Array.from(menu.children).map(n => n.className.split(" ")[0]);
+  expect(sections).toEqual(["hub-account-head", "hub-account-section", "hub-account-section", "hub-account-foot"]);
+  expect(menu.querySelector(".hub-account-credits")?.textContent).toBe("$4.61");
+  expect(menu.textContent).toContain("Free plan");
+  expect(menu.textContent).toContain("25 USDC · 1 ETH");
+  expect(menu.textContent).toContain("Base");
+  const signOut = menu.querySelector(".hub-account-foot .hub-account-signout") as HTMLButtonElement;
+  expect(signOut.textContent).toBe("Sign out");
+  await act(async () => signOut.click());
+  expect(privy.logout).toHaveBeenCalledTimes(1);
+  await act(async () => account.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  expect(menu.hidden).toBe(true);
+  expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  privy.sendTransaction.mockReset();
 });

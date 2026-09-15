@@ -153,3 +153,16 @@ describe("runBackgroundAgent", () => {
     expect(broke.entries).toEqual([]);
   });
 });
+
+it("does not deliver a finding after the dispatcher aborts a slow model", async () => {
+  const controller = new AbortController();
+  const model: ModelClient = { async complete() {
+    controller.abort(new Error("Run timed out."));
+    return { content: "A late finding", toolCalls: [call("notify_user", { title: "Late", message: "Late result", relevance: "high", dedupe_key: "late" })] };
+  } };
+  const outcome = await runBackgroundAgent(job, { ...deps(model), signal: controller.signal });
+  expect(outcome.status).toBe("failed");
+  expect(outcome.error).toBe("Run timed out.");
+  expect(store.notifications).toHaveLength(0);
+  expect(store.runs[0].status).toBe("failed");
+});

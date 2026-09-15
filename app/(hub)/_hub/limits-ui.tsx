@@ -2,7 +2,7 @@
 
 import { X } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { formatCredits, LIMIT_COPY, limitStatus, type AccountSummary, type LimitKey, type PlanLimits } from "@/lib/socialtrading/plans";
+import { LIMIT_COPY, limitStatus, type AccountSummary, type LimitKey, type PlanLimits } from "@/lib/socialtrading/plans";
 
 /**
  * Quiet plan feedback. The rule everywhere: say nothing while there is room, count when the user is close or
@@ -13,7 +13,7 @@ import { formatCredits, LIMIT_COPY, limitStatus, type AccountSummary, type Limit
 export function UsagePill({ limits, limit, used, label, always = false, className = "" }: { limits: PlanLimits; limit: LimitKey; used: number; label?: string; always?: boolean; className?: string }) {
   const status = limitStatus(limits, limit, used);
   if (status.unlimited || (!always && !status.nearLimit && !status.atLimit)) return null;
-  return <span className={`hub-usage${status.atLimit ? " is-full" : status.nearLimit ? " is-near" : ""} ${className}`} title={status.atLimit ? LIMIT_COPY[limit].remedy : undefined}>
+  return <span className={`hub-usage${status.atLimit ? " is-full" : status.nearLimit ? " is-near" : ""} ${className}`} data-tooltip={status.atLimit ? LIMIT_COPY[limit].remedy : undefined}>
     {status.used} of {status.limit}{label ? ` ${label}` : ""}
   </span>;
 }
@@ -48,16 +48,6 @@ export function PlanNote({ id, children }: { id: string; children: ReactNode }) 
   const [dismissed, dismiss] = useDismissed(id);
   if (dismissed) return null;
   return <p className="hub-plan-note" role="note">{children}<button type="button" onClick={dismiss} aria-label="Got it"><X size={12} aria-hidden="true" /></button></p>;
-}
-
-/** Balance beside the composer. Quiet by default; warm when low; plain when empty. */
-export function CreditsChip({ account, className = "" }: { account: AccountSummary | null; className?: string }) {
-  if (!account) return null;
-  const { balanceMicros, holdMicros } = account.credits;
-  const empty = balanceMicros < holdMicros, low = !empty && balanceMicros < 500_000;
-  return <span className={`hub-credits${empty ? " is-empty" : low ? " is-low" : ""} ${className}`} title="Credits pay for your agent’s model usage. Every request is charged at the provider’s actual cost.">
-    {formatCredits(balanceMicros)} credits{empty ? " · empty" : low ? " · running low" : ""}
-  </span>;
 }
 
 export const planName = (account: AccountSummary | null) => account?.planName ?? "Free";

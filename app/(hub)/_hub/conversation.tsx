@@ -54,12 +54,12 @@ function ChatHead() {
   const ordered = [...chats].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
   const canCreate = !busy && !(status?.atLimit);
   return <div ref={root} className="hub-chat-head">
-    <button type="button" className="hub-chat-title" aria-expanded={open} aria-haspopup="listbox" onClick={() => setOpen(o => !o)} title="Switch chat">
+    <button type="button" className="hub-chat-title" aria-expanded={open} aria-haspopup="listbox" onClick={() => setOpen(o => !o)} data-tooltip="Switch chat">
       <span>{chat.title}</span><ChevronDown size={13} aria-hidden="true" />
     </button>
     <div className="hub-chat-tools">
       {limits && <UsagePill limits={limits} limit="chats" used={used} label="chats" />}
-      <button type="button" className="hub-chip-button" disabled={!canCreate} onClick={() => void newChat()} title={status?.atLimit ? `You have ${status.limit} chats, the most this plan keeps. Delete an old chat to start a new one.` : "Start a new chat"}>
+      <button type="button" className="hub-chip-button" disabled={!canCreate} onClick={() => void newChat()} data-tooltip={status?.atLimit ? `You have ${status.limit} chats, the most this plan keeps. Delete an old chat to start a new one.` : "Start a new chat"}>
         <MessageSquarePlus size={12} aria-hidden="true" />New chat
       </button>
     </div>
@@ -69,7 +69,7 @@ function ChatHead() {
           <strong>{c.title}</strong><small>{c.messages.length ? `${c.messages.length} message${c.messages.length === 1 ? "" : "s"} · ${timeAgo(c.updatedAt)}` : "Empty"}</small>
         </button>
         <button type="button" className="hub-chat-delete" aria-label={confirm === c.id ? `Confirm deleting ${c.title}` : `Delete ${c.title}`} aria-pressed={confirm === c.id} disabled={busy}
-          onClick={() => { if (confirm === c.id) { setConfirm(null); void deleteChat(c.id); } else setConfirm(c.id); }} title={confirm === c.id ? "Click again to delete" : "Delete this chat"}>
+          onClick={() => { if (confirm === c.id) { setConfirm(null); void deleteChat(c.id); } else setConfirm(c.id); }} data-tooltip={confirm === c.id ? "Click again to delete" : "Delete this chat"}>
           <Trash2 size={13} aria-hidden="true" />
         </button>
       </div>)}

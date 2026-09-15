@@ -86,7 +86,7 @@ export function AssetDetail({ kind, id }: { kind: Asset["kind"]; id: string }) {
           <p className="hub-part-title">Why this matters to you</p>
           <p>{asset.reason}</p>
           <div className="hub-asset-actions">
-            <button type="button" className="hub-chip-button" onClick={() => signal(watched ? "removed" : "watched", asset)} aria-pressed={watched} title={watched ? undefined : follow.title} aria-disabled={!watched && !follow.room}>{watched ? <><EyeOff size={12} aria-hidden="true" />Watching</> : <><Eye size={12} aria-hidden="true" />Add to what I’m watching</>}</button>
+            <button type="button" className="hub-chip-button" onClick={() => signal(watched ? "removed" : "watched", asset)} aria-pressed={watched} data-tooltip={watched ? undefined : follow.title} aria-disabled={!watched && !follow.room}>{watched ? <><EyeOff size={12} aria-hidden="true" />Watching</> : <><Eye size={12} aria-hidden="true" />Add to what I’m watching</>}</button>
             <button type="button" className="hub-chip-button" onClick={() => ask(`What happened with ${asset.symbol} recently?`)}><MessageCircle size={12} aria-hidden="true" />What happened here?</button>
             <button type="button" className="hub-chip-button" onClick={() => ask(`Why did you surface ${asset.symbol}?`)}>Why did you surface this?</button>
             {state.profile.permission !== "notify" && <button type="button" className="hub-chip-button" onClick={() => { setDraft(`Buy $50 of ${asset.symbol}`); router.push("/"); }}>Ask my agent to buy $50…</button>}

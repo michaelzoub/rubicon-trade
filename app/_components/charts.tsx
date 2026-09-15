@@ -8,9 +8,9 @@ export function ChartFrame({ children, height, className = "" }: { children: Rea
 
 export function ChartTooltip({ label, value, detail }: { label: ReactNode; value: ReactNode; detail?: ReactNode }) {
   return (
-    <div className="min-w-40 rounded-lg border border-[var(--line)] bg-white px-3 py-2.5 text-left">
-      <div className="dashboard-meta">{label}</div>
-      <div className="mt-0.5 text-sm font-semibold tabular-nums text-[var(--ink)]">{value}</div>
+    <div className="rubicon-hover-surface min-w-40 px-3 py-2.5 text-left">
+      <div className="text-xs text-white/75">{label}</div>
+      <div className="mt-0.5 text-sm font-semibold tabular-nums text-white">{value}</div>
       {detail && <div className="dashboard-meta mt-1">{detail}</div>}
     </div>
   );

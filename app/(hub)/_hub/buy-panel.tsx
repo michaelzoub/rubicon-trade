@@ -5,9 +5,9 @@ import { ArrowUpRight, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { CHAINS, DEFAULT_CHAIN, explorerAddress, shortAddress, type ChainId } from "@/lib/crypto/chains";
 import type { TokenMatch } from "@/lib/crypto/search";
-import { compact, pct, usd } from "./format";
+import { pct, usd } from "./format";
 import { useHub } from "./hub-provider";
-import { TradeCard } from "./parts";
+import { AssetLogo, TradeCard } from "./parts";
 
 const PRESETS = ["25", "50", "100", "250"];
 const USD = /^\d{1,7}(\.\d{1,2})?$/;
@@ -83,9 +83,9 @@ export function BuyPanel({ preselected, title = "Buy" }: {
         {!searching && results.length === 0 && <li className="hub-empty-inline">No assets found. Try another name or symbol.</li>}
         {results.map(t => <li key={`${t.chainId}:${t.address}`}>
           <button type="button" role="option" aria-selected={false} className="hub-buy-result" onClick={() => { setPicked(t); setError(""); }}>
-            <span className="hub-buy-result-id"><strong>{t.symbol.toUpperCase()}</strong><span>{t.name}</span></span>
+            <AssetLogo asset={{ symbol: t.symbol.toUpperCase() }} /><span className="hub-buy-result-id"><strong>{t.symbol.toUpperCase()}</strong><span>{t.name}</span></span>
             <span className="hub-buy-result-tags">{t.kind === "stock" && <span className="hub-label hub-label--emerging">Tokenized stock</span>}<span className="hub-label hub-label--related">{t.chain}</span>{t.thin && <span className="hub-label hub-label--muted">thin liquidity</span>}</span>
-            <span className="hub-buy-result-price"><span>{usd(t.priceUsd)}</span><span className={`hub-change${(t.change24h ?? 0) > 0 ? " is-up" : (t.change24h ?? 0) < 0 ? " is-down" : ""}`}>{pct(t.change24h)}</span><small>liq. ${compact(t.liquidityUsd)}</small></span>
+            <span className="hub-buy-result-price"><span>{usd(t.priceUsd)}</span><span className={`hub-change${(t.change24h ?? 0) > 0 ? " is-up" : (t.change24h ?? 0) < 0 ? " is-down" : ""}`}>{pct(t.change24h)}</span></span>
           </button>
         </li>)}
       </ul>}

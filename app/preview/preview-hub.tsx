@@ -94,6 +94,11 @@ export function PreviewHub({ view }: { view: string }) {
           if (action.limits) state.profile.limits = action.limits;
         }
         if (action.action === "profile") { state.profile = action.profile; state.dislikes = action.dislikes; state.preferences = action.preferences; }
+        if (action.action === "signal") {
+          state.signals.push({ id: crypto.randomUUID(), action: action.signal, target: action.target, at: new Date().toISOString() });
+          if (action.signal === "watched" && !state.profile.interests.some(i => i.id === action.target)) state.profile.interests.push({ id: action.target, name: action.name ?? action.target, symbol: action.symbol ?? action.target, kind: action.kind ?? "stock" });
+          if (action.signal === "removed") state.profile.interests = state.profile.interests.filter(i => i.id !== action.target && i.symbol !== action.target);
+        }
         let chatId: string | undefined;
         if (action.action === "chat") {
           if (action.op === "create") { if (account().usage.chats >= PREVIEW_ACCOUNT.limits.chats) throw new Error(`Your plan allows up to ${PREVIEW_ACCOUNT.limits.chats} chats. Delete an old chat to start a new one.`); const chat = newChat(); state.chats.push(chat); chatId = chat.id; }
