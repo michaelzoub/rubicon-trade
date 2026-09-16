@@ -15,31 +15,34 @@ let container: HTMLDivElement, root: Root;
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(prefers-reduced-motion: reduce)', media: query, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() }));
-  hub = { state: { ...PREVIEW_STATE, trades: [] }, messages: [], busy: false, send: vi.fn(async () => {}), stop: vi.fn(), error: null, lastChange: null, account: null } as unknown as HubContextValue;
+  hub = { state: { ...PREVIEW_STATE, trades: [] }, messages: [], busy: false, send: vi.fn(async () => {}), stop: vi.fn(), error: null, lastChange: null, account: null, agents: [] } as unknown as HubContextValue;
   container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
-const render = () => act(async () => { root.render(<main><h1>Explore</h1><div className="wv-market"><button className="wv-market-object">An idea</button></div><AmbientAgent/></main>); });
+const render = () => act(async () => { root.render(<main><h1>Explore</h1><div data-agent-region="market"><button className="wv-market-object">An idea</button></div><AmbientAgent/></main>); });
 const clickOrb = () => act(async () => { container.querySelector<HTMLButtonElement>('.ambient-orb')!.click(); });
 const key = (value: string, ctrlKey = false) => act(async () => { document.dispatchEvent(new KeyboardEvent('keydown', { key: value, ctrlKey, bubbles: true })); });
+const state = () => container.querySelector('.ambient-agent')?.getAttribute('data-state');
 
 it('summons from the keyboard, focuses the thought, and returns focus on Escape', async () => {
   await render(); await key('j', true);
   expect(container.querySelector('[role="dialog"]')).not.toBeNull();
   expect(document.activeElement).toBe(container.querySelector('textarea'));
-  expect(container.textContent).toContain('In the context of your discoveries');
   await key('Escape');
   expect(container.querySelector('[role="dialog"]')).toBeNull();
   expect(document.activeElement).toBe(container.querySelector('.ambient-orb'));
 });
 
-it('offers editable contextual prompts without sending until submission', async () => {
+it('opens with the person’s own convictions rather than a stock list of prompts', async () => {
   await render(); await clickOrb();
-  await act(async () => container.querySelector<HTMLButtonElement>('.ambient-prompts button')!.click());
-  expect(container.querySelector('textarea')?.value).toBe('How do these ideas fit my thesis?');
+  const first = container.querySelector<HTMLButtonElement>('.ambient-prompts button')!;
+  expect(first.textContent).toContain(PREVIEW_STATE.profile.thesis.split(/(?<=[.!?])\s+|\n+/)[0].replace(/[.!?]$/, '').slice(0, 30));
+  await act(async () => first.click());
+  const prompt = container.querySelector('textarea')!.value;
+  expect(prompt).toContain('Challenge');
   expect(hub.send).not.toHaveBeenCalled();
   await act(async () => container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
-  expect(hub.send).toHaveBeenCalledWith('How do these ideas fit my thesis?');
+  expect(hub.send).toHaveBeenCalledWith(prompt);
 });
 
 it('does not submit when credits are exhausted', async () => {
@@ -51,12 +54,36 @@ it('does not submit when credits are exhausted', async () => {
   expect(container.querySelector('textarea')?.disabled).toBe(true);
 });
 
-it('connects research, output, and approval states to provider activity', async () => {
+it('is quiet until something happens, then shows one state at a time', async () => {
+  await render();
+  expect(state()).toBe('idle');
+
   hub.busy = true; await render();
-  expect(container.querySelector('.ambient-agent')?.getAttribute('data-state')).toBe('researching');
+  expect(state()).toBe('thinking');
+
   hub.messages = [{ id: 'stream', role: 'assistant', at: '', status: 'streaming', parts: [] }];
   await render();
-  expect(container.querySelector('.ambient-agent')?.getAttribute('data-state')).toBe('acting');
-  hub.busy = false; hub.state = { ...hub.state, trades: PREVIEW_STATE.trades }; await render();
-  expect(container.querySelector('.ambient-agent')?.getAttribute('data-state')).toBe('waiting');
+  expect(state()).toBe('interacting');
+
+  // A decision nobody can make but the person outranks the agent's own work.
+  hub.state = { ...hub.state, trades: PREVIEW_STATE.trades }; await render();
+  expect(state()).toBe('wanting');
+});
+
+it('turns its attention to what is being read without going there', async () => {
+  await render();
+  const before = container.querySelector('.ambient-agent')!.getAttribute('style');
+  await act(async () => { window.dispatchEvent(new CustomEvent('rubicon:attend', { detail: { x: 600, y: 300 } })); });
+  expect(state()).toBe('observing');
+  // Looking is not travelling: the body has not been asked to move.
+  expect(container.querySelector('.ambient-agent')!.getAttribute('style')).toBe(before);
+  await act(async () => { window.dispatchEvent(new CustomEvent('rubicon:attend', { detail: null })); });
+  expect(state()).toBe('idle');
+});
+
+it('names its state for anyone not watching it move', async () => {
+  await render();
+  expect(container.querySelector('.ambient-orb')?.getAttribute('aria-label')).toContain('Here when you need me');
+  hub.state = { ...hub.state, trades: PREVIEW_STATE.trades }; await render();
+  expect(container.querySelector('.ambient-orb')?.getAttribute('aria-label')).toContain('A decision needs you');
 });

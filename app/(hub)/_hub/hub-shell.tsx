@@ -4,7 +4,7 @@ import { usePrivy } from "@privy-io/react-auth";
 import { Clock, Compass, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import { PurchaseDialog } from "./purchase-dialog";
 import { CommandMenu } from "./command-menu";
 import "./refinements.css";
@@ -21,6 +21,8 @@ import type { HubState } from "@/lib/socialtrading/types";
 import { gsap, useGSAP, rubiconMotion } from "../../_components/motion";
 import { ProfileFlow } from "../social-trading";
 import { AmbientAgent } from "./ambient-agent";
+import { GlossProvider } from "./gloss";
+import { identityPalette, identityVars } from "@/lib/socialtrading/identity-palette";
 import { hubApi, HubRequestError } from "./client";
 import { useAccountSummary } from "./account-state";
 import { HubProvider, useHub } from "./hub-provider";
@@ -154,7 +156,11 @@ export function Hub({ children, path, resolveHref = href => href }: {
   const router = useRouter();
   const { state, name, userId, error, clearError, account, agents } = useHub();
   const identityStats_ = identityStats(state, agents.length ? agents : state.agent ? [state.agent] : []);
-  const identityStage_ = identityStage(identityDepth(state, identityStats_));
+  const depth = identityDepth(state, identityStats_);
+  const identityStage_ = identityStage(depth);
+  // The whole product wears one accent, derived from what the person believes
+  // and how much the agent has learned. Set once, read everywhere.
+  const palette = useMemo(() => identityPalette(userId, state.profile.themes, state.inferred, depth), [userId, state.profile.themes, state.inferred, depth]);
   const stage = useRef<HTMLDivElement>(null);
   const previousPath = useRef(pathname);
   const direction = useRef(1);
@@ -197,14 +203,16 @@ export function Hub({ children, path, resolveHref = href => href }: {
         themes={state.profile.themes} inferred={state.inferred}
         identity={{ progress: identityStage_.progress, depth: identityStage_.depth, energy: identityStats_.energy }}
         profileHref={resolveHref("/profile")} plansHref={resolveHref("/plans")} preview={path !== undefined} />}>
-      <AmbientAgent resolveHref={resolveHref} />
-      <PurchaseDialog />
-      <div className="hub-layout">
-        <div ref={stage} className="hub-stage">
-          {error && <p className="hub-error" role="alert">{error} <button type="button" onClick={clearError}>Dismiss</button></p>}
-          <div key={state.agent?.id ?? "default"}>{children}</div>
+      <GlossProvider>
+        <AmbientAgent resolveHref={resolveHref} />
+        <PurchaseDialog />
+        <div className="hub-layout" style={identityVars(palette) as CSSProperties}>
+          <div ref={stage} className="hub-stage">
+            {error && <p className="hub-error" role="alert">{error} <button type="button" onClick={clearError}>Dismiss</button></p>}
+            <div key={state.agent?.id ?? "default"}>{children}</div>
+          </div>
         </div>
-      </div>
+      </GlossProvider>
     </Frame>
   );
 }

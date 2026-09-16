@@ -1,42 +1,74 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ArrowUp, ArrowUpRight, Square, X } from 'lucide-react';
 import { gsap, useGSAP, prefersReducedMotion } from '../../_components/motion';
 import { presenceNote, type PresenceContext } from '@/lib/socialtrading/presence';
+import { AGENT_LABEL, agentState, arc, chooseRegion, dwellSeconds, travelSeconds, type Candidate } from '@/lib/socialtrading/agent-state';
+import { agentAvatarTraits } from '@/lib/socialtrading/avatar';
+import { identityPalette } from '@/lib/socialtrading/identity-palette';
+import { identityDepth, identityStats } from '@/lib/socialtrading/identity';
+import { convictionsOf } from '@/lib/socialtrading/worldview';
+import { AgentCreature } from './agent-creature';
 import { useHub } from './hub-provider';
 import { HubLink } from './navigation';
 import './ambient-agent.css';
 
+/** Roughly the creature's own size, used to keep it inside the viewport and
+ * out of the way of whatever it is standing next to. */
+const BODY = 52;
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
 export function AmbientAgent({ resolveHref = href => href }: { resolveHref?: (href: string) => string }) {
-  const { state, messages, busy, send, stop, error, lastChange, account } = useHub();
+  const { state, messages, busy, send, stop, error, lastChange, account, agents } = useHub();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
   const [note, setNote] = useState<string | null>(null);
-  const [focused, setFocused] = useState(false);
-  const [reconsidering, setReconsidering] = useState(false);
-  const root = useRef<HTMLDivElement>(null), orb = useRef<HTMLButtonElement>(null), panel = useRef<HTMLElement>(null), input = useRef<HTMLTextAreaElement>(null), log = useRef<HTMLDivElement>(null);
-  const [quiet, setQuiet] = useState(false);
-  const [assembling, setAssembling] = useState(false);
-  const [context, setContext] = useState('your thesis');
-  const position = useRef({ x: 100, y: 180 });
+  const [reflecting, setReflecting] = useState(false);
+  const [attend, setAttend] = useState<{ x: number; y: number } | null>(null);
+  const [seat, setSeat] = useState({ x: 120, y: 220 });
+  const root = useRef<HTMLDivElement>(null), orb = useRef<HTMLButtonElement>(null), panel = useRef<HTMLElement>(null);
+  const input = useRef<HTMLTextAreaElement>(null), log = useRef<HTMLDivElement>(null), body = useRef<HTMLSpanElement>(null);
   const summoned = useRef(false);
+  const composing = useRef(false);
+  const region = useRef<string | undefined>(undefined);
   const backgroundSeen = useRef(new Set(state.chats.flatMap(c => c.messages.filter(m => m.via === 'background').map(m => m.id))));
   const cooldown = useRef(0), seen = useRef(new Set<string>());
   const id = useId();
+
   const waiting = state.trades.some(t => t.status === 'approval_required');
   const streaming = messages.some(m => m.status === 'streaming');
-  const mode = assembling ? 'assembling' : busy ? (streaming ? 'acting' : 'researching') : waiting ? 'waiting' : reconsidering ? 'reflecting' : open || focused ? 'listening' : note ? 'noticed' : 'idle';
-  const labels = { idle: state.agent?.enabled === false ? 'Background checks paused' : 'Here when you need me', researching: 'Looking into it', acting: 'Working on it', waiting: 'A decision needs you', noticed: 'A thought for you', reflecting: 'Updating my understanding', listening: 'Listening', assembling: 'Making room for your thought' };
-  const close = () => { setOpen(false); orb.current?.focus(); };
+  const mode = agentState({ open, busy, streaming, waiting, discovery: !!note, attending: !!attend, reflecting });
+  const label = AGENT_LABEL[mode];
+  const close = useCallback(() => { setOpen(false); orb.current?.focus(); }, []);
+
+  const traits = agentAvatarTraits(state.agent?.id ?? 'default', state.profile);
+  const palette = useMemo(() => identityPalette(
+    state.agent?.id ?? 'default',
+    state.profile.themes,
+    state.inferred,
+    identityDepth(state, identityStats(state, agents?.length ? agents : state.agent ? [state.agent] : [])),
+  ), [state, agents]);
+
+  // Openers come from what the person actually believes, not from a stock list.
+  const prompts = useMemo(() => {
+    const beliefs = convictionsOf(state);
+    const first = beliefs[0]?.text.replace(/[.!?]\s*$/, '');
+    return [first ? `Challenge “${first.length > 52 ? `${first.slice(0, 52)}…` : first}”` : 'Challenge my thesis', 'What am I overlooking?'];
+  }, [state]);
 
   useEffect(() => {
     if (!lastChange) return;
-    setReconsidering(true);
-    const timer = setTimeout(() => setReconsidering(false), 12000);
+    setReflecting(true);
+    const timer = setTimeout(() => setReflecting(false), 9000);
     return () => clearTimeout(timer);
   }, [lastChange]);
-  useEffect(() => { backgroundSeen.current = new Set(state.chats.flatMap(c => c.messages.filter(m => m.via === 'background').map(m => m.id))); seen.current.clear(); cooldown.current = 0; setNote(null); setOpen(false); setDraft(''); }, [state.agent?.id]);
+
+  useEffect(() => {
+    backgroundSeen.current = new Set(state.chats.flatMap(c => c.messages.filter(m => m.via === 'background').map(m => m.id)));
+    seen.current.clear(); cooldown.current = 0; setNote(null); setOpen(false); setDraft('');
+  }, [state.agent?.id]);
+
   useEffect(() => {
     const receive = (event: Event) => {
       const context = (event as CustomEvent<PresenceContext>).detail;
@@ -47,134 +79,164 @@ export function AmbientAgent({ resolveHref = href => href }: { resolveHref?: (hr
     window.addEventListener('rubicon:presence', receive);
     return () => window.removeEventListener('rubicon:presence', receive);
   }, [state, open, busy]);
+
   useEffect(() => {
     const fresh = state.chats.flatMap(c => c.messages).filter(m => m.via === 'background' && !backgroundSeen.current.has(m.id));
     fresh.forEach(m => backgroundSeen.current.add(m.id));
-    const latest = fresh.at(-1);
-    if (latest && state.agent?.enabled !== false && !open && !busy && Date.now() - cooldown.current > 90000) {
+    if (fresh.length && state.agent?.enabled !== false && !open && !busy && Date.now() - cooldown.current > 90000) {
       cooldown.current = Date.now();
-      setNote('Your agent has a new discovery. Open Activity to see what changed.');
+      setNote('Your agent found something while you were away.');
     }
   }, [state.chats, state.agent?.enabled, open, busy]);
+
   useEffect(() => { if (!note || open) return; const timer = setTimeout(() => setNote(null), 14000); return () => clearTimeout(timer); }, [note, open]);
+
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'j') {
-        event.preventDefault();
-        const target = document.activeElement;
-        if (!open && target && target !== document.body && !root.current?.contains(target)) {
-          const rect = target.getBoundingClientRect();
-          position.current = { x: rect.left, y: rect.bottom + 12 };
-        }
-        summoned.current = true;
-        if (open) close(); else setOpen(true);
-      }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'j') { event.preventDefault(); summoned.current = true; if (open) close(); else setOpen(true); }
       if (event.key === 'Escape' && open) close();
     };
     const outside = (event: PointerEvent) => { if (open && !root.current?.contains(event.target as Node)) setOpen(false); };
+    const summon = () => { summoned.current = true; setOpen(true); };
     document.addEventListener('keydown', key); document.addEventListener('pointerdown', outside);
-    return () => { document.removeEventListener('keydown', key); document.removeEventListener('pointerdown', outside); };
-  }, [open]);
+    window.addEventListener('rubicon:summon', summon);
+    return () => {
+      document.removeEventListener('keydown', key); document.removeEventListener('pointerdown', outside);
+      window.removeEventListener('rubicon:summon', summon);
+    };
+  }, [open, close]);
+
   useEffect(() => { if (open) input.current?.focus(); }, [open]);
   useEffect(() => { if (open && log.current) log.current.scrollTop = log.current.scrollHeight; }, [open, messages]);
 
-  // Content is the anchor; the viewport only supplies collision boundaries.
+  // Looking without going. Whatever the person is reading pulls the agent's
+  // attention, and only its attention: the body stays wherever it was.
   useEffect(() => {
-    let inactivity: ReturnType<typeof setTimeout>;
-    let frame = 0;
-    const move = (x: number, y: number) => {
-      const width = Math.min(520, window.innerWidth - 32);
-      position.current = {
-        x: Math.max(16, Math.min(x, window.innerWidth - (open ? width : note ? Math.min(300, window.innerWidth - 40) : 76) - 16)),
-        y: Math.max(90, Math.min(y, window.innerHeight - (open ? Math.min(570, window.innerHeight - 112) : note ? 260 : 90) - 16)),
-      };
-      gsap.to(root.current, { ...position.current, duration: prefersReducedMotion() ? 0 : open ? .55 : 1.4, ease: 'power3.out', overwrite: 'auto' });
+    const look = (event: Event) => setAttend((event as CustomEvent<{ x: number; y: number } | null>).detail ?? null);
+    const track = (event: FocusEvent) => {
+      const target = event.target as HTMLElement | null;
+      composing.current = event.type === 'focusin' && !!target?.matches?.('textarea, input:not([type=checkbox]):not([type=radio])');
     };
-    const dock = () => {
-      if (open && summoned.current) { move(position.current.x, position.current.y); return; }
-      const anchor = document.querySelector('[data-intelligence-anchor]')
-        ?? document.querySelector('.wv-decision, .wv-memory-chain')
-        ?? document.querySelector('.wv-market-object')
-        ?? document.querySelector('.wv-memory-spread')
-        ?? document.querySelector('.wv-thesis-layout')
-        ?? document.querySelector('main h1');
-      const rect = anchor?.getBoundingClientRect();
-      setContext(document.querySelector('.wv-market') ? 'your discoveries' : document.querySelector('.wv-memory') ? 'your evolving perspective' : 'your thesis');
-      move(rect ? rect.right + 18 : window.innerWidth * .7, rect ? rect.top + 12 : 180);
-    };
-    const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(dock); };
-    const active = () => { setQuiet(false); clearTimeout(inactivity); inactivity = setTimeout(() => setQuiet(true), 24000); };
-    const magnet = (event: PointerEvent | FocusEvent) => {
-      active();
-      if (open) return;
-      const anchor = (event.target as Element)?.closest?.('[data-intelligence-anchor], .wv-market-object, .wv-theme-object, .wv-echoes article, .wv-memory-spread, .wv-thesis-layout');
-      if (anchor) { const rect = anchor.getBoundingClientRect(); move(rect.right + 16, rect.top + 8); }
-    };
-    const summon = () => { summoned.current = true; setOpen(true); };
-    const observer = new MutationObserver(schedule);
-    const main = document.querySelector('main');
-    if (main) observer.observe(main, { childList: true, subtree: true });
-    dock(); active();
-    window.addEventListener('resize', schedule);
-    window.addEventListener('scroll', schedule, true);
-    window.addEventListener('rubicon:summon', summon);
-    document.addEventListener('pointerover', magnet);
-    document.addEventListener('focusin', magnet);
-    document.addEventListener('keydown', active);
+    window.addEventListener('rubicon:attend', look);
+    document.addEventListener('focusin', track); document.addEventListener('focusout', track);
     return () => {
-      observer.disconnect(); cancelAnimationFrame(frame); clearTimeout(inactivity);
-      window.removeEventListener('resize', schedule); window.removeEventListener('scroll', schedule, true);
-      window.removeEventListener('rubicon:summon', summon);
-      document.removeEventListener('pointerover', magnet); document.removeEventListener('focusin', magnet); document.removeEventListener('keydown', active);
-      gsap.killTweensOf(root.current);
+      window.removeEventListener('rubicon:attend', look);
+      document.removeEventListener('focusin', track); document.removeEventListener('focusout', track);
     };
-  }, [open, note]);
+  }, []);
+
+  /** Places worth standing: the margins beside content that marks itself. */
+  const places = useCallback((): Candidate[] => {
+    const width = window.innerWidth, height = window.innerHeight;
+    const active = document.activeElement as HTMLElement | null;
+    const keepClear = composing.current && active ? active.getBoundingClientRect() : null;
+    const found = Array.from(document.querySelectorAll<HTMLElement>('[data-agent-region]')).flatMap((node, index) => {
+      const rect = node.getBoundingClientRect();
+      if (rect.width === 0 || rect.bottom < 40 || rect.top > height - 40) return [];
+      const right = rect.right + 22;
+      const x = right + BODY < width - 16 ? right : rect.left - BODY - 22;
+      const point = { x: clamp(x, 16, width - BODY - 16), y: clamp(rect.top + 12, 84, height - BODY - 24) };
+      // While the person writes, the agent keeps out of arm's reach of the input.
+      if (keepClear && point.x < keepClear.right + 160 && point.x + BODY > keepClear.left - 160 && point.y < keepClear.bottom + 120 && point.y + BODY > keepClear.top - 120) return [];
+      return [{ id: `${node.dataset.agentRegion ?? 'region'}-${index}`, ...point, weight: Number(node.dataset.agentWeight ?? 1) || 1 }];
+    });
+    if (found.length) return found;
+    // Nothing has marked itself: drift the quiet edges instead of standing still.
+    return [
+      { id: 'edge-left', x: 28, y: height * .38, weight: 1 },
+      { id: 'edge-right', x: width - BODY - 28, y: height * .3, weight: 1 },
+      { id: 'edge-low', x: width - BODY - 60, y: height * .68, weight: 1 },
+    ].map(p => ({ ...p, x: clamp(p.x, 16, width - BODY - 16), y: clamp(p.y, 84, height - BODY - 24) }));
+  }, []);
+
+  // The wander. It chooses somewhere, curves there, rests, and chooses again.
+  useGSAP(() => {
+    const node = root.current;
+    if (!node) return;
+    gsap.set(node, { x: seat.x, y: seat.y });
+    if (prefersReducedMotion()) return;
+    let stopped = false;
+    let travel: gsap.core.Tween | null = null;
+    let rest: gsap.core.Tween | null = null;
+
+    const step = () => {
+      if (stopped || document.hidden) { rest = gsap.delayedCall(2, step); return; }
+      const from = { x: gsap.getProperty(node, 'x') as number, y: gsap.getProperty(node, 'y') as number };
+      const target = chooseRegion(places(), Math.random(), region.current);
+      if (!target) { rest = gsap.delayedCall(4, step); return; }
+      region.current = target.id;
+      const distance = Math.hypot(target.x - from.x, target.y - from.y);
+      const seconds = travelSeconds(distance, mode, composing.current);
+      const lean = clamp((target.x - from.x) / 90, -7, 7);
+      travel = gsap.to(node, {
+        motionPath: { path: arc(from, target), curviness: 1.35 },
+        duration: seconds, ease: 'creature',
+        onComplete: () => {
+          setSeat({ x: target.x, y: target.y });
+          const wait = dwellSeconds(mode, Math.random());
+          if (Number.isFinite(wait)) rest = gsap.delayedCall(wait, step);
+        },
+      });
+      gsap.to(node, { rotation: lean, duration: seconds * .3, ease: 'power2.inOut' });
+      gsap.to(node, { rotation: 0, duration: seconds * .4, ease: 'power2.inOut', delay: seconds * .6 });
+    };
+
+    rest = gsap.delayedCall(1.2, step);
+    const visibility = () => { if (document.hidden) travel?.pause(); else travel?.resume(); };
+    document.addEventListener('visibilitychange', visibility);
+    return () => {
+      stopped = true; travel?.kill(); rest?.kill();
+      document.removeEventListener('visibilitychange', visibility);
+      gsap.killTweensOf(node);
+    };
+    // The loop re-arms on state change so urgency and pace follow the agent's mood.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, { dependencies: [mode, places] });
+
+  // Breathing, under everything else.
+  useGSAP(() => {
+    if (prefersReducedMotion()) return;
+    const energy = { idle: .25, observing: .4, thinking: .75, discovering: .95, wanting: .8, interacting: .5 }[mode];
+    const loop = gsap.timeline({ repeat: -1, yoyo: true })
+      .to(body.current, { y: -3 - energy * 3, scale: 1 + energy * .05, duration: 3.4 - energy * 1.6, ease: 'breath' }, 0)
+      .to('.ambient-glow', { scale: 1.06 + energy * .26, opacity: .28 + energy * .5, duration: 3.4 - energy * 1.6, ease: 'breath' }, 0);
+    const visibility = () => document.hidden ? loop.pause() : loop.resume();
+    document.addEventListener('visibilitychange', visibility);
+    return () => { loop.kill(); document.removeEventListener('visibilitychange', visibility); };
+  }, { scope: root, dependencies: [mode], revertOnUpdate: true });
 
   useGSAP(() => {
-    const media = gsap.matchMedia();
-    media.add('(prefers-reduced-motion: no-preference)', () => {
-      const energy = { idle: .3, listening: .55, researching: .8, noticed: .9, waiting: .45, assembling: 1, acting: .7, reflecting: .5 }[mode];
-      const animation = gsap.timeline({ repeat: -1, yoyo: true })
-        .to('.ambient-core', { y: mode === 'idle' ? -4 : -2, scale: 1 + energy * .1, rotation: mode === 'reflecting' ? -24 : energy * 25, duration: 5 - energy * 2.5, ease: 'sine.inOut' }, 0)
-        .to('.ambient-halo', { scale: 1.1 + energy * .3, opacity: energy, duration: 5 - energy * 2.5, ease: 'sine.inOut' }, 0)
-        .to('.ambient-orbit', { rotation: mode === 'researching' ? 150 : -30, scaleY: mode === 'reflecting' ? .45 : .8, duration: 7, ease: 'sine.inOut' }, 0);
-      const visibility = () => document.hidden ? animation.pause() : animation.resume();
-      visibility(); document.addEventListener('visibilitychange', visibility);
-      return () => document.removeEventListener('visibilitychange', visibility);
-    });
-    return () => media.revert();
-  }, { scope: root, dependencies: [mode], revertOnUpdate: true });
-  useGSAP(() => {
-    if (!open || !panel.current) { summoned.current = false; setAssembling(false); return; }
-    setAssembling(true);
-    const tween = gsap.fromTo(panel.current, { opacity: 0, y: -12, scale: .94 }, { opacity: 1, y: 0, scale: 1, duration: prefersReducedMotion() ? 0 : .55, ease: 'power3.out', onComplete: () => setAssembling(false) });
+    if (!open || !panel.current) { summoned.current = false; return; }
+    const tween = gsap.fromTo(panel.current, { opacity: 0, y: -10, scale: .95 }, { opacity: 1, y: 0, scale: 1, duration: prefersReducedMotion() ? 0 : .5, ease: 'power3.out' });
     return () => { tween.kill(); };
   }, { dependencies: [open], scope: root });
 
-  return <div ref={root} className="ambient-agent" data-state={mode} data-quiet={quiet && !open && mode === 'idle'} data-open={open}>
+  const centre = { x: seat.x + BODY / 2, y: seat.y + BODY / 2 };
+
+  return <div ref={root} className="ambient-agent" data-state={mode} data-open={open}>
     {open && <section ref={panel} id={id} className="ambient-panel" role="dialog" aria-label="Ask your agent">
-      <header><div><span className="ambient-eyebrow">RUBICON INTELLIGENCE</span><h2>A space to think.</h2></div><button aria-label="Close agent" onClick={close}><X size={17} /></button></header>
+      <header><button aria-label="Close agent" onClick={close}><X size={17} /></button></header>
       <div ref={log} className="ambient-log">
         {note && <p className="ambient-thought">{note}</p>}
-        {!messages.length && <div className="ambient-empty"><h3>What’s on<br />your mind?</h3><p>Follow a curiosity. Test a conviction. See a little further.</p></div>}
+        {!messages.length && <div className="ambient-empty"><h3>What’s on<br />your mind?</h3></div>}
         {messages.slice(-6).map(message => <div key={message.id} className={`ambient-message is-${message.role}`}><small>{message.role === 'user' ? 'You' : state.agent?.name ?? 'Your agent'}</small>{message.parts.map((part, index) => part.type === 'text' || part.type === 'notice' ? <p key={index}>{part.text}</p> : <HubLink className="ambient-detail-link" key={index} href={resolveHref(part.type === 'trade' ? '/activity' : '/')} onClick={() => setOpen(false)}>{part.type === 'trade' ? 'Review trade' : 'View supporting details'} <ArrowUpRight size={12} /></HubLink>)}</div>)}
       </div>
-      {!busy && <div className="ambient-prompts">{(context === 'your discoveries' ? ['How do these ideas fit my thesis?', 'What deserves a closer look?'] : context === 'your evolving perspective' ? ['What changed in my thinking?', 'Challenge my thesis'] : ['Challenge my thesis', 'What am I overlooking?']).map(prompt => <button key={prompt} onClick={() => { setDraft(prompt); input.current?.focus(); }}>{prompt}<ArrowUpRight size={12}/></button>)}</div>}
-      <p className="ambient-status" role="status">{error ?? labels[mode]} {waiting && <HubLink href={resolveHref("/activity")} onClick={() => setOpen(false)}>Review activity ↗</HubLink>}</p>
+      {!busy && <div className="ambient-prompts">{prompts.map(prompt => <button key={prompt} onClick={() => { setDraft(prompt); input.current?.focus(); }}>{prompt}<ArrowUpRight size={12}/></button>)}</div>}
+      <p className="ambient-status" role="status">{error ?? label} {waiting && <HubLink href={resolveHref("/activity")} onClick={() => setOpen(false)}>Review the decision ↗</HubLink>}</p>
       <form onSubmit={event => { event.preventDefault(); if (draft.trim() && !busy && (!account || account.credits.balanceMicros > 0)) { void send(draft); setDraft(''); setNote(null); } }}>
         <textarea rows={2} ref={input} aria-label="Ask your agent" placeholder="A question, a thought…" value={draft} maxLength={4000} onChange={e => setDraft(e.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} disabled={!!account && account.credits.balanceMicros <= 0} />
         {busy ? <button type="button" onClick={stop} aria-label="Stop response"><Square size={14} /></button> : <button disabled={!draft.trim() || (!!account && account.credits.balanceMicros <= 0)} aria-label="Send message"><ArrowUp size={17} /></button>}
       </form>
-      <footer><HubLink href={resolveHref('/thesis')} onClick={() => setOpen(false)}>Your thesis</HubLink><HubLink href={resolveHref('/agents')} onClick={() => setOpen(false)}>Manage agents</HubLink><span>{account && account.credits.balanceMicros <= 0 ? 'Out of credits' : `In the context of ${context}`}</span><HubLink href={resolveHref('/')} onClick={() => setOpen(false)}>Full conversation <ArrowUpRight size={12} /></HubLink></footer>
+      <footer><HubLink href={resolveHref('/thesis')} onClick={() => setOpen(false)}>Your thesis</HubLink><HubLink href={resolveHref('/agents')} onClick={() => setOpen(false)}>Manage agents</HubLink>{account && account.credits.balanceMicros <= 0 && <span>Out of credits</span>}<HubLink href={resolveHref('/')} onClick={() => setOpen(false)}>Full conversation <ArrowUpRight size={12} /></HubLink></footer>
     </section>}
     {!open && note && <div className="ambient-nudge"><button className="ambient-nudge-copy" onClick={() => setOpen(true)}>{note}<span>Think it through <ArrowUpRight size={12} /></span></button><button aria-label="Dismiss thought" onClick={() => setNote(null)}><X size={13} /></button></div>}
-    <div className="ambient-dock"><span className="ambient-caption" aria-live="polite">{labels[mode]}</span>
-      <button ref={orb} className="ambient-orb" aria-label={`${labels[mode]}. Open agent. Shortcut Control or Command J. Summon from anywhere.`} aria-keyshortcuts="Control+j Meta+j" aria-expanded={open} aria-controls={open ? id : undefined}
-        onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-        onMouseEnter={() => setFocused(true)} onMouseLeave={() => setFocused(false)}
-        onClick={() => { summoned.current = true; setOpen(value => !value); }}>
-        <span className="ambient-halo" /><span className="ambient-core"><span /></span><span className="ambient-orbit" />
-      </button>
-    </div>
+    <button ref={orb} className="ambient-orb" aria-label={`${label}. Open agent. Shortcut Control or Command J.`} aria-keyshortcuts="Control+j Meta+j" aria-expanded={open} aria-controls={open ? id : undefined}
+      onClick={() => { summoned.current = true; setOpen(value => !value); }}>
+      <span className="ambient-glow" aria-hidden="true" />
+      <span ref={body} className="ambient-body">
+        <AgentCreature traits={traits} palette={palette} expression={mode} lookAt={{ from: centre, to: attend }} className="ambient-creature" />
+      </span>
+      <span className="sr-only" aria-live="polite">{label}</span>
+    </button>
   </div>;
 }
