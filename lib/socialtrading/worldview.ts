@@ -38,3 +38,63 @@ export function captureWorldview(state: HubState, at = new Date().toISOString())
   const frame: MemoryFrame = { id: `${at}-${state.revision}`, at, title: last ? 'Your agent’s understanding evolved' : 'Your first recorded worldview', convictions: structuredClone(convictions), interests, understanding };
   state.worldview = { ...state.worldview, convictions: state.worldview?.convictions ?? convictions, memories: [...(state.worldview?.memories ?? []), frame].slice(-120) };
 }
+
+/**
+ * Where each theme lives, forever. Direction is geography, not decoration: a
+ * person learns that energy is up and crypto is down, and afterwards they know
+ * where to look before the page has finished arriving.
+ */
+export const THEME_BEARING: Record<string, number> = { energy: 0, tech: 60, ai: 120, crypto: 180, healthcare: 240, consumer: 300 };
+
+/** Stable pseudo-bearing for something that belongs to no theme, so an
+ * unclassified asset still has a home rather than a random one each render. */
+function strayBearing(key: string): number {
+  let state = 2166136261;
+  for (const char of `rubicon-bearing-v1:${key}`) state = Math.imul(state ^ char.charCodeAt(0), 16777619) >>> 0;
+  return (state >>> 0) % 360;
+}
+
+/** The resultant direction of everything an asset belongs to. */
+export function bearing(themes: readonly string[], key = ""): number {
+  const known = themes.filter(t => t in THEME_BEARING);
+  if (!known.length) return strayBearing(key);
+  const x = known.reduce((sum, t) => sum + Math.cos(THEME_BEARING[t] * Math.PI / 180), 0);
+  const y = known.reduce((sum, t) => sum + Math.sin(THEME_BEARING[t] * Math.PI / 180), 0);
+  // Themes exactly opposite each other cancel; fall back to the first, which is
+  // more useful than dropping the asset in the middle of the field.
+  if (Math.abs(x) < 1e-9 && Math.abs(y) < 1e-9) return THEME_BEARING[known[0]];
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+export type Placement = {
+  /** Degrees clockwise from north. */
+  angle: number;
+  /** Distance from the centre as a percentage of the field. */
+  radius: number;
+  /** 0–1. Drives scale and opacity, so uncertainty reads as distance in depth. */
+  confidence: number;
+  /** 0–1 thesis relevance, kept for sorting and for the gloss. */
+  fit: number;
+};
+
+/** Distance is relevance. The band is wide enough that a glance reads it. */
+export const NEAR = 14, FAR = 46;
+
+export function placement(asset: Asset, beliefs: Conviction[], state: HubState): Placement {
+  const fit = relevance(asset, beliefs, state);
+  return {
+    angle: bearing(asset.themes, `${asset.kind}:${asset.id}`),
+    radius: NEAR + (1 - fit) * (FAR - NEAR),
+    confidence: Math.max(0, ...state.inferred.filter(i => asset.themes.includes(i.id)).map(i => i.confidence)),
+    fit,
+  };
+}
+
+/** Screen position for a placement, as percentages of the field. North is up. */
+export function point(place: Placement, rotation = 0): { x: number; y: number } {
+  const radians = (place.angle - 90 + rotation) * Math.PI / 180;
+  return { x: 50 + Math.cos(radians) * place.radius, y: 50 + Math.sin(radians) * place.radius };
+}
+
+/** How far the field must turn to bring a theme to the top. */
+export const rotationFor = (theme: string | null) => theme && theme in THEME_BEARING ? -THEME_BEARING[theme] : 0;

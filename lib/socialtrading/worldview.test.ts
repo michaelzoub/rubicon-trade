@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PREVIEW_STATE, PREVIEW_ASSETS } from '../../app/preview/fixture';
-import { captureWorldview, changeConviction, convictionsOf, relevance } from './worldview';
+import { NEAR, FAR, THEME_BEARING, bearing, captureWorldview, changeConviction, convictionsOf, placement, point, relevance, rotationFor } from './worldview';
+import type { Asset } from './types';
 describe('living worldview', () => {
   it('preserves immutable before/after memories and exposes edits to the agent thesis', () => {
     const state = structuredClone(PREVIEW_STATE);
@@ -40,5 +41,56 @@ describe('living worldview', () => {
     const state = structuredClone(PREVIEW_STATE), before = structuredClone(state);
     expect(() => changeConviction(state, {id:'bad', text:'AI', strength:NaN})).toThrow();
     expect(state).toEqual(before);
+  });
+});
+
+describe('spatial market', () => {
+  const state = () => structuredClone(PREVIEW_STATE);
+  const asset = (over: Partial<Asset> = {}): Asset => ({
+    id: 'x', kind: 'stock', symbol: 'X', name: 'X', price: 1, change: 0, chart: [], themes: [], news: [], ...over,
+  } as Asset);
+
+  it('gives every theme its own permanent direction', () => {
+    const bearings = Object.values(THEME_BEARING);
+    expect(new Set(bearings).size).toBe(bearings.length);
+    expect(THEME_BEARING.energy).toBe(0);
+  });
+
+  it('places an asset on its theme, and between themes when it spans two', () => {
+    expect(bearing(['energy'])).toBe(0);
+    expect(bearing(['crypto'])).toBe(180);
+    expect(bearing(['energy', 'tech'])).toBeCloseTo(30);
+  });
+
+  it('gives an unclassified asset a home of its own that never moves', () => {
+    const first = bearing([], 'stock:ZZZ');
+    expect(first).toBe(bearing([], 'stock:ZZZ'));
+    expect(first).not.toBe(bearing([], 'stock:AAA'));
+    expect(first).toBeGreaterThanOrEqual(0);
+    expect(first).toBeLessThan(360);
+  });
+
+  it('falls back to a real direction when two themes cancel out', () => {
+    expect(bearing(['energy', 'crypto'])).toBe(THEME_BEARING.energy);
+  });
+
+  it('brings what matters close and pushes what does not away', () => {
+    const base = state();
+    const beliefs = convictionsOf(base);
+    const connected = placement(asset({ themes: base.profile.themes.slice(0, 1) }), beliefs, base);
+    const stranger = placement(asset({ id: 'y', symbol: 'Y', themes: [] }), beliefs, base);
+    expect(connected.radius).toBeLessThan(stranger.radius);
+    expect(connected.radius).toBeGreaterThanOrEqual(NEAR);
+    expect(stranger.radius).toBeLessThanOrEqual(FAR);
+  });
+
+  it('puts north at the top and turns the field to face a theme', () => {
+    const north = point({ angle: 0, radius: 20, confidence: 0, fit: 0 });
+    expect(north.x).toBeCloseTo(50);
+    expect(north.y).toBeCloseTo(30);
+    expect(rotationFor('crypto')).toBe(-180);
+    expect(rotationFor(null)).toBe(0);
+    const turned = point({ angle: THEME_BEARING.crypto, radius: 20, confidence: 0, fit: 0 }, rotationFor('crypto'));
+    expect(turned.y).toBeCloseTo(30);
   });
 });

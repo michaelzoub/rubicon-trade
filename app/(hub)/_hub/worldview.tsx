@@ -1,10 +1,11 @@
 "use client";
-import { useRef, useState, type CSSProperties } from 'react';
+import { useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import { ArrowUpRight, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
-import { convictionsOf, relevance } from '@/lib/socialtrading/worldview';
+import { convictionsOf, placement, point, relevance, rotationFor } from '@/lib/socialtrading/worldview';
 import { THEMES } from '@/lib/socialtrading/themes';
 import type { Asset } from '@/lib/socialtrading/types';
-import { gsap, useGSAP } from '../../_components/motion';
+import { gsap, useGSAP, Flip, prefersReducedMotion } from '../../_components/motion';
+import { assetGloss, relationWords, useGloss } from './gloss';
 import { ProfileAvatar } from '../profile-avatar';
 import { useHub } from './hub-provider';
 import { HubLink } from './navigation';
@@ -74,55 +75,107 @@ export function DecisionSurface({ asset: providedAsset, question, onClose }: { a
   </div>;
 }
 /** Stable angular slots preserve spatial memory; only relevance changes the radius. */
-export function SpatialMarket({ assets }: { assets: Asset[] }) {
+/** What the field looks like between renders, so a change can be animated as
+ * the same objects moving rather than a new page appearing. */
+export type FieldSnapshot = RefObject<ReturnType<typeof Flip.getState> | null>;
+export const captureField = (snapshot: FieldSnapshot) => { snapshot.current = Flip.getState('.wv-object', { props: 'opacity' }); };
+
+/**
+ * The market as somewhere rather than something. Themes hold permanent
+ * bearings, so direction is geography a person learns once; distance is how
+ * close an idea sits to what they believe; scale and light are how sure the
+ * agent is. Nothing is labelled, because position is the label.
+ */
+export function SpatialMarket({ assets, theme = null, snapshot }: { assets: Asset[]; theme?: string | null; snapshot?: FieldSnapshot }) {
   const { state, userId } = useHub();
+  const gloss = useGloss();
   const [selected, select] = useState<Asset>();
-  const [hovered, hover] = useState<Asset>();
-  const [idea, setIdea] = useState<string>();
-  const root = useRef<HTMLDivElement>(null);
-  const slots = useRef(new Map<string, number>());
-  const beliefs = convictionsOf(state);
-  const visible = assets.slice(0, 8);
-  const visibleKeys = new Set(visible.map(a => `${a.kind}:${a.id}`));
-  for (const key of slots.current.keys()) if (!visibleKeys.has(key)) slots.current.delete(key);
-  const ranked = visible.map(asset => {
-    const key = `${asset.kind}:${asset.id}`;
-    if (!slots.current.has(key)) slots.current.set(key, Array.from({ length: 8 }, (_, i) => i).find(i => ![...slots.current.values()].includes(i))!);
-    const fit = relevance(asset, beliefs, state);
-    const confidence = Math.max(0, ...state.inferred.filter(i => asset.themes.includes(i.id)).map(i => i.confidence));
-    return { asset, fit, confidence, slot: slots.current.get(key)! };
-  });
-  const inspected = assets.find(a => a.id === selected?.id && a.kind === selected?.kind) ?? selected;
-  const preview = hovered;
-  const belief = beliefs.find(c => preview?.themes.some(t => c.themes.includes(t)));
+  const field = useRef<HTMLDivElement>(null);
+  const beliefs = useMemo(() => convictionsOf(state), [state]);
+  const rotation = rotationFor(theme);
+
+  const placed = useMemo(() => assets.slice(0, 14)
+    .map(asset => ({ asset, place: placement(asset, beliefs, state) }))
+    .sort((a, b) => b.place.fit - a.place.fit), [assets, beliefs, state]);
+  const key = placed.map(p => `${p.asset.kind}:${p.asset.id}`).join('|');
+
+  // Arrival: each object comes in from beyond the edge along its own bearing,
+  // nearest first, so the world assembles by relevance instead of by index.
   useGSAP(() => {
-    const media = gsap.matchMedia();
-    media.add('(prefers-reduced-motion: no-preference)', () => { gsap.fromTo('.gravity-asset-head', { opacity: 0 }, { opacity: 1, duration: .55, ease: 'power3.out', clearProps: 'opacity' }); });
-    return () => media.revert();
-  }, { scope: root, dependencies: [assets.map(a => a.id).join('|')], revertOnUpdate: true });
-  return <div className="wv-market" ref={root}>
-    <div className="wv-market-caption"><span>YOUR MARKET GRAVITY</span><small>Distance = thesis relevance · depth = agent confidence</small></div>
-    <div className="wv-space" aria-label="Market ordered by relevance to your thesis">
-      <div className="wv-space-wash"/><div className="gravity-ring gravity-ring--inner"/><div className="gravity-ring gravity-ring--outer"/>
-      <div className="gravity-themes">{THEMES.filter(t => beliefs.some(c => c.themes.includes(t.id))).slice(0, 3).map(t => <button key={t.id} onClick={() => { setIdea(t.id); select(undefined); }}>{t.name}<span>↗</span></button>)}</div>
-      <HubLink href="/thesis" className="wv-center" aria-label="Open your thesis"><ProfileAvatar profile={state.profile} seed={state.agent?.id ?? userId} themes={state.profile.themes} className="wv-center-orb"/><span>Your thesis</span><small>The center of your world</small></HubLink>
-      {ranked.map(({asset, fit, confidence, slot}) => {
-        const angle = ([0, 4, 2, 6, 1, 5, 3, 7][slot % 8] * 45 - 22.5) * Math.PI / 180;
-        const radius = 30 + (1 - fit) * 11;
-        return <button key={`${asset.kind}-${asset.id}`} className={`wv-market-object gravity-asset${fit < .1 ? ' is-rejected' : ''}`} style={{ left: `${50 + Math.cos(angle)*radius}%`, top: `${52 + Math.sin(angle)*radius}%`, '--confidence': confidence } as CSSProperties} aria-pressed={selected?.id === asset.id} aria-label={`${asset.symbol}, ${usd(asset.price)}, ${asset.change ?? 'unavailable'} percent daily change. Inspect thesis connection.`} onPointerEnter={() => hover(asset)} onPointerLeave={() => hover(undefined)} onFocus={() => hover(asset)} onBlur={() => hover(undefined)} onClick={() => { select(asset); setIdea(undefined); }}>
-          <span className="gravity-asset-head"><AssetLogo asset={asset}/><span><b>{asset.symbol}</b><span className="gravity-name">{asset.name}</span></span><span className="gravity-confidence" title={confidence ? `${Math.round(confidence*100)}% agent confidence in the connected theme` : 'Agent confidence not established'}/></span>
-          <span className="gravity-quote"><strong>{asset.price === null ? 'Unavailable' : usd(asset.price)}</strong><ChangeText value={asset.change}/></span>
-          <span className="gravity-signal"><Sparkline points={asset.chart.slice(-30)} width={55} height={16}/><small>{fit < .1 ? 'Set aside' : confidence ? `${Math.round(confidence*100)}% confidence` : 'New connection'}</small></span>
-        </button>;
+    if (prefersReducedMotion() || snapshot?.current) return;
+    const nodes = gsap.utils.toArray<HTMLElement>('.wv-object', field.current);
+    nodes.forEach((node, index) => {
+      const away = Number(node.dataset.bearing) * Math.PI / 180;
+      gsap.fromTo(node,
+        { opacity: 0, x: Math.cos(away - Math.PI / 2) * 320, y: Math.sin(away - Math.PI / 2) * 320, scale: .7 },
+        { opacity: 1, x: 0, y: 0, scale: 1, duration: 1.1, delay: index * .05, ease: 'creature', clearProps: 'transform' });
+    });
+  }, { scope: field, dependencies: [key], revertOnUpdate: true });
+
+  // Reorganisation: the same objects travel to their new places. What leaves
+  // shrinks outward along its bearing; what arrives comes in along its own.
+  useGSAP(() => {
+    const previous = snapshot?.current;
+    if (!previous) return;
+    if (snapshot) snapshot.current = null;
+    if (prefersReducedMotion()) return;
+    Flip.from(previous, {
+      duration: .95, ease: 'power3.inOut', stagger: .015, absolute: true, scale: true,
+      onEnter: nodes => gsap.fromTo(nodes, { opacity: 0, scale: .6 }, { opacity: 1, scale: 1, duration: .7, ease: 'creature' }),
+      onLeave: nodes => gsap.to(nodes, { opacity: 0, scale: .55, duration: .4, ease: 'power2.in' }),
+    });
+  }, { scope: field, dependencies: [key, rotation] });
+
+  // Depth: the further from the centre, the more an object drifts, so distance
+  // is felt as well as measured.
+  useGSAP(() => {
+    if (prefersReducedMotion()) return;
+    gsap.utils.toArray<HTMLElement>('.wv-object-drift', field.current).forEach(node => {
+      const reach = Number(node.dataset.drift);
+      gsap.to(node, {
+        x: `random(${-reach}, ${reach})`, y: `random(${-reach}, ${reach})`,
+        duration: `random(7, 13)`, repeat: -1, yoyo: true, ease: 'sine.inOut', delay: Math.random() * 3,
+      });
+    });
+  }, { scope: field, dependencies: [key], revertOnUpdate: true });
+
+  // Focusing a theme turns the whole field to face it and moves in a little.
+  useGSAP(() => {
+    if (prefersReducedMotion()) return;
+    gsap.to(field.current, { scale: theme ? 1.08 : 1, duration: 1.1, ease: 'power3.inOut' });
+  }, { dependencies: [theme] });
+
+  return <div className="wv-market">
+    <div ref={field} className="wv-space" data-agent-region="market" data-agent-weight="2" aria-label="The market, placed by what you believe">
+      <div className="wv-space-wash" aria-hidden="true" />
+      <div className="gravity-ring gravity-ring--inner" aria-hidden="true" /><div className="gravity-ring gravity-ring--outer" aria-hidden="true" />
+      <HubLink href="/thesis" className="wv-centre" aria-label="You, and what you believe. Open your thesis.">
+        <ProfileAvatar profile={state.profile} seed={state.agent?.id ?? userId} themes={state.profile.themes} className="wv-centre-mark" />
+      </HubLink>
+      {placed.map(({ asset, place }) => {
+        const at = point(place, rotation);
+        const off = theme ? !asset.themes.includes(theme) : false;
+        return <div key={`${asset.kind}:${asset.id}`} className={`wv-object${off ? ' is-off' : ''}`} data-flip-id={`${asset.kind}:${asset.id}`} data-bearing={place.angle}
+          style={{ left: `${at.x}%`, top: `${at.y}%`, '--confidence': place.confidence, '--fit': place.fit, '--tether': `${place.angle + 90 + rotation}deg` } as CSSProperties}>
+          <span className="wv-object-tether" aria-hidden="true" />
+          <span className="wv-object-drift" data-drift={Math.round((1 - place.fit) * 7)}>
+            <button type="button" className="wv-object-card" aria-pressed={selected?.id === asset.id}
+              aria-label={`${asset.symbol}, ${asset.name}, ${asset.price === null ? 'price unavailable' : usd(asset.price)}. ${relationWords(place.fit)}.`}
+              onClick={() => select(asset)} {...gloss(assetGloss(asset, state))}>
+              <AssetLogo asset={asset} />
+              <b>{asset.symbol}</b>
+              <span className="wv-object-quote"><strong>{asset.price === null ? '—' : usd(asset.price)}</strong><ChangeText value={asset.change} /></span>
+              <Sparkline points={asset.chart.slice(-30)} width={52} height={15} />
+            </button>
+          </span>
+        </div>;
       })}
-      {!assets.length && <p className="wv-no-market">Market discoveries will appear here when data is available.</p>}
+      {!assets.length && <p className="wv-no-market">Nothing to place here yet.</p>}
     </div>
-    <div className="gravity-preview" aria-live="polite">{preview ? <><span>YOUR BELIEF</span><p>{belief?.text ?? 'An idea outside your established thesis.'}</p><span>WHAT CHANGED</span><p>{preview.news[0]?.title ?? preview.reason ?? 'No new evidence reported. Select to investigate.'}</p></> : <><span>FOLLOW A CONNECTION</span><p>Hover to see the belief and signal. Select to examine the evidence, uncertainty, and your next move.</p></>}</div>
-    <div className="wv-space-footer"><span className="wv-blue-dot"/> Positions change with your thinking. Quotes may be delayed.<HubLink href="/thesis">Adjust your thesis ↗</HubLink></div>
-    {idea && <div className="wv-decision"><header><p className="eyebrow">A theme in your world</p><button className="wv-close" aria-label="Close theme" onClick={() => setIdea(undefined)}><X size={17}/></button></header><h2>{THEMES.find(t => t.id === idea)?.name}</h2><div className="wv-reasoning">{beliefs.filter(c => c.themes.includes(idea)).map(c => <section key={c.id}><span>CONNECTED BELIEF</span><h3>{c.text}</h3><p>{c.origin}</p><HubLink href="/thesis">Reconsider this belief ↗</HubLink></section>)}</div></div>}
-    {inspected && <DecisionSurface asset={inspected} onClose={() => select(undefined)}/>}
+    {selected && <DecisionSurface asset={assets.find(a => a.id === selected.id && a.kind === selected.kind) ?? selected} onClose={() => select(undefined)} />}
   </div>;
 }
+
 export function MemoryView() {
   const { state } = useHub();
   const [index, setIndex] = useState<number | null>(null);
