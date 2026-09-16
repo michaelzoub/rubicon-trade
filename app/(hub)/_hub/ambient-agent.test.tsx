@@ -87,3 +87,31 @@ it('names its state for anyone not watching it move', async () => {
   hub.state = { ...hub.state, trades: PREVIEW_STATE.trades }; await render();
   expect(container.querySelector('.ambient-orb')?.getAttribute('aria-label')).toContain('A decision needs you');
 });
+
+it('holds still while it is being reached for, and while the thought is open', async () => {
+  await render();
+  const agent = container.querySelector<HTMLElement>('.ambient-agent')!;
+  expect(agent.dataset.held).toBeUndefined();
+
+  // React synthesises enter and leave from the bubbling over/out pair.
+  await act(async () => { agent.dispatchEvent(new MouseEvent('pointerover', { bubbles: true })); });
+  expect(agent.dataset.held).toBe('true');
+  await act(async () => { agent.dispatchEvent(new MouseEvent('pointerout', { bubbles: true })); });
+  expect(agent.dataset.held).toBeUndefined();
+
+  // Opening it is the other reason to stop: nothing being read should move.
+  await clickOrb();
+  expect(container.querySelector('.ambient-agent')?.getAttribute('data-open')).toBe('true');
+});
+
+it('keeps the thought surface on screen wherever the agent happens to be', async () => {
+  await render();
+  await clickOrb();
+  const agent = container.querySelector<HTMLElement>('.ambient-agent')!;
+  const panel = container.querySelector<HTMLElement>('.ambient-panel')!;
+  expect(panel).not.toBeNull();
+  // The agent is the panel's origin, so it must sit where a panel still fits.
+  const x = Number((agent.style.transform.match(/translate(?:3d)?\(([-\d.]+)px/) ?? [])[1] ?? 0);
+  expect(x).toBeGreaterThanOrEqual(0);
+  expect(x).toBeLessThanOrEqual(Math.max(16, window.innerWidth - Math.min(520, window.innerWidth - 32) - 16) + 1);
+});

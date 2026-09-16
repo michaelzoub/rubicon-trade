@@ -12,45 +12,49 @@
 @media(min-width:601px){.gravity-themes{position:absolute;inset:0;display:block;pointer-events:none}.gravity-themes button{position:absolute;top:10%;left:22%;padding:8px 12px;border:1px solid #dee9f5;border-radius:20px;background:#ffffff99;pointer-events:auto;transform:translateX(-50%)}.gravity-themes button:nth-child(2){left:50%;top:3%}.gravity-themes button:nth-child(3){left:78%;top:10%}}
 
 
+
 /* The field. Direction is theme, distance is relevance, light is confidence.
-   Nothing here is labelled, because the position is the label. */
+   The card itself is the one Rubicon already had: a cool blue-tinted face that
+   deepens with the agent's confidence and lifts under the pointer. */
 .wv-space{position:relative}
 .wv-centre{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;place-items:center;text-decoration:none;z-index:4;border-radius:50%}
 .wv-centre-mark{width:78px!important;height:78px!important}
-.wv-centre:focus-visible{outline:2px solid var(--id-accent,#4b94ed);outline-offset:6px}
+.wv-centre:focus-visible{outline:2px solid #4b94ed;outline-offset:6px}
 
 .wv-object{position:absolute;transform:translate(-50%,-50%);z-index:2}
-.wv-object-tether{position:absolute;left:50%;top:50%;width:46px;height:1px;transform-origin:0 50%;transform:rotate(var(--tether,0deg));background:linear-gradient(90deg,color-mix(in srgb,var(--id-accent,#7aa3d6) calc(14% + var(--confidence,0)*26%),transparent),transparent);opacity:.7;transition:opacity .3s;pointer-events:none}
+.wv-object-tether{position:absolute;left:50%;top:50%;width:46px;height:1px;transform-origin:0 50%;transform:rotate(var(--tether,0deg));background:linear-gradient(90deg,rgba(122,159,200,calc(.16 + var(--confidence,0)*.3)),transparent);opacity:.7;transition:opacity .3s;pointer-events:none}
 .wv-object-drift{display:block;position:relative;z-index:1}
 
-.wv-object-card{display:grid;grid-template-columns:auto 1fr;grid-auto-rows:auto;gap:4px 9px;align-items:center;width:150px;padding:12px;text-align:left;cursor:pointer;
-  border:1px solid color-mix(in srgb,var(--id-accent,#7a9fc8) calc(16% + var(--confidence,0)*30%),transparent);
+.gravity-asset.wv-object-card{
+  display:block;width:156px;max-width:156px;text-align:left;padding:13px;cursor:pointer;
+  /* The edge is drawn with an inset ring rather than a border. This file lands
+     in a cascade layer, and the unlayered reset's `border:0` beats any border
+     set here however specific it is; a ring also takes the calc() that makes
+     the edge deepen with the agent's confidence. */
+  border:0;
   border-radius:15px;
-  background:linear-gradient(140deg,#fff,color-mix(in srgb,var(--id-wash,#ebf4ff) calc(55% + var(--confidence,0)*45%),#fff));
-  box-shadow:0 calc(3px + var(--confidence,0)*10px) calc(12px + var(--confidence,0)*22px) color-mix(in srgb,var(--id-accent-deep,#638ab3) 14%,transparent);
-  opacity:calc(.62 + var(--fit,0)*.38);
-  transition:transform .28s cubic-bezier(.2,.8,.3,1),box-shadow .28s,opacity .3s,border-color .3s}
-.wv-object-card .hub-asset-logo{grid-row:1/3;width:28px;height:28px;min-width:28px;font-size:9px;border-radius:9px}
-.wv-object-card b{font-size:13px;font-weight:600;letter-spacing:0;color:var(--id-accent-deep,#314c70)}
-.wv-object-quote{display:flex;justify-content:space-between;gap:8px;align-items:center;font-variant-numeric:tabular-nums}
-.wv-object-quote strong{font-size:12px;font-weight:500;color:#314863}
-.wv-object-quote .hub-change{font-size:10px!important}
-.wv-object-card svg:last-child{grid-column:1/-1;margin-top:2px;opacity:.75}
-
-.wv-object-card:hover,.wv-object-card:focus-visible{transform:translateY(-4px) scale(1.04);opacity:1;border-color:var(--id-accent,#8ab6ed);box-shadow:0 16px 34px color-mix(in srgb,var(--id-accent-deep,#528dd3) 24%,transparent)}
+  background:linear-gradient(140deg,#fff,rgba(235,244,255,calc(.6 + var(--confidence,0)*.4)));
+  box-shadow:
+    inset 0 0 0 1px rgba(122,159,200,calc(.2 + var(--confidence,0)*.34)),
+    0 calc(3px + var(--confidence,0)*10px) calc(12px + var(--confidence,0)*22px) #638ab31c;
+  transition:transform .25s cubic-bezier(.2,.8,.3,1),box-shadow .25s,border-color .25s,opacity .3s;
+}
+.gravity-asset.wv-object-card:hover,.gravity-asset.wv-object-card:focus-visible{transform:translateY(-3px);box-shadow:inset 0 0 0 1px #8ab6ed,0 12px 30px #528dd32b}
+.gravity-asset.wv-object-card.is-rejected{opacity:.45}
+.gravity-asset.wv-object-card.is-rejected:hover,.gravity-asset.wv-object-card.is-rejected:focus-visible{opacity:1}
 .wv-object:has(.wv-object-card:hover) .wv-object-tether,.wv-object:has(.wv-object-card:focus-visible) .wv-object-tether{opacity:1}
 .wv-object:has(.wv-object-card:hover),.wv-object:has(.wv-object-card:focus-visible){z-index:6}
 .wv-object.is-off{z-index:1}
-.wv-object.is-off .wv-object-card{opacity:.24;transform:scale(.88)}
+.wv-object.is-off .wv-object-card{opacity:.28}
 .wv-object.is-off .wv-object-tether{opacity:.2}
 
-@media(max-width:1000px){.wv-object-card{width:132px;padding:10px}}
+@media(max-width:1000px){.gravity-asset.wv-object-card{width:140px;padding:10px}}
 @media(max-width:600px){
   .wv-space{height:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:12px 0 22px}
   .wv-space .wv-centre{position:relative;left:auto;top:auto;transform:none;grid-column:1/-1;margin:10px 0}
   .wv-object{position:relative;left:auto!important;top:auto!important;transform:none}
   .wv-object-tether{display:none}
-  .wv-object-card{width:auto}
-  .wv-object.is-off .wv-object-card{opacity:.4;transform:none}
+  .gravity-asset.wv-object-card{width:auto;max-width:none}
+  .wv-object.is-off .wv-object-card{opacity:.45}
 }
-@media(prefers-reduced-motion:reduce){.wv-object-card{transition:opacity .2s}.wv-object-card:hover,.wv-object-card:focus-visible{transform:none}}
+@media(prefers-reduced-motion:reduce){.gravity-asset.wv-object-card{transition:opacity .2s}.gravity-asset.wv-object-card:hover,.gravity-asset.wv-object-card:focus-visible{transform:none}}

@@ -27,11 +27,15 @@ export function AmbientAgent({ resolveHref = href => href }: { resolveHref?: (hr
   const [reflecting, setReflecting] = useState(false);
   const [attend, setAttend] = useState<{ x: number; y: number } | null>(null);
   const [seat, setSeat] = useState({ x: 120, y: 220 });
+  /** Pointer or focus is on the agent: it holds still to be caught. */
+  const [held, setHeld] = useState(false);
   const root = useRef<HTMLDivElement>(null), orb = useRef<HTMLButtonElement>(null), panel = useRef<HTMLElement>(null);
   const input = useRef<HTMLTextAreaElement>(null), log = useRef<HTMLDivElement>(null), body = useRef<HTMLSpanElement>(null);
   const summoned = useRef(false);
   const composing = useRef(false);
   const region = useRef<string | undefined>(undefined);
+  const travelling = useRef<gsap.core.Tween | null>(null);
+  const resting = useRef<gsap.core.Tween | null>(null);
   const backgroundSeen = useRef(new Set(state.chats.flatMap(c => c.messages.filter(m => m.via === 'background').map(m => m.id))));
   const cooldown = useRef(0), seen = useRef(new Set<string>());
   const id = useId();
@@ -108,6 +112,44 @@ export function AmbientAgent({ resolveHref = href => href }: { resolveHref?: (hr
 
   useEffect(() => { if (open) input.current?.focus(); }, [open]);
   useEffect(() => { if (open && log.current) log.current.scrollTop = log.current.scrollHeight; }, [open, messages]);
+
+  // Reaching for the agent stops it, and so does opening it: nothing that a
+  // person is trying to touch or read should still be moving.
+  const still = open || held;
+  const stillNow = useRef(still);
+  useEffect(() => {
+    stillNow.current = still;
+    if (still) { travelling.current?.pause(); resting.current?.pause(); }
+    else { travelling.current?.resume(); resting.current?.resume(); }
+  }, [still]);
+
+  // Opening it makes room: the agent moves to wherever the thought surface
+  // fits whole, so the conversation is never half off the screen.
+  useEffect(() => {
+    if (!open || !root.current) return;
+    const panel = { width: Math.min(520, window.innerWidth - 32), height: Math.min(570, window.innerHeight - 112) };
+    const at = {
+      x: clamp(gsap.getProperty(root.current, 'x') as number, 16, Math.max(16, window.innerWidth - panel.width - 16)),
+      y: clamp(gsap.getProperty(root.current, 'y') as number, 90, Math.max(90, window.innerHeight - panel.height - 16)),
+    };
+    gsap.to(root.current, { ...at, duration: prefersReducedMotion() ? 0 : .45, ease: 'power3.out', overwrite: 'auto' });
+    setSeat(at);
+  }, [open]);
+
+  // However the window changes, the agent stays inside it.
+  useEffect(() => {
+    const fit = () => {
+      if (!root.current) return;
+      const at = {
+        x: clamp(gsap.getProperty(root.current, 'x') as number, 16, Math.max(16, window.innerWidth - BODY - 16)),
+        y: clamp(gsap.getProperty(root.current, 'y') as number, 84, Math.max(84, window.innerHeight - BODY - 24)),
+      };
+      gsap.set(root.current, at);
+      setSeat(at);
+    };
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, []);
 
   // Looking without going. Whatever the person is reading pulls the agent's
   // attention, and only its attention: the body stays wherever it was.
@@ -186,14 +228,13 @@ export function AmbientAgent({ resolveHref = href => href }: { resolveHref?: (hr
     gsap.set(node, { x: seat.x, y: seat.y });
     if (prefersReducedMotion()) return;
     let stopped = false;
-    let travel: gsap.core.Tween | null = null;
-    let rest: gsap.core.Tween | null = null;
+    const hold = <T extends gsap.core.Tween>(tween: T) => { if (stillNow.current) tween.pause(); return tween; };
 
     const step = () => {
-      if (stopped || document.hidden) { rest = gsap.delayedCall(2, step); return; }
+      if (stopped || document.hidden) { resting.current = hold(gsap.delayedCall(2, step)); return; }
       const from = { x: gsap.getProperty(node, 'x') as number, y: gsap.getProperty(node, 'y') as number };
       const target = chooseRegion(places(), Math.random(), region.current);
-      if (!target) { rest = gsap.delayedCall(4, step); return; }
+      if (!target) { resting.current = hold(gsap.delayedCall(4, step)); return; }
       region.current = target.id;
       const distance = Math.hypot(target.x - from.x, target.y - from.y);
       const seconds = travelSeconds(distance, mode, composing.current);
@@ -203,24 +244,25 @@ export function AmbientAgent({ resolveHref = href => href }: { resolveHref?: (hr
       // can never leave the agent sitting still while its posture animates.
       const path = arc(from, target, bowAway(from, target, window.innerWidth / 2));
       const progress = { at: 0 };
-      travel = gsap.to(progress, {
+      travelling.current = hold(gsap.to(progress, {
         at: 1, duration: seconds, ease: 'creature',
         onUpdate: () => gsap.set(node, along(path, progress.at)),
         onComplete: () => {
           setSeat({ x: target.x, y: target.y });
           const wait = dwellSeconds(mode, Math.random());
-          if (Number.isFinite(wait)) rest = gsap.delayedCall(wait, step);
+          if (Number.isFinite(wait)) resting.current = hold(gsap.delayedCall(wait, step));
         },
-      });
+      }));
       gsap.to(node, { rotation: lean, duration: seconds * .3, ease: 'power2.inOut' });
       gsap.to(node, { rotation: 0, duration: seconds * .4, ease: 'power2.inOut', delay: seconds * .6 });
     };
 
-    rest = gsap.delayedCall(1.2, step);
-    const visibility = () => { if (document.hidden) travel?.pause(); else travel?.resume(); };
+    resting.current = hold(gsap.delayedCall(1.2, step));
+    const visibility = () => { if (document.hidden) travelling.current?.pause(); else if (!stillNow.current) travelling.current?.resume(); };
     document.addEventListener('visibilitychange', visibility);
     return () => {
-      stopped = true; travel?.kill(); rest?.kill();
+      stopped = true; travelling.current?.kill(); resting.current?.kill();
+      travelling.current = null; resting.current = null;
       document.removeEventListener('visibilitychange', visibility);
       gsap.killTweensOf(node);
     };
@@ -248,7 +290,9 @@ export function AmbientAgent({ resolveHref = href => href }: { resolveHref?: (hr
 
   const centre = { x: seat.x + BODY / 2, y: seat.y + BODY / 2 };
 
-  return <div ref={root} className="ambient-agent" data-state={mode} data-open={open}>
+  return <div ref={root} className="ambient-agent" data-state={mode} data-open={open} data-held={held || undefined}
+    onPointerEnter={() => setHeld(true)} onPointerLeave={() => setHeld(false)}
+    onFocusCapture={() => setHeld(true)} onBlurCapture={event => { if (!root.current?.contains(event.relatedTarget as Node | null)) setHeld(false); }}>
     {open && <section ref={panel} id={id} className="ambient-panel" role="dialog" aria-label="Ask your agent">
       <header><button aria-label="Close agent" onClick={close}><X size={17} /></button></header>
       <div ref={log} className="ambient-log">

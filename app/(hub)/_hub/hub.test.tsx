@@ -454,7 +454,7 @@ it("leaves Home calm, and keeps the thesis in what reaching for something reveal
   expect(said.filter(node => node.getAttribute("aria-describedby") === GLOSS_ID).every(node => node.tabIndex === 0)).toBe(true);
 });
 
-it("teaches the account card once, then leaves quiet affordances behind", async () => {
+it("keeps distinct account borders without labels covering the actions", async () => {
   localStorage.removeItem("rubicon:account-discovered:v1");
   await render(PREVIEW_STATE, <HomeView />, PREVIEW_ACCOUNT);
   const trigger = container.querySelector<HTMLButtonElement>(".hub-account-trigger")!;
@@ -466,21 +466,22 @@ it("teaches the account card once, then leaves quiet affordances behind", async 
   await open();
   const menu = container.querySelector<HTMLElement>(".hub-account-menu")!;
   expect(menu.hidden).toBe(false);
-  expect(menu.classList.contains("is-discovering")).toBe(true);
-  expect(Array.from(menu.querySelectorAll(".hub-discover-tag")).map(t => t.textContent)).toEqual(["Profile", "Plan", "Deposit", "Sign out"]);
 
-  // Every labelled thing is genuinely an action, not a caption.
+  expect(menu.querySelector(".hub-discover-tag")).toBeNull();
+  expect(Array.from(menu.querySelectorAll("[data-discover]")).map(t => t.getAttribute("data-discover"))).toEqual(["profile", "plan", "wallet", "signout"]);
+
+  // Borders belong to actions.
   const actions = Array.from(menu.querySelectorAll<HTMLElement>("[data-discover]"));
   expect(actions.every(node => node.matches("a, button") || !!node.querySelector("a, button"))).toBe(true);
-  // The labels are decoration over controls that already name themselves.
-  expect(menu.querySelectorAll('.hub-discover-tag[aria-hidden="true"]').length).toBe(4);
+  // Each action retains its own border color.
+  expect(menu.querySelectorAll("[data-discover]").length).toBe(4);
 
-  // It holds long enough to read, then recedes for good.
+  // The introductory animation finishes.
   await act(async () => { await new Promise(r => setTimeout(r, 2800)); });
   expect(menu.classList.contains("is-discovering")).toBe(false);
   expect(container.querySelector(".hub-discover-tag")).toBeNull();
 
-  // Opening it again never explains itself a second time.
+  // Opening it again retains the settled borders.
   await open(); await open();
   expect(container.querySelector(".hub-account-menu")?.classList.contains("is-discovering")).toBe(false);
   // What stays is the chevron already on every row.

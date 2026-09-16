@@ -7,8 +7,8 @@ import { gsap, useGSAP, Flip, prefersReducedMotion } from '../../_components/mot
 import { assetGloss, relationWords, useGloss } from './gloss';
 import { ProfileAvatar } from '../profile-avatar';
 import { useHub } from './hub-provider';
-import { HubLink } from './navigation';
-import { AssetLogo, Sparkline, ChangeText } from './parts';
+import { HubLink, useHubRouter } from './navigation';
+import { assetHref, AssetLogo, Sparkline, ChangeText } from './parts';
 import { usd } from './format';
 import { openPurchase } from './purchase';
 import './worldview.css';
@@ -86,9 +86,9 @@ export const captureField = (snapshot: FieldSnapshot) => { snapshot.current = Fl
  * agent is. Nothing is labelled, because position is the label.
  */
 export function SpatialMarket({ assets, theme = null, snapshot }: { assets: Asset[]; theme?: string | null; snapshot?: FieldSnapshot }) {
-  const { state, userId } = useHub();
+  const { state, userId, signal } = useHub();
   const gloss = useGloss();
-  const [selected, select] = useState<Asset>();
+  const router = useHubRouter();
   const field = useRef<HTMLDivElement>(null);
   const beliefs = useMemo(() => convictionsOf(state), [state]);
   const rotation = rotationFor(theme);
@@ -158,19 +158,24 @@ export function SpatialMarket({ assets, theme = null, snapshot }: { assets: Asse
           style={{ left: `${at.x}%`, top: `${at.y}%`, '--confidence': place.confidence, '--fit': place.fit, '--tether': `${place.angle + 90 + rotation}deg` } as CSSProperties}>
           <span className="wv-object-tether" aria-hidden="true" />
           <span className="wv-object-drift" data-drift={Math.round((1 - place.fit) * 7)}>
-            <button type="button" className="wv-object-card" aria-pressed={selected?.id === asset.id}
-              aria-label={`${asset.symbol}, ${asset.name}, ${asset.price === null ? 'price unavailable' : usd(asset.price)}. ${relationWords(place.fit)}.`}
-              onClick={() => select(asset)} {...gloss(assetGloss(asset, state))}>
-              <AssetLogo asset={asset} />
-              <b>{asset.symbol}</b>
-              <span className="wv-object-quote"><strong>{asset.price === null ? '—' : usd(asset.price)}</strong><ChangeText value={asset.change} /></span>
-              <Sparkline points={asset.chart.slice(-30)} width={52} height={15} />
+            <button type="button" className={`gravity-asset wv-object-card${place.fit < .1 ? ' is-rejected' : ''}`}
+              aria-label={`${asset.symbol}, ${asset.name}, ${asset.price === null ? 'price unavailable' : usd(asset.price)}. ${relationWords(place.fit)}. Open.`}
+              onClick={() => { void signal('opened', asset); router.push(assetHref(asset)); }} {...gloss(assetGloss(asset, state))}>
+              <span className="gravity-asset-head">
+                <AssetLogo asset={asset} />
+                <span><b>{asset.symbol}</b><span className="gravity-name">{asset.name}</span></span>
+                <span className="gravity-confidence" title={place.confidence ? `${Math.round(place.confidence * 100)}% agent confidence in the connected theme` : 'Agent confidence not established'} />
+              </span>
+              <span className="gravity-quote"><strong>{asset.price === null ? 'Unavailable' : usd(asset.price)}</strong><ChangeText value={asset.change} /></span>
+              <span className="gravity-signal">
+                <Sparkline points={asset.chart.slice(-30)} width={55} height={16} />
+                <small>{place.fit < .1 ? 'Set aside' : place.confidence ? `${Math.round(place.confidence * 100)}% confidence` : 'New connection'}</small>
+              </span>
             </button>
           </span>
         </div>;
       })}
       {!assets.length && <p className="wv-no-market">Nothing to place here yet.</p>}
     </div>
-    {selected && <DecisionSurface asset={assets.find(a => a.id === selected.id && a.kind === selected.kind) ?? selected} onClose={() => select(undefined)} />}
   </div>;
 }

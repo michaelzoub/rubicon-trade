@@ -10,7 +10,8 @@ vi.mock("@privy-io/react-auth", () => ({
   usePrivy: () => ({ getAccessToken: async () => "token", ready: true, authenticated: true, user: { id: "preview-user", linkedAccounts: [] } }),
   useWallets: () => ({ ready: true, wallets: [] }),
 }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => "/explore" }));
+const pushed: string[] = [];
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: (href: string) => { pushed.push(href); } }), usePathname: () => "/explore" }));
 import { HubProvider } from "./hub-provider";
 import { ExploreView, mergeKinds } from "./explore-view";
 import { GlossProvider, GLOSS_ID } from "./gloss";
@@ -29,7 +30,7 @@ const api = {
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(prefers-reduced-motion: reduce)", media: query, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() }));
-  calls.length = 0;
+  calls.length = 0; pushed.length = 0;
   container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
@@ -62,8 +63,12 @@ it("places the market by belief, without a word of explanation", async () => {
   const bearing = (symbol: string) => objects.find(o => o.querySelector("b")?.textContent === symbol)!.dataset.bearing;
   expect(bearing("DOGE")).toBe(String(THEME_BEARING.crypto));
 
-  await act(async () => container.querySelector<HTMLButtonElement>(".wv-object-card")!.click());
-  expect(container.querySelector('[aria-label="Decision workspace"]')).not.toBeNull();
+  // Choosing an instrument opens the instrument, chart and all.
+  const card = container.querySelector<HTMLButtonElement>(".wv-object-card")!;
+  const symbol = card.querySelector("b")!.textContent;
+  const opened = objects.find(o => o.querySelector("b")?.textContent === symbol)!;
+  await act(async () => card.click());
+  expect(pushed.at(-1)).toBe(`/explore/${opened.dataset.flipId!.split(":")[0]}/${encodeURIComponent(opened.dataset.flipId!.split(":").slice(1).join(":"))}`);
 
   const grid = Array.from(container.querySelectorAll(".gravity-all .hub-asset")).map(c => c.getAttribute("data-asset"));
   expect(grid).toContain("DOGE");

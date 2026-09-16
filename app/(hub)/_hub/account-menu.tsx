@@ -100,24 +100,15 @@ function Menu({ userId, name, planName, account, themes, inferred, identity, pro
     } catch { /* storage unavailable: the affordances below still stand */ }
   };
 
-  // Each action names itself once, in turn, then the labels recede and the
-  // quiet chevrons carry the meaning from then on.
+  // One turn around each action, then leave the muted gradient border in place.
   useGSAP(() => {
     if (!discover || !pane.current) return;
     const rows = gsap.utils.toArray<HTMLElement>("[data-discover]", pane.current);
-    if (!rows.length) { setDiscover(false); return; }
-    // With less motion asked for, the labels still teach — they simply appear,
-    // hold long enough to read, and go.
-    if (prefersReducedMotion()) {
-      const hold = setTimeout(() => setDiscover(false), 2600);
-      return () => clearTimeout(hold);
-    }
-    const tags = gsap.utils.toArray<HTMLElement>(".hub-discover-tag", pane.current);
+    if (!rows.length || prefersReducedMotion()) { setDiscover(false); return; }
     const timeline = gsap.timeline({ onComplete: () => setDiscover(false) })
-      .fromTo(rows, { "--discover": 0 }, { "--discover": 1, duration: .34, stagger: .12, ease: "power2.out" }, 0)
-      .fromTo(tags, { opacity: 0, x: -6 }, { opacity: 1, x: 0, duration: .3, stagger: .12, ease: "power3.out" }, .06)
-      .to(tags, { opacity: 0, duration: .35, ease: "power2.in" }, "+=0.9")
-      .to(rows, { "--discover": 0, duration: .45, ease: "power2.inOut" }, "<");
+      .fromTo(rows, { "--account-edge-angle": "0deg" }, {
+        "--account-edge-angle": "360deg", duration: 1.4, stagger: .1, ease: "power2.inOut",
+      });
     return () => { timeline.kill(); };
   }, { dependencies: [discover], scope: pane });
   // A short grace on leave so the cursor can cross from the card to the menu without it snapping shut.
@@ -149,33 +140,33 @@ function Menu({ userId, name, planName, account, themes, inferred, identity, pro
       {shown
         ? <WalletDetail key={shown.address} wallet={shown} onBack={() => setDetail(null)} />
         : <div key="summary" className="hub-account-pane is-summary">
-          <Link href={profileHref} className="hub-account-head" data-discover onClick={() => change(false)}>
+          <Link href={profileHref} className="hub-account-head" data-discover="profile" onClick={() => change(false)}>
             <AccountOrb seed={userId} themes={themes} inferred={inferred} identity={identity} />
             <span className="hub-account-who"><strong>{label}</strong><small>{planName} plan</small></span>
-            {discover && <span className="hub-discover-tag" aria-hidden="true">Profile</span>}
+
             <ArrowUpRight size={14} aria-hidden="true" className="hub-account-head-arrow" />
           </Link>
           <div className="hub-account-body">
-            <Link href={plansHref} className="hub-account-row is-link" data-discover aria-label="AI credits" onClick={() => change(false)}>
+            <Link href={plansHref} className="hub-account-row is-link" data-discover="plan" aria-label="AI credits" onClick={() => change(false)}>
               <span className="hub-account-label">AI credits</span>
               <span className={`hub-account-credits is-${credits?.state ?? "unknown"}`}>{credits?.value ?? "—"}</span>
-              {discover && <span className="hub-discover-tag" aria-hidden="true">Plan</span>}
+
               <ChevronRight size={14} aria-hidden="true" className="hub-account-chevron" />
             </Link>
-            {!preview && wallets.length === 0 && <Link href={profileHref} className="hub-account-row is-link" data-discover onClick={() => change(false)}>
+            {!preview && wallets.length === 0 && <Link href={profileHref} className="hub-account-row is-link" data-discover="wallet" onClick={() => change(false)}>
               <span className="hub-account-label">Wallet</span><span className="hub-account-value is-quiet">Add</span>
-              {discover && <span className="hub-discover-tag" aria-hidden="true">Deposit</span>}
+
               <ChevronRight size={14} aria-hidden="true" className="hub-account-chevron" />
             </Link>}
-            {wallets.map((w, index) => <button key={w.address} type="button" className="hub-account-row is-link hub-account-wallet" data-discover onClick={() => setDetail(w.address)}>
+            {wallets.map(w => <button key={w.address} type="button" className="hub-account-row is-link hub-account-wallet" data-discover="wallet" onClick={() => setDetail(w.address)}>
               <span className="hub-account-label">{wallets.length > 1 ? w.kind : "Wallet"}</span>
               <span className={`hub-account-value${w.balance?.state === "ok" ? "" : " is-quiet"}`}>{walletSummary(w)}</span>
-              {discover && index === 0 && <span className="hub-discover-tag" aria-hidden="true">Deposit</span>}
+
               <ChevronRight size={14} aria-hidden="true" className="hub-account-chevron" />
             </button>)}
           </div>
         </div>}
-      {signOut && <div className="hub-account-foot" data-discover>{signOut}{discover && <span className="hub-discover-tag" aria-hidden="true">Sign out</span>}</div>}
+      {signOut && <div className="hub-account-foot" data-discover="signout">{signOut}</div>}
     </div>
   </div>;
 }

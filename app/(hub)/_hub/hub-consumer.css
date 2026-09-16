@@ -653,3 +653,31 @@
   .hub-knowledge-name { font-size: 9px; }
 }
 @media (prefers-reduced-motion: reduce) { .hub-knowledge-body { transition: none; } }
+
+/* The market card, one face everywhere. This is the treatment Explore's
+   objects wear — a cool blue-tinted face over white, a hairline that warms on
+   approach, and a small lift under the pointer — so a card is the same object
+   wherever it turns up rather than a different thing per surface. */
+.hub-asset,
+.hub-discovery {
+  border: 1px solid rgba(122, 159, 200, .24);
+  border-radius: 15px;
+  background: linear-gradient(140deg, #fff, rgba(235, 244, 255, .72));
+  box-shadow: 0 6px 18px #638ab314;
+  transition: transform .25s cubic-bezier(.2, .8, .3, 1), box-shadow .25s, border-color .25s;
+}
+.hub-asset:hover,
+.hub-asset:focus-within,
+.hub-discovery:hover,
+.hub-discovery:focus-within {
+  transform: translateY(-3px);
+  border-color: #8ab6ed;
+  box-shadow: 0 12px 30px #528dd32b;
+}
+.hub-asset .hub-asset-id strong { color: #314c70; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-asset, .hub-discovery { transition: border-color .2s, box-shadow .2s; }
+  .hub-asset:hover, .hub-asset:focus-within,
+  .hub-discovery:hover, .hub-discovery:focus-within { transform: none; }
+}

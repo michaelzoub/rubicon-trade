@@ -108,6 +108,9 @@ export function useGloss() {
 
 const percent = (value: number) => `${Math.round(value * 100)}%`;
 
+/** A reveal stays a note. Anything longer is cut where it stops being one. */
+const brief = (text: string, at = 120) => text.length > at ? `${text.slice(0, at).trimEnd()}…` : text;
+
 /** How close something sits to what the person believes, in words. */
 export function relationWords(fit: number): string {
   return fit >= .6 ? "Close to the centre of your thesis" : fit >= .35 ? "Connected to what you believe"
@@ -126,7 +129,7 @@ export function assetGloss(asset: Asset, state: HubState): GlossContent {
   const trade = state.trades.filter(t => t.asset.symbol === asset.symbol).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
   const seen = state.events.filter(e => `${e.text} ${e.detail ?? ""}`.includes(asset.symbol)).sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0];
   const lines: GlossLine[] = [
-    { label: "Your belief", value: belief?.text ?? "Outside your thesis so far" },
+    { label: "Your belief", value: belief ? brief(belief.text) : "Outside your thesis so far" },
     { label: "Relationship", value: relationWords(fit) },
   ];
   if (confidence > 0) lines.push({ label: "Agent confidence", value: percent(confidence) });
@@ -143,8 +146,8 @@ export function messageGloss(text: string, state: HubState): GlossContent | null
   if (!belief) return null;
   const learned = state.inferred.find(i => belief.themes.includes(i.id));
   const lines: GlossLine[] = [
-    { label: "Behind this", value: belief.text },
-    { label: "Where it came from", value: belief.origin },
+    { label: "Behind this", value: brief(belief.text) },
+    { label: "Where it came from", value: brief(belief.origin, 90) },
   ];
   if (learned) lines.push({ label: "Agent confidence", value: percent(learned.confidence) });
   return { title: "Why you are seeing this", lines };
