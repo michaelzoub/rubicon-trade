@@ -91,17 +91,21 @@ it("carries navigation inside the one header band, with the conversation and per
   expect(document.activeElement).toBe(presence);
 });
 
-it("keeps Home to the conversation and shows every stock and crypto order on Activity", async () => {
+it("keeps Home to the conversation and keeps every stock and crypto order in Memory's record", async () => {
   await render(PREVIEW_STATE);
-  expect(container.querySelector(".hub-trade-chart")).toBeNull();
+  expect(container.querySelector(".mem-field")).toBeNull();
   await render(PREVIEW_STATE, <ActivityView />);
-  const chart = container.querySelector(".hub-trade-chart")!;
-  expect(chart.textContent).toContain("$75 buys");
-  expect(chart.textContent).toContain("$0 sells");
-  expect(Array.from(chart.querySelectorAll(".hub-trade-chart-list strong")).map(node => node.textContent)).toEqual(["OKLO", "WETH"]);
-  expect(chart.textContent).toContain("stock");
-  expect(chart.textContent).toContain("crypto");
-  expect(chart.querySelectorAll(".hub-trade-chart-point")).toHaveLength(2);
+
+  // Memory is a field of beliefs, not a chart of orders.
+  expect(container.querySelector(".hub-trade-chart")).toBeNull();
+  expect(container.querySelector(".mem-field")).not.toBeNull();
+
+  // Every order is still reachable, in the complete record underneath.
+  const entries = Array.from(container.querySelectorAll<HTMLElement>(".mem-record li"));
+  const text = entries.map(node => node.textContent ?? "").join(" ");
+  expect(text).toContain("OKLO");
+  expect(text).toContain("WETH");
+  expect(entries.filter(node => node.querySelector("a"))).toHaveLength(PREVIEW_STATE.trades.length);
 });
 
 it("streams a reply with rich parts and animates the profile card from the persisted state", async () => {

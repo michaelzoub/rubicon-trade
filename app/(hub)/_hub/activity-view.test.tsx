@@ -13,6 +13,8 @@ vi.mock("@privy-io/react-auth", () => ({
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => "/activity" }));
 import { HubProvider } from "./hub-provider";
 import { ActivityView, needsYou } from "./activity-view";
+import { GlossProvider, GLOSS_ID } from "./gloss";
+import { buildGraph, summarise } from "@/lib/socialtrading/memory-graph";
 
 let container: HTMLDivElement, root: Root;
 beforeEach(() => {
@@ -21,29 +23,52 @@ beforeEach(() => {
   container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
-const render = async () => act(async () => root.render(<HubProvider userId="preview-user" name="Michael" initial={PREVIEW_STATE} initialAccount={PREVIEW_ACCOUNT}><ActivityView /></HubProvider>));
+const render = async () => act(async () => root.render(<HubProvider userId="preview-user" name="Michael" initial={PREVIEW_STATE} initialAccount={PREVIEW_ACCOUNT}><GlossProvider><ActivityView /></GlossProvider></HubProvider>));
 
-it("reads the week back in words and flags the trades that need the person", async () => {
+it("draws the worldview as beliefs rather than as a report", async () => {
   await render();
-  const beads = Array.from(container.querySelectorAll(".hub-pulse-bead")).map(b => b.textContent);
-  expect(beads[2]).toContain("2 trades waiting for you");
-  expect(container.querySelector(".hub-pulse-bead.is-live")).not.toBeNull();
-  expect(container.querySelectorAll(".hub-event").length).toBe(PREVIEW_STATE.events.length);
-  const flagged = container.querySelectorAll(".hub-event.is-urgent");
-  expect(flagged).toHaveLength(2);
-  expect(flagged[0].querySelector(".hub-event-flag")?.textContent).toBe("Needs you");
-  expect(flagged[0].classList.contains("hub-priority-card")).toBe(true);
-  expect(container.querySelectorAll(".hub-day").length).toBeGreaterThan(3);
-  expect(container.querySelector(".hub-event.is-learning .hub-event-medallion")).not.toBeNull();
+  const frames = buildGraph(PREVIEW_STATE);
+  const latest = frames[frames.length - 1];
+
+  // Nothing here is an activity page any more.
+  expect(container.querySelector(".hub-pulse-bead")).toBeNull();
+  expect(container.querySelector(".hub-lens-item")).toBeNull();
+  expect(container.querySelector(".hub-day")).toBeNull();
+  expect(container.textContent).not.toContain("Your world, lately");
+
+  const beliefs = Array.from(container.querySelectorAll<HTMLElement>(".mem-belief"));
+  expect(beliefs).toHaveLength(latest.nodes.length);
+  // Conviction is the size of the body, so strength is read rather than printed.
+  expect(beliefs[0].style.getPropertyValue("--strength")).toBe(String(latest.nodes[0].strength));
+  expect(beliefs[0].getAttribute("aria-describedby")).toBe(GLOSS_ID);
+  expect(container.querySelectorAll(".mem-edges line").length).toBeGreaterThan(0);
 });
 
-it("narrows the feed through the lens without losing the day grouping", async () => {
+it("moves through time from the keyboard as well as by dragging", async () => {
   await render();
-  const trades = Array.from(container.querySelectorAll<HTMLButtonElement>(".hub-lens-item")).find(b => b.textContent === "Trades")!;
-  await act(async () => trades.click());
-  expect(container.querySelectorAll(".hub-event").length).toBe(2);
-  expect(container.querySelectorAll(".hub-day").length).toBe(1);
-  expect(Array.from(container.querySelectorAll(".hub-event")).every(e => e.classList.contains("is-trade"))).toBe(true);
+  const frames = buildGraph(PREVIEW_STATE);
+  if (frames.length < 2) return;
+  const field = container.querySelector<HTMLElement>(".mem-field")!;
+  expect(container.querySelectorAll(".mem-tick")).toHaveLength(frames.length);
+  expect(container.querySelector('.mem-tick[aria-current="true"]')).toBe(container.querySelectorAll(".mem-tick")[frames.length - 1]);
+
+  await act(async () => field.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true })));
+  expect(container.querySelector('.mem-tick[aria-current="true"]')).toBe(container.querySelectorAll(".mem-tick")[frames.length - 2]);
+  expect(container.querySelector(".mem-now")?.textContent).toContain(summarise(frames[frames.length - 2]));
+});
+
+it("keeps the exact sequence reachable underneath the field", async () => {
+  await render();
+  const record = container.querySelector(".mem-record")!;
+  expect(record.querySelector("summary")?.textContent).toBe("Everything, in order");
+  expect(record.querySelectorAll("ol > li")).toHaveLength(PREVIEW_STATE.events.length);
+});
+
+it("says what each belief did, for anyone who cannot see it move", async () => {
+  await render();
+  const labels = Array.from(container.querySelectorAll(".mem-belief")).map(b => b.getAttribute("aria-label") ?? "");
+  expect(labels.every(l => /per cent conviction/.test(l))).toBe(true);
+  expect(container.querySelector(".mem-field")?.getAttribute("aria-label")).toContain("arrow keys");
 });
 
 it("knows which trades are waiting on a signature or approval", () => {

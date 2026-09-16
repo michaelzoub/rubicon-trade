@@ -1,8 +1,7 @@
 "use client";
 import { useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react';
-import { ArrowUpRight, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react';
+import { ArrowUpRight, Plus, X } from 'lucide-react';
 import { convictionsOf, placement, point, relevance, rotationFor } from '@/lib/socialtrading/worldview';
-import { THEMES } from '@/lib/socialtrading/themes';
 import type { Asset } from '@/lib/socialtrading/types';
 import { gsap, useGSAP, Flip, prefersReducedMotion } from '../../_components/motion';
 import { assetGloss, relationWords, useGloss } from './gloss';
@@ -174,27 +173,4 @@ export function SpatialMarket({ assets, theme = null, snapshot }: { assets: Asse
     </div>
     {selected && <DecisionSurface asset={assets.find(a => a.id === selected.id && a.kind === selected.kind) ?? selected} onClose={() => select(undefined)} />}
   </div>;
-}
-
-export function MemoryView() {
-  const { state } = useHub();
-  const [index, setIndex] = useState<number | null>(null);
-  const memories = state.worldview?.memories ?? [];
-  const frames = memories.length ? memories : [{ id: 'now', at: state.profile.updatedAt, title: 'Your worldview, now', convictions: convictionsOf(state), interests: state.profile.interests.map(i => i.name), understanding: state.inferred.map(i => `${i.id} · ${Math.round(i.confidence*100)}% confidence`) }];
-  const active = Math.min(index ?? frames.length-1, frames.length-1);
-  const frame = frames[active];
-  const root = useAssembly(frame.id);
-  const [echo, setEcho] = useState<string | null>(null);
-  const selectedEvent = state.events.find(e => e.id === echo && Date.parse(e.at) <= Date.parse(frame.at));
-  const echoThemes = THEMES.filter(t => t.keywords.test(`${selectedEvent?.text ?? ''} ${selectedEvent?.detail ?? ''}`));
-  const connected = selectedEvent ? state.events.filter(e => e.id !== selectedEvent.id && Date.parse(e.at) <= Date.parse(frame.at) && (e.tradeId && e.tradeId === selectedEvent.tradeId || echoThemes.some(t => t.keywords.test(`${e.text} ${e.detail ?? ''}`)))) : [];
-  const related = state.events.filter(e => Date.parse(e.at) <= Date.parse(frame.at)).slice().sort((a,b) => Date.parse(b.at)-Date.parse(a.at)).slice(0,6);
-  return <section className="wv-memory" ref={root}><header className="wv-heading"><div><p className="eyebrow">Memory</p><h1 className="landing-section-title">Revisit your thinking.</h1><p>The decisions that changed your mind. And the ideas that stayed.</p></div><span className="wv-memory-date">{new Date(frame.at).toLocaleDateString(undefined, {month:'long', day:'numeric', year:'numeric'})}</span></header>
-    <div className="wv-memory-controls"><button aria-label="Earlier worldview" disabled={active === 0} onClick={() => setIndex(active-1)}><ChevronLeft size={18}/></button><input aria-label="Move through memory" type="range" min={0} max={Math.max(0,frames.length-1)} value={active} disabled={frames.length===1} onChange={e => setIndex(Number(e.target.value))}/><button aria-label="Later worldview" disabled={active===frames.length-1} onClick={() => setIndex(active+1)}><ChevronRight size={18}/></button><button onClick={() => setIndex(null)}>Latest</button></div>
-    <div className="wv-memory-spread" data-assemble><div><p className="eyebrow">{active === frames.length-1 ? 'Latest chapter' : 'Looking back'}</p><h2>{frame.title}</h2><p>{memories.length ? 'A recorded snapshot of your beliefs and the agent’s understanding.' : 'History starts with your next conviction change. Earlier activity is preserved below; past beliefs are not reconstructed.'}</p><span className="wv-mini-orb"/></div><div className="wv-memory-beliefs">{frame.convictions.map(c => <div key={c.id}><span style={{width:`${Math.max(5,c.strength*100)}%`}}/><p>{c.text}</p><small>{Math.round(c.strength*100)}% conviction</small></div>)}</div></div>
-    <div className="wv-memory-context" data-assemble><section><span className="eyebrow">What held your attention</span><p>{frame.interests.join(' · ') || 'No interests recorded.'}</p></section><section><span className="eyebrow">What your agent understood</span><p>{frame.understanding.join(' · ') || 'Still getting to know you.'}</p></section></div>
-    <p className="eyebrow">Echoes from this chapter</p><div className="wv-echoes">{related.map(e => <article key={e.id}><small>{new Date(e.at).toLocaleDateString()} · {e.kind}</small><h3><button className="hub-inline-link" onClick={() => setEcho(echo === e.id ? null : e.id)} aria-expanded={echo === e.id}>{e.text}</button></h3><p>{e.detail}</p>{e.tradeId && <HubLink href="/">Review decision ↗</HubLink>}</article>)}{!related.length && <p className="hub-empty">Meaningful moments will collect here as you explore and decide.</p>}</div>
-    {selectedEvent && <div className="wv-memory-chain"><p className="eyebrow">Following the thought · {echoThemes.map(t => t.name).join(' / ') || 'This decision'}</p><h3>{selectedEvent.text}</h3><p>{selectedEvent.detail}</p><div className="wv-echoes">{connected.map(e => <article key={e.id}><small>{new Date(e.at).toLocaleDateString()} · {e.kind}</small><h3>{e.text}</h3><p>{e.detail}</p></article>)}{!connected.length && <p>No other recorded moments share this decision or theme yet.</p>}</div><small>Connected by shared themes or the same trade. This connection does not establish causation.</small></div>}
-    {frames.length>1 && <div className="wv-chapters">{frames.map((f,i) => <button key={f.id} aria-pressed={active===i} onClick={() => setIndex(i)}><small>{new Date(f.at).toLocaleDateString()}</small><span>{f.title}</span></button>)}</div>}
-  </section>;
 }

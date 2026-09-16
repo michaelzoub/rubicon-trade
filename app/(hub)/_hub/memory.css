@@ -1,0 +1,123 @@
+/* A mind over time. Nothing here is a report: beliefs are bodies, kinship is a
+   line, and what was decided hangs off whatever was believed at the time. */
+.mem { padding: 8px 0 56px; }
+
+.mem-field {
+  position: relative;
+  height: min(620px, 68vh);
+  margin-inline: auto;
+  max-width: 1040px;
+  cursor: grab;
+  touch-action: pan-y;
+  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--id-wash, #eef5ff) 82%, transparent), transparent 70%);
+}
+.mem-field:active { cursor: grabbing; }
+.mem-field:focus-visible { outline: 2px solid var(--id-accent, #4b94ed); outline-offset: 10px; border-radius: 22px; }
+
+.mem-edges { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.mem-edges line { stroke: color-mix(in srgb, var(--id-accent, #7aa3d6) 34%, transparent); stroke-width: 1; }
+.mem-edges line[data-kind="branch"] { stroke: color-mix(in srgb, var(--id-accent, #7aa3d6) 62%, transparent); stroke-width: 1.6; }
+.mem-edges line[data-kind="satellite"] { stroke: color-mix(in srgb, var(--id-accent-deep, #52607a) 26%, transparent); stroke-dasharray: 2 3; }
+/* A contradiction is drawn severed: the line between them no longer meets. */
+.mem-edges line[data-kind="contradiction"] { stroke: #b4707d; stroke-width: 1.4; stroke-dasharray: 5 7; }
+
+.mem-belief {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  max-width: 170px;
+}
+.mem-belief-body {
+  display: block;
+  width: calc(16px + var(--strength, 0) * 40px);
+  height: calc(16px + var(--strength, 0) * 40px);
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 28%, #fff 4%, color-mix(in srgb, var(--id-accent-soft, #dbe9fb) 80%, #fff) 26%, color-mix(in srgb, var(--id-accent, #7aa3d6) calc(30% + var(--strength, 0) * 60%), #fff) 74%, var(--id-accent-deep, #4a6b93));
+  box-shadow: 0 6px 22px color-mix(in srgb, var(--id-accent-deep, #4a6b93) calc(10% + var(--strength, 0) * 22%), transparent);
+  transition: transform .3s cubic-bezier(.2, .8, .3, 1), filter .4s;
+}
+.mem-belief-name {
+  font-size: 11px;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--id-accent-deep, #4a6b93) 82%, transparent);
+  text-align: center;
+  opacity: calc(.35 + var(--strength, 0) * .65);
+  max-width: 160px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.mem-belief:hover .mem-belief-body,
+.mem-belief:focus-visible .mem-belief-body { transform: scale(1.12); }
+.mem-belief:hover .mem-belief-name,
+.mem-belief:focus-visible .mem-belief-name { opacity: 1; }
+.mem-belief:focus-visible { outline: 2px solid var(--id-accent, #4b94ed); outline-offset: 6px; border-radius: 14px; }
+
+/* Verbs, written into the body itself. */
+.mem-belief[data-change="faded"] .mem-belief-body { filter: saturate(.4); }
+.mem-belief[data-change="released"] .mem-belief-body { filter: grayscale(1); opacity: .3; box-shadow: none; }
+.mem-belief[data-change="released"] .mem-belief-name { opacity: .32; text-decoration: line-through; }
+.mem-belief[data-change="contradicted"] .mem-belief-body { box-shadow: 0 0 0 2px #b4707d55, 0 6px 22px #b4707d2e; }
+.mem-belief[data-change="branched"] .mem-belief-body,
+.mem-belief[data-change="appeared"] .mem-belief-body { box-shadow: 0 0 0 4px color-mix(in srgb, var(--id-accent, #7aa3d6) 16%, transparent), 0 6px 22px color-mix(in srgb, var(--id-accent-deep, #4a6b93) 18%, transparent); }
+
+.mem-satellite {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 11px;
+  height: 11px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--id-accent-deep, #52607a) 34%, transparent);
+  border-radius: 3px;
+  background: #fff;
+  cursor: pointer;
+  transition: transform .25s, background .25s;
+}
+.mem-satellite[data-kind="trade"] { border-radius: 50%; background: var(--id-accent, #7aa3d6); }
+.mem-satellite:hover, .mem-satellite:focus-visible { transform: translate(-50%, -50%) scale(1.5); }
+.mem-satellite:focus-visible { outline: 2px solid var(--id-accent, #4b94ed); outline-offset: 3px; }
+
+.mem-empty {
+  position: absolute; inset: auto 0 45%; text-align: center;
+  font-size: 13px; line-height: 1.8; color: var(--muted, #71717a);
+  max-width: 440px; margin-inline: auto;
+}
+
+/* Position feedback, and the only way through time that does not need a pointer. */
+.mem-ticks { display: flex; gap: 4px; justify-content: center; align-items: flex-end; height: 22px; margin-top: 14px; }
+.mem-tick {
+  width: 2px; height: 9px; padding: 0; border: 0; border-radius: 1px; cursor: pointer;
+  background: color-mix(in srgb, var(--id-accent, #7aa3d6) 30%, transparent);
+  transition: height .3s, background .3s;
+}
+.mem-tick:hover { height: 14px; }
+.mem-tick[aria-current="true"] { height: 20px; background: var(--id-accent, #4b94ed); }
+.mem-tick:focus-visible { outline: 2px solid var(--id-accent, #4b94ed); outline-offset: 3px; }
+
+.mem-now { display: grid; justify-items: center; gap: 4px; margin: 10px 0 0; font-size: 12px; color: var(--id-accent-deep, #52607a); }
+.mem-now span { font-size: 10px; color: var(--muted, #8b94a5); }
+
+/* The complete record stays reachable, and is what a screen reader walks. */
+.mem-record { max-width: 720px; margin: 46px auto 0; border-top: 1px solid #e6edf6; padding-top: 16px; }
+.mem-record summary { cursor: pointer; font-size: 12px; color: var(--muted, #71717a); }
+.mem-record ol { list-style: none; margin: 20px 0 0; padding: 0; display: grid; gap: 16px; }
+.mem-record li { display: grid; gap: 3px; font-size: 13px; line-height: 1.6; }
+.mem-record time { font-size: 10px; color: var(--muted, #8b94a5); }
+.mem-record small { font-size: 11px; color: var(--muted, #8b94a5); line-height: 1.7; }
+.mem-record a { font-size: 11px; color: var(--id-accent, #4b94ed); justify-self: start; }
+
+@media (max-width: 760px) {
+  .mem-field { height: 74vh; }
+  .mem-belief-name { font-size: 10px; max-width: 110px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mem-field { cursor: default; }
+  .mem-belief-body, .mem-satellite, .mem-tick { transition: none; }
+}
