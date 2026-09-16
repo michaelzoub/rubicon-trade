@@ -9,7 +9,7 @@ import { PREVIEW_ACCOUNT, PREVIEW_STATE, PREVIEW_TOKENS, PREVIEW_WALLET } from "
 vi.mock("@privy-io/react-auth", () => ({
   useSign7702Authorization: () => ({ signAuthorization: vi.fn(async () => ({ r: "0x1", s: "0x2", yParity: 0, address: "0x0", chainId: 8453, nonce: 0 })) }),
   usePrivy: () => ({ getAccessToken: async () => "token", ready: true, authenticated: true, user: { id: "preview-user", linkedAccounts: [] }, connectWallet: vi.fn() }),
-  useWallets: () => ({ ready: true, wallets: [{ address: PREVIEW_WALLET, walletClientType: "privy", switchChain: vi.fn(), getEthereumProvider: async () => ({ request: vi.fn() }) }] }),
+  useWallets: () => ({ ready: true, wallets: [{ address: PREVIEW_WALLET, walletClientType: "privy", switchChain: vi.fn(), getEthereumProvider: async () => ({ request: vi.fn(async ({ method }: { method: string }) => method === "eth_chainId" ? "0x2105" : method === "eth_accounts" ? [PREVIEW_WALLET] : method === "eth_call" ? "0x3b9aca00" : "0x0") }) }] }),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => "/trade" }));
 import { HubProvider } from "./hub-provider";

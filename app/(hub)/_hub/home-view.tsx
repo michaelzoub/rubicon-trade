@@ -25,7 +25,7 @@ export function HomeView() {
   return (
     <div className="hub-home">
       <Conversation />
-      {quiet && assets && assets.length > 0 && <div className="hub-home-opportunities" data-agent-region="openings"><AssetGrid assets={assets} dense /></div>}
+      {quiet && assets && assets.length > 0 && <div className="hub-home-opportunities" data-agent-region="openings"><AssetGrid assets={assets} quiet /></div>}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import "server-only";
 import { cryptoServices } from "./services";
 import { ownedWallet } from "./wallet";
 import { address, chain, CHAINS, NATIVE, parseUnits, swapRequest } from "./chains";
+import { feeCap } from "./readiness";
 import { buildSwapBatch, gaslessChain } from "./batch";
 import { tradePolicy } from "@/lib/socialtrading/policy";
 import { recordEvent } from "@/lib/socialtrading/personalization";
@@ -64,6 +65,11 @@ export async function prepareSwap(state: HubState, userId: string, trade: TradeI
   // Verify RPC setup before a wallet can submit anything.
   const { rpc } = await import("./rpc");
   if (BigInt(await rpc<string>(c.request.chainId, "eth_chainId", [])) !== BigInt(c.request.chainId)) throw new Error("RPC network mismatch.");
+  // Read on the server-selected chain as well; client balances are never authority.
+  if (c.request.tokenIn === chain(c.request.chainId).usdc) {
+    const funds = await rpc<string>(c.request.chainId, "eth_call", [{ to: c.request.tokenIn, data: `0x70a08231${c.request.wallet.slice(2).padStart(64, "0")}` }, "latest"]);
+    if (!/^0x[0-9a-f]+$/i.test(funds) || BigInt(funds) < BigInt(c.request.amount) + feeCap(c.request.chainId)) throw new Error("Insufficient USDC on the purchase network, including the network fee reserve.");
+  }
   const value = await cryptoServices.valuation.value({ chainId: c.request.chainId, address: c.request.tokenIn }, c.request.amount);
   if (value > trade.value) throw new Error("The USD input value increased. Ask for a new swap proposal.");
   const policy = tradePolicy(state.profile, trade.value, state.trades.filter(t => t.id !== trade.id), true, Date.now(), trade.initiator ?? "agent");

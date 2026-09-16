@@ -1,10 +1,11 @@
 "use client";
 import { usePrivy, useSign7702Authorization, useWallets } from "@privy-io/react-auth";
 import { ArrowUpRight, ChevronDown } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { TradeIntent } from "@/lib/socialtrading/types";
 import { chain, explorerAddress, explorerTx, formatUnits, shortAddress } from "@/lib/crypto/chains";
-import { sendSwapBatch, type SignAuthorization, type WalletProvider } from "@/lib/crypto/gasless";
+import { sendSwapBatch, recoverSwapOperation, type SignAuthorization, type WalletProvider } from "@/lib/crypto/gasless";
+import { readPurchaseBalance, feeCap, purchaseError } from "@/lib/crypto/readiness";
 import { timeAgo, usd } from "./format";
 import { useHub } from "./hub-provider";
 
@@ -25,37 +26,68 @@ export function cryptoStatus(trade: TradeIntent): string {
 export function CryptoTradeCard({ trade, expanded = false }: { trade: TradeIntent; expanded?: boolean }) {
   const { state, crypto, busy: chatting } = useHub(), { connectWallet } = usePrivy(), { wallets } = useWallets();
   const { signAuthorization } = useSign7702Authorization();
+  const [stage, setStage] = useState("");
+  const [funds, setFunds] = useState("");
+  const [operation, setOperation] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [recovery, setRecovery] = useState(""), [raw, setRaw] = useState(false);
   const lock = useRef(false), c = trade.crypto!, r = c.request, net = chain(r.chainId);
   const tokenIn = c.display?.tokenIn ?? { symbol: shortAddress(r.tokenIn), decimals: null }, tokenOut = c.display?.tokenOut ?? { symbol: shortAddress(r.tokenOut), decimals: null };
-  const wallet = wallets.find(w => w.address.toLowerCase() === r.wallet);
+  const wallet = wallets.find(w => w.address.toLowerCase() === r.wallet.toLowerCase());
   const storageKey = `rubicon:swap:${state.profile.userId}:${trade.id}:${c.step ?? "next"}`;
+  useEffect(() => {
+    try { setOperation(localStorage.getItem(`${storageKey}:operation`) ?? ""); setRecovery(localStorage.getItem(storageKey) ?? ""); } catch { /* storage optional */ }
+  }, [storageKey]);
   const open = c.phase === "ready" && ["approval_required", "reserved"].includes(trade.status);
 
-  async function act(action: "prepare" | "reject" | "status" | "recover") {
+  async function act(action: "prepare" | "reject" | "status" | "recover" | "operation") {
     if (lock.current) return; lock.current = true; setBusy(true); setError("");
     try {
       if (action === "prepare") {
         if (!wallet) throw new Error(`Connect the wallet ${shortAddress(r.wallet)} to sign this swap.`);
+        setStage("Confirm network in your wallet…");
         await wallet.switchChain(r.chainId);
         const provider = await wallet.getEthereumProvider() as WalletProvider;
+        setStage("Checking wallet and funds…");
+        const balance = await readPurchaseBalance(provider, r.wallet, r.chainId);
+        if (balance.usdc < (r.tokenIn === net.usdc ? BigInt(r.amount) : 0n) + feeCap(r.chainId)) throw new Error("Insufficient USDC for this purchase and its network fee.");
+        setFunds(`${Number(balance.usdc) / 1e6} USDC · ${Number(balance.native) / 1e18} ${net.nativeSymbol} on ${net.name}`);
+        setStage("Preparing your approvals and quote…");
         const result = await crypto({ action: "prepare", tradeId: trade.id }), batch = result.batch!;
         if (Date.now() >= result.expiresAt!) throw new Error("The quote expired before signing. Do not resend; check your wallet, then ask for a fresh proposal.");
         // The batch goes out as one user operation: allowances and the swap
         // together, with the network fee taken from USDC rather than ETH.
-        const { userOpHash, hash } = await sendSwapBatch({ batch, provider, signAuthorization: signAuthorization as SignAuthorization });
+        if (!batch || batch.sender.toLowerCase() !== r.wallet.toLowerCase() || batch.chainId !== r.chainId) throw new Error("Purchase context changed. Reconnect your wallet.");
+        setStage("Review the requests in your wallet…");
+        const { userOpHash, hash } = await sendSwapBatch({ batch, provider, signAuthorization: signAuthorization as SignAuthorization, expiresAt: result.expiresAt, requiredUsdc: (r.tokenIn === net.usdc ? BigInt(r.amount) : 0n) + feeCap(r.chainId), onSubmitted: hash => {
+          setOperation(hash); setStage("Submitted · waiting for the network…");
+          try { localStorage.setItem(`${storageKey}:operation`, hash); } catch { /* visible below */ }
+        } });
         if (!/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new Error("Your wallet returned no transaction hash. Check the wallet before retrying.");
         setRecovery(hash);
         try { localStorage.setItem(`rubicon:swap:${state.profile.userId}:${trade.id}:${result.step}`, hash); } catch { /* Recovery stays visible in this card. */ }
         await crypto({ action: "submitted", tradeId: trade.id, hash, userOpHash }); await crypto({ action: "status", tradeId: trade.id });
+      } else if (action === "operation") {
+        const hash = await recoverSwapOperation(r.chainId, operation);
+        if (!hash) { setError("Still waiting for network confirmation. Check again shortly; do not submit another purchase."); return; }
+        setRecovery(hash);
+        await crypto({ action: "submitted", tradeId: trade.id, hash, userOpHash: operation });
+        await crypto({ action: "status", tradeId: trade.id });
       } else if (action === "recover") {
         let hash = recovery.trim(); try { hash ||= localStorage.getItem(storageKey) ?? ""; } catch { /* no storage */ }
         if (!/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new Error("Paste the 66-character transaction hash from your wallet.");
         await crypto({ action: "submitted", tradeId: trade.id, hash }); await crypto({ action: "status", tradeId: trade.id });
       } else await crypto({ action, tradeId: trade.id });
-    } catch (e) { setError(e instanceof Error ? e.message : "Wallet request failed. Check your wallet before retrying."); }
+    } catch (e) { setError(purchaseError(e)); }
     finally { lock.current = false; setBusy(false); }
   }
+
+  useEffect(() => {
+    if (c.phase !== "issued" || !c.hash) return;
+    const timer = setInterval(() => { if (!lock.current) void act("status"); }, 8000);
+    return () => clearInterval(timer);
+    // The action always verifies the server's recorded transaction.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [c.phase, c.hash, trade.id]);
 
   return <div className={`hub-trade hub-trade--crypto is-${trade.status}${open ? " hub-priority-card" : ""}`} role="group" aria-label="Onchain swap">
     <div className="hub-trade-head">
@@ -70,8 +102,10 @@ export function CryptoTradeCard({ trade, expanded = false }: { trade: TradeInten
       <span className="hub-trade-line-out">{formatUnits(r.amount, tokenIn.decimals)} {tokenIn.symbol.toUpperCase()}</span>
       <span className="hub-trade-line-arrow" aria-hidden="true">→</span>
       <span className="hub-trade-line-in">{formatUnits(c.outputAmount, tokenOut.decimals)} {tokenOut.symbol.toUpperCase()}</span>
-      <small>≈ {usd(trade.value, 2)} · fee from your USDC</small>
+      <small>≈ {usd(trade.value, 2)} · up to {Number(feeCap(r.chainId)) / 1e6} USDC network fee</small>
     </p>
+    <div className="purchase-readiness"><strong>{net.name} · {shortAddress(r.wallet)}</strong><p>Receive at least {formatUnits(c.minimumOutput, tokenOut.decimals)} {tokenOut.symbol.toUpperCase()} · {r.slippageBps / 100}% maximum slippage</p><p>{funds || "Wallet and network funds are checked again before signing."}</p><p role="status">{busy ? stage : cryptoStatus(trade)}</p></div>
+    {operation && <p className="purchase-requirements">Submitted operation: <span className="mono">{operation}</span>. Keep this reference if confirmation takes longer. <button type="button" className="hub-chip-button" disabled={busy} onClick={() => void act("operation")}>Check submitted purchase</button></p>}
     {trade.reasoning && <p className="hub-trade-reasoning">{trade.reasoning}</p>}
     <p className="hub-trade-policy">{trade.policy.reason}</p>
     <p className="hub-trade-brokerage">{c.detail}</p>
@@ -96,7 +130,7 @@ export function CryptoTradeCard({ trade, expanded = false }: { trade: TradeInten
     {error && <p className="hub-error" role="alert">{error}</p>}
     {open && <div className="hub-trade-actions">
       {wallet
-        ? <button type="button" disabled={busy || chatting} className="button button-primary" onClick={() => void act("prepare")}>{busy ? "Confirming…" : "Review & sign in wallet"}</button>
+        ? <button type="button" disabled={busy || chatting} className="button button-primary" onClick={() => void act("prepare")}>{busy ? stage : "Review & sign in wallet"}</button>
         : <button type="button" disabled={busy} className="button button-primary" onClick={() => connectWallet()}>Connect {shortAddress(r.wallet)}</button>}
       <button type="button" disabled={busy} className="button button-secondary" onClick={() => void act("reject")}>Decline</button>
     </div>}

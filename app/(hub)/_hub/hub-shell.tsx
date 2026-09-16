@@ -30,6 +30,7 @@ import { identityDepth, identityStage, identityStats } from "@/lib/socialtrading
 import "../socialtrading.css";
 import "./hub.css";
 import "./hub-consumer.css";
+import "./quiet-refinement.css";
 
 export const NAV = [
   { href: "/", label: "Home", icon: MessageCircle, exact: true },

@@ -61,6 +61,7 @@ export function Lens<T extends string>({ items, value, onChange, label, classNam
       const selected = item.id === value;
       return <button key={item.id} type="button" role="tab" data-lens={item.id} aria-selected={selected} tabIndex={selected ? 0 : -1}
         className={`hub-lens-item${selected ? " is-active" : ""}`} style={{ "--lens-hue": item.hue } as CSSProperties}
+        onPointerMove={event => { if (event.pointerType === "touch" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return; const rect = event.currentTarget.getBoundingClientRect(); event.currentTarget.style.setProperty("--mx", `${(event.clientX - rect.left) / rect.width * 100}%`); event.currentTarget.style.setProperty("--my", `${(event.clientY - rect.top) / rect.height * 100}%`); }}
         onClick={() => onChange(item.id)} onKeyDown={key}>
         {item.icon && <item.icon size={14} strokeWidth={1.8} aria-hidden />}
         <span>{item.label}</span>

@@ -56,6 +56,7 @@ import type { AccountSummary } from "@/lib/socialtrading/plans";
 
 let container: HTMLDivElement, root: Root;
 beforeEach(() => {
+  privy.sendTransaction.mockImplementation(async ({ method }: { method: string }) => method === "eth_chainId" ? "0x2105" : method === "eth_accounts" ? [PREVIEW_WALLET] : method === "eth_call" ? "0x3b9aca00" : "0x0");
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(prefers-reduced-motion: reduce)", media: query, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() }));
   events.script = []; events.posted = [];
@@ -179,7 +180,7 @@ it("shows an onchain swap in human units and walks prepare → sign → submitte
 
 it("tells the buyer what is missing instead of letting a short balance reach the wallet", async () => {
   privy.sendTransaction.mockImplementation(async ({ method }: { method: string }) =>
-    method === "eth_chainId" ? "0x2105" : method === "eth_call" ? "0x2faf080" : "0x0"); // 50 USDC, no ETH
+    method === "eth_chainId" ? "0x2105" : method === "eth_accounts" ? [PREVIEW_WALLET] : method === "eth_call" ? "0x2faf080" : "0x0"); // 50 USDC, no ETH
   await render(PREVIEW_STATE, <TradeView />);
   await setValue(container.querySelector("#buy-search") as HTMLInputElement, "bnvda");
   await act(async () => { await new Promise(r => setTimeout(r, 350)); });

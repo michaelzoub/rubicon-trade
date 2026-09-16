@@ -137,7 +137,21 @@ function DiscoveryCard({ asset }: { asset: Asset }) {
   </article>;
 }
 
-export function AssetGrid({ assets, title, dense, discovery = false }: { assets: Asset[]; title?: string; dense?: boolean; discovery?: boolean }) {
+/** A quiet, tactile opening. Further actions live on the asset page. */
+function QuietAssetCard({ asset }: { asset: Asset }) {
+  const { signal } = useHub();
+  const tilt = useTilt<HTMLElement>(2);
+  return <article ref={tilt.root} className="hub-quiet-card" data-asset={asset.symbol} onPointerMove={tilt.onPointerMove} onPointerLeave={tilt.onPointerLeave}>
+    <Link href={assetHref(asset)} onClick={() => { void signal("opened", asset); }} aria-label={`Open ${asset.name}`}>
+      <span className="quiet-card-head"><AssetLogo asset={asset}/><span><strong>{asset.symbol}</strong><small>{asset.name}</small></span><ArrowUpRight size={15}/></span>
+      <span className="quiet-card-quote"><strong>{usd(asset.price)}</strong><ChangeText value={asset.change}/></span>
+      <Sparkline points={asset.chart.slice(-40)} width={280} height={64}/>
+      <span className="quiet-card-signal">{asset.label || "A new connection"}</span>
+    </Link>
+  </article>;
+}
+
+export function AssetGrid({ assets, title, dense, discovery = false, quiet = false }: { assets: Asset[]; title?: string; dense?: boolean; discovery?: boolean; quiet?: boolean }) {
   const root = useRef<HTMLDivElement>(null);
   const { state } = useHub();
   const visible = discovery ? assets.filter(a => {
@@ -155,7 +169,7 @@ export function AssetGrid({ assets, title, dense, discovery = false }: { assets:
   if (!assets.length) return null;
   return <section ref={root} className="hub-assets">
     {title && <p className="hub-part-title">{title}</p>}
-    <div className={discovery ? "hub-discovery-grid" : "hub-asset-grid"}>{visible.map(asset => discovery ? <DiscoveryCard key={`${asset.kind}:${asset.id}`} asset={asset} /> : <AssetCard key={`${asset.kind}:${asset.id}`} asset={asset} dense={dense} />)}</div>{discovery && !visible.length && <p className="hub-empty" role="status">All caught up. Try another category to discover more.</p>}
+    <div className={discovery ? "hub-discovery-grid" : "hub-asset-grid"}>{visible.map(asset => quiet ? <QuietAssetCard key={`${asset.kind}:${asset.id}`} asset={asset} /> : discovery ? <DiscoveryCard key={`${asset.kind}:${asset.id}`} asset={asset} /> : <AssetCard key={`${asset.kind}:${asset.id}`} asset={asset} dense={dense} />)}</div>{discovery && !visible.length && <p className="hub-empty" role="status">All caught up. Try another category to discover more.</p>}
   </section>;
 }
 

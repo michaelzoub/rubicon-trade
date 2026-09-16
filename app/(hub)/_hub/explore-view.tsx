@@ -1,11 +1,10 @@
 "use client";
 
-import { SpatialMarket, captureField } from "./worldview";
+import { Constellation, constellation } from "./explore-hero";
 import { Flame, Search, Shapes, Sparkles, Sprout } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { Asset } from "@/lib/socialtrading/types";
 import { THEMES } from "@/lib/socialtrading/themes";
-import { Flip } from "../../_components/motion";
 import { ThemeMark } from "../theme-cards";
 import { useGloss } from "./gloss";
 import { useHub } from "./hub-provider";
@@ -40,7 +39,7 @@ export function ExploreView() {
   const search = query.trim();
   /** The field as it stands, taken the moment before a change, so the same
    * objects can be seen travelling to their new places. */
-  const snapshot = useRef<ReturnType<typeof Flip.getState> | null>(null);
+
 
   const forYou = useCallback(async (q: string) => {
     const [stocks, coins] = await Promise.allSettled([market({ kind: "stock", q }), market({ kind: "crypto", q })]);
@@ -56,7 +55,6 @@ export function ExploreView() {
     const handle = setTimeout(() => {
       load().then(list => {
         if (cancelled) return;
-        captureField(snapshot);
         setAssets(list);
       }).catch(e => { if (!cancelled) { setAssets([]); setError(e instanceof Error ? e.message : "Market data is unavailable."); } });
     }, search ? 350 : 0);
@@ -68,12 +66,12 @@ export function ExploreView() {
     return { ...t, explicit: state.profile.themes.includes(t.id), weight: learned?.weight ?? 0, confidence: learned?.confidence ?? 0 };
   }).sort((a, b) => Number(b.explicit) - Number(a.explicit) || b.weight * b.confidence - a.weight * a.confidence), [state.inferred, state.profile.themes]);
 
-  const change = (next: () => void) => { captureField(snapshot); next(); };
+  const change = (next: () => void) => { next(); };
 
   return (
     <div className="hub-explore">
       <div className="hub-explore-controls">
-        <Lens items={LENSES} value={lens} label="Ways to explore" onChange={id => change(() => { setLens(id); setTheme(null); setQuery(""); })} />
+        <Lens className="hub-discovery-lenses" items={LENSES} value={lens} label="Ways to explore" onChange={id => change(() => { setLens(id); setTheme(null); setQuery(""); })} />
         {lens === "forYou" && <label className="hub-search hub-explore-search"><Search size={14} aria-hidden="true" /><span className="sr-only">Search stocks and crypto</span>
           <input value={query} onChange={e => setQuery(e.target.value)} placeholder="A company, a coin, or an idea" maxLength={100} /></label>}
       </div>
@@ -93,11 +91,11 @@ export function ExploreView() {
         })}
       </div>}
 
-      <SpatialMarket assets={assets ?? []} theme={theme} snapshot={snapshot} />
+      {assets && assets.length > 0 && <Constellation assets={constellation(assets)} />}
 
       <section className="hub-explore-results" aria-live="polite">
         {assets === null && (lens !== "themes" || theme) && <div className="hub-skeleton-grid" aria-label="Loading" role="status">{[0, 1, 2, 3].map(i => <span key={i} className="rubicon-skeleton hub-skeleton" />)}</div>}
-        {assets && assets.length > 0 && <details className="gravity-all"><summary>Everything here, in a list</summary><AssetGrid assets={assets} /></details>}
+        {assets && assets.length > 0 && <AssetGrid assets={assets} quiet />}
         {assets && assets.length === 0 && <div className="hub-empty">
           <p>{error || (search ? "Nothing matched. Try a company name, a ticker, or an idea." : "Nothing here yet.")}</p>
           {search && <button type="button" className="hub-chip-button" onClick={() => { setDraft(""); void send(`Find me something related to ${search}`); }}>Ask your agent about “{search}”</button>}

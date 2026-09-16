@@ -8,7 +8,8 @@ import { toAccount } from "viem/accounts";
 import { arbitrum, base, mainnet, optimism, polygon } from "viem/chains";
 import { createBundlerClient, toSimple7702SmartAccount } from "viem/account-abstraction";
 import { bundlerUrl, CIRCLE_PAYMASTER, SIMPLE_7702_ACCOUNT } from "./aa";
-import { chain, feeReserveUsd } from "./chains";
+import { chain } from "./chains";
+import { readPurchaseBalance, feeCap } from "./readiness";
 import type { SwapBatch } from "./types";
 
 const CHAIN_OBJECTS = { 1: mainnet, 10: optimism, 137: polygon, 8453: base, 42161: arbitrum } as const;
@@ -63,21 +64,32 @@ function circlePaymaster(usdc: string, account: { address: string; signTypedData
  * not spend — so this only has to clear the real fee. Twice the reserve the buy
  * screen asks the user to keep back, which on mainnet is dollars and on the
  * rollups is cents. */
-const feeAllowance = (chainId: number) => BigInt(Math.ceil(feeReserveUsd(chainId) * 2 * 1e6));
+const feeAllowance = feeCap;
 
-export async function sendSwapBatch({ batch, provider, signAuthorization }: {
+export async function sendSwapBatch({ batch, provider, signAuthorization, onSubmitted, expiresAt, requiredUsdc }: {
   batch: SwapBatch; provider: WalletProvider; signAuthorization: SignAuthorization;
+  onSubmitted?: (hash: string) => void; expiresAt?: number; requiredUsdc?: bigint;
 }): Promise<{ userOpHash: string; hash: string }> {
   const viemChain = CHAIN_OBJECTS[batch.chainId as keyof typeof CHAIN_OBJECTS];
   if (!viemChain || !batch.paymaster) throw new Error(`Gasless swaps are not available on ${chain(batch.chainId).name}.`);
 
+  const assertContext = async () => {
+    if (expiresAt && Date.now() >= expiresAt) throw new Error("Quote expired. Request a fresh quote.");
+    const funds = await readPurchaseBalance(provider, batch.sender, batch.chainId);
+    if (funds.usdc < (requiredUsdc ?? feeCap(batch.chainId))) throw new Error("Insufficient USDC on this network.");
+  };
+  await assertContext();
+  const guardedProvider: WalletProvider = { request: async args => {
+    if (['personal_sign', 'eth_signTypedData_v4'].includes(args.method)) await assertContext();
+    return provider.request(args);
+  } };
   // One concrete chain type: the union of five would make every downstream
   // viem generic irreconcilable without changing a single runtime value.
   const client = createPublicClient({ chain: viemChain as Chain, transport: custom(provider as Parameters<typeof custom>[0]) });
   const owner = toAccount({
     address: batch.sender as `0x${string}`,
-    signMessage: async ({ message }) => provider.request({ method: "personal_sign", params: [typeof message === "string" ? message : (message as { raw: string }).raw, batch.sender] }) as Promise<`0x${string}`>,
-    signTypedData: typedDataSigner(provider, batch.sender) as never,
+    signMessage: async ({ message }) => guardedProvider.request({ method: "personal_sign", params: [typeof message === "string" ? message : (message as { raw: string }).raw, batch.sender] }) as Promise<`0x${string}`>,
+    signTypedData: typedDataSigner(guardedProvider, batch.sender) as never,
     signTransaction: async () => { throw new Error("This wallet signs user operations, not raw transactions."); },
   });
   const account = await toSimple7702SmartAccount({ client, owner: owner as never });
@@ -102,8 +114,10 @@ export async function sendSwapBatch({ batch, provider, signAuthorization }: {
 
   // A wallet already delegated to this implementation needs no new authorization;
   // re-sending one on every swap would just cost the user gas.
-  const code = await client.getCode({ address: batch.sender as `0x${string}` }).catch(() => undefined);
+  const code = await client.getCode({ address: batch.sender as `0x${string}` });
   const delegated = code?.toLowerCase() === `0xef0100${SIMPLE_7702_ACCOUNT.slice(2)}`;
+  if (code && code !== "0x" && !delegated) throw new Error("This wallet already uses a different smart account. Its configuration was not changed.");
+  await assertContext();
   const authorization = delegated ? undefined : await signAuthorization({ contractAddress: SIMPLE_7702_ACCOUNT as `0x${string}`, chainId: batch.chainId }, { address: batch.sender });
 
   const userOpHash = await bundler.sendUserOperation({
@@ -111,6 +125,19 @@ export async function sendSwapBatch({ batch, provider, signAuthorization }: {
     calls: batch.calls.map(c => ({ to: c.to as `0x${string}`, value: BigInt(c.value), data: c.data as `0x${string}` })),
     ...(authorization ? { authorization: authorization as never } : {}),
   });
+  onSubmitted?.(userOpHash);
   const receipt = await bundler.waitForUserOperationReceipt({ hash: userOpHash });
   return { userOpHash, hash: receipt.receipt.transactionHash };
+}
+
+/** Read-only recovery after a receipt timeout or page reload. Never resubmits. */
+export async function recoverSwapOperation(chainId: number, userOpHash: string): Promise<string | null> {
+  chain(chainId);
+  if (!/^0x[0-9a-f]{64}$/i.test(userOpHash)) throw new Error('Invalid operation reference.');
+  const response = await fetch(bundlerUrl(chainId), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getUserOperationReceipt', params: [userOpHash] }) });
+  if (!response.ok) throw new Error('Confirmation service unavailable.');
+  const body = await response.json();
+  if (body.error) throw new Error('Confirmation service unavailable.');
+  const hash = body.result?.receipt?.transactionHash;
+  return typeof hash === 'string' && /^0x[0-9a-f]{64}$/i.test(hash) ? hash : null;
 }

@@ -106,7 +106,6 @@ export function Constellation({ assets }: { assets: Asset[] }) {
     const media = gsap.matchMedia();
     media.add("(prefers-reduced-motion: no-preference)", () => {
       const slots = gsap.utils.toArray<HTMLElement>("[data-orbit]", stage);
-      const gathers = gsap.utils.toArray<HTMLElement>("[data-orbit-gather]", stage);
       const floats = gsap.utils.toArray<HTMLElement>("[data-orbit-float]", stage);
 
       gsap.fromTo(floats, { opacity: 0, y: 30, scale: .9, filter: "blur(8px)" }, { opacity: 1, y: 0, scale: 1, filter: "blur(0px)", duration: .85, stagger: .055, ease: rubiconMotion.ease.enter, clearProps: "filter" });
@@ -123,26 +122,19 @@ export function Constellation({ assets }: { assets: Asset[] }) {
       const rest = () => slots.forEach((_, i) => { xs[i](0); ys[i](0); });
       stage.addEventListener("pointermove", move); stage.addEventListener("pointerleave", rest);
 
-      const rect = stage.getBoundingClientRect();
-      const tl = gsap.timeline({ scrollTrigger: { trigger: stage, start: 0, end: 520, scrub: .6, onUpdate: self => stage.classList.toggle("is-collapsed", self.progress > .8) } });
-      gathers.forEach((g, i) => {
-        const gr = g.getBoundingClientRect(), d = Number(slots[i].dataset.depth);
-        const dx = rect.left + rect.width / 2 - (gr.left + gr.width / 2), dy = rect.top + rect.height / 2 - (gr.top + gr.height / 2);
-        tl.to(g, { x: dx * .6, y: dy * .6 - 26 * d, scale: .7, opacity: 0, filter: "blur(8px)", ease: "none" }, 0);
-      });
-      tl.to("[data-orbit-glow], [data-orbit-axis]", { opacity: 0, ease: "none" }, 0);
       return () => { stage.removeEventListener("pointermove", move); stage.removeEventListener("pointerleave", rest); };
     });
     return () => media.revert();
   }, { scope: root, dependencies: [key], revertOnUpdate: true });
 
-  return <div ref={root} className="hub-constellation"
+  return <div className="rubicon-xy-scroll"><div ref={root} className="hub-constellation rubicon-xy"
     aria-label="Picked for you, placed by how far each has moved today and how closely it matches your thesis">
     <span className="hub-constellation-glow is-one" data-orbit-glow aria-hidden="true" />
     <span className="hub-constellation-glow is-two" data-orbit-glow aria-hidden="true" />
     <div className="hub-field-axes" data-orbit-axis aria-hidden="true">
       <span className="hub-field-rule is-vertical" /><span className="hub-field-rule is-horizontal" />
-      <span className="hub-field-tick is-top">Closer to your thesis</span>
+      <span className="hub-field-tick is-top">More your thing</span>
+      <span className="hub-field-tick is-bottom">Something new</span>
       <span className="hub-field-tick is-left">Down today</span>
       <span className="hub-field-tick is-right">Up today</span>
     </div>
@@ -163,5 +155,5 @@ export function Constellation({ assets }: { assets: Asset[] }) {
         </div>
       </div>;
     })}
-  </div>;
+  </div></div>;
 }

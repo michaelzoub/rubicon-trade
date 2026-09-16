@@ -1,50 +1,43 @@
 "use client";
-import { useEffect, useRef, useState } from 'react';
-import { Search, ArrowUpRight, X } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { useHub } from './hub-provider';
-import type { Asset } from '@/lib/socialtrading/types';
 
-const destinations = [ ['Home', '/'], ['Explore', '/explore'], ['Memory', '/activity'], ['Your thesis', '/thesis'], ['Manage agents', '/agents'], ['Profile & settings', '/profile'], ['Plan & billing', '/plans'] ];
+import { useEffect, useRef, useState } from "react";
+import { ArrowUpRight, Plus } from "lucide-react";
+import { gsap, useGSAP, prefersReducedMotion } from "../../_components/motion";
+import { HubLink } from "./navigation";
+
+/** Home, Explore and Memory live in the header; account destinations live in the avatar. */
 export function CommandMenu({ resolveHref }: { resolveHref: (href: string) => string }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  const origin = useRef<HTMLElement | null>(null);
-  const input = useRef<HTMLInputElement>(null);
+  const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [status, setStatus] = useState('');
-  const { market, chats, selectChat } = useHub();
-  const router = useRouter();
-  function close() { dialog.current?.close(); setOpen(false); origin.current?.focus(); }
-  function show() { origin.current = document.activeElement as HTMLElement; setQuery(''); setAssets([]); setOpen(true); dialog.current?.showModal(); input.current?.focus(); }
-  function go(href: string) { close(); router.push(resolveHref(href)); }
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancel = () => { if (timer.current) clearTimeout(timer.current); };
+  const close = () => { cancel(); setOpen(false); };
   useEffect(() => {
-    const key = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); if (dialog.current?.open) close(); else show(); } };
-    window.addEventListener('keydown', key);
-    return () => window.removeEventListener('keydown', key);
+    const outside = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
+    const key = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { setOpen(false); if (root.current?.contains(document.activeElement)) trigger.current?.focus(); }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setOpen(value => !value); trigger.current?.focus(); }
+    };
+    document.addEventListener("pointerdown", outside); document.addEventListener("keydown", key);
+    return () => { cancel(); document.removeEventListener("pointerdown", outside); document.removeEventListener("keydown", key); };
   }, []);
-  useEffect(() => {
-    if (!open || query.trim().length < 2) { setAssets([]); setStatus(''); return; }
-    let live = true; setStatus('Searching your market…'); setAssets([]);
-    const timer = setTimeout(async () => {
-      const results = await Promise.allSettled([market({ kind: 'stock', q: query }), market({ kind: 'crypto', q: query })]);
-      if (!live) return;
-      const found = results.flatMap(r => r.status === 'fulfilled' ? r.value : []).slice(0, 8);
-      setAssets(found); setStatus(results.every(r => r.status === 'rejected') ? 'Market search unavailable. Destinations are still accessible.' : found.length ? '' : 'No matching assets. Try another name.');
-    }, 250);
-    return () => { live = false; clearTimeout(timer); };
-  }, [open, query, market]);
-  return <><button className="rubicon-command-trigger" onClick={show} aria-label="Search or jump to anything" aria-keyshortcuts="Meta+k Control+k"><Search size={15}/></button>
-    <dialog className="rubicon-command dashboard-theme" ref={dialog} aria-label="Jump to anything" onPointerDown={e => e.stopPropagation()} onCancel={e => { e.preventDefault(); close(); }} onKeyDown={e => {
-      e.stopPropagation();
-      if (!['ArrowDown', 'ArrowUp'].includes(e.key)) return;
-      e.preventDefault(); const nodes = Array.from(dialog.current?.querySelectorAll<HTMLElement>('[data-command]') ?? []);
-      if (!nodes.length) return; const at = nodes.indexOf(document.activeElement as HTMLElement); nodes[(at + (e.key === 'ArrowDown' ? 1 : -1) + nodes.length) % nodes.length]?.focus();
-    }}>
-      <header><Search size={18}/><input ref={input} aria-label="Search destinations and assets" value={query} onChange={e => setQuery(e.target.value)} placeholder="Look for something" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); dialog.current?.querySelector<HTMLButtonElement>('[data-command]')?.click(); } }}/><button aria-label="Close search" onClick={close}><X size={16}/></button></header>
-      <div className="command-results">{destinations.filter(([name]) => name.toLowerCase().includes(query.toLowerCase())).map(([name, href]) => <button data-command key={href} onClick={() => go(href)}><span>{name}</span><ArrowUpRight size={14}/></button>)}
-      {query.trim().length >= 2 && chats.filter(chat => chat.title.toLowerCase().includes(query.toLowerCase())).slice(0, 5).map(chat => <button data-command key={chat.id} onClick={() => { selectChat(chat.id); go('/'); }}><span>{chat.title}</span><small>Conversation</small></button>)}
-      {assets.map(asset => <button data-command key={`${asset.kind}:${asset.id}`} onClick={() => go(`/explore/${asset.kind}/${encodeURIComponent(asset.id)}`)}><span><strong>{asset.symbol}</strong> {asset.name}</span><small>{asset.kind}</small></button>)}{status && <p role="status">{status}</p>}</div>
-    </dialog></>;
+  useGSAP(() => {
+    if (!open || prefersReducedMotion()) return;
+    gsap.fromTo(".rubicon-portals", { opacity: 0, y: -8, scale: .97 }, { opacity: 1, y: 0, scale: 1, duration: .3, ease: "power3.out", clearProps: "all" });
+    gsap.fromTo(".rubicon-portal", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: .4, stagger: .055, clearProps: "all" });
+  }, { scope: root, dependencies: [open], revertOnUpdate: true });
+  return <div ref={root} className="rubicon-more" onPointerEnter={event => { cancel(); if (event.pointerType === "mouse") setOpen(true); }} onPointerLeave={() => { cancel(); timer.current = setTimeout(() => { if (!root.current?.contains(document.activeElement)) setOpen(false); }, 180); }} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) close(); }}>
+    <button ref={trigger} type="button" className="rubicon-more-trigger" aria-label="Discover more of Rubicon" aria-expanded={open} aria-controls="rubicon-destinations" onClick={() => { cancel(); setOpen(value => !value); }}><Plus size={19} /></button>
+    {open && <nav id="rubicon-destinations" className="rubicon-portals" aria-label="More of Rubicon">
+      <HubLink href={resolveHref("/thesis")} className="rubicon-portal is-thesis" onClick={close}>
+        <span className="portal-heading"><strong>Your thesis</strong><ArrowUpRight size={15}/></span><span className="portal-note">What you believe.</span>
+        <span className="portal-strata" aria-hidden="true"><i/><i/><i/><i/></span>
+      </HubLink>
+      <HubLink href={resolveHref("/agents")} className="rubicon-portal is-agents" onClick={close}>
+        <span className="portal-heading"><strong>Your agents</strong><ArrowUpRight size={15}/></span><span className="portal-note">A mind beside yours.</span>
+        <span className="portal-orbit" aria-hidden="true"><i/><i/><i/></span>
+      </HubLink>
+    </nav>}
+  </div>;
 }

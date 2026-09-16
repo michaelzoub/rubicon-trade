@@ -681,3 +681,17 @@
   .hub-asset:hover, .hub-asset:focus-within,
   .hub-discovery:hover, .hub-discovery:focus-within { transform: none; }
 }
+
+/* Acquisition: the asset leads, readiness stays visible, details remain optional. */
+.purchase-progress { display:flex; justify-content:space-between; gap:8px; padding:0; margin:0 0 24px; list-style:none; color:var(--quiet); font-size:11px; }
+.purchase-progress [aria-current="step"] { color:var(--hub-blue); font-weight:600; }
+.hub-buy.has-target .hub-buy-target { padding:22px 12px; border-radius:24px; background:radial-gradient(ellipse at 50% 0%, #dcecff, #f7fbff 65%, #fff); box-shadow:inset 0 1px 0 #fff, 0 12px 28px -24px #2f80ed; }
+.hub-buy.has-target .hub-buy-target .hub-asset-logo { box-shadow:0 8px 20px -8px #72aaf4, inset 0 2px 2px #fff; }
+.purchase-readiness { padding:16px; border:1px solid #dce8f8; border-radius:18px; background:linear-gradient(145deg,#f6faff,#fff); font-size:12px; line-height:1.6; overflow-wrap:anywhere; }
+.purchase-readiness strong { color:var(--hub-blue-ink); font-weight:600; }
+.purchase-readiness p { margin:5px 0; color:var(--muted); }
+.purchase-readiness button { margin-top:8px; }
+.hub-buy .hub-buy-amount-row input.socialtrading-input:focus-visible { outline:2px solid #2f80ed !important; outline-offset:4px; }
+.hub-buy-presets button[aria-pressed="true"] { background:#e0eeff; box-shadow:inset 0 0 0 1px #92bff6, 0 4px 10px -7px #2f80ed; }
+.purchase-requirements .mono { overflow-wrap:anywhere; }
+@media(max-width:540px) { .purchase-progress { font-size:10px; margin-bottom:16px; } .purchase-readiness { padding:12px; } .hub-buy-target { flex-wrap:wrap; } }
