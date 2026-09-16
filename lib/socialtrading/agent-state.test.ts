@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AGENT_LABEL, agentState, arc, chooseRegion, dwellSeconds, travelSeconds, type AgentSituation } from "./agent-state";
+import { AGENT_LABEL, agentState, along, arc, bowAway, chooseRegion, dwellSeconds, keepToGutter, travelSeconds, type AgentSituation } from "./agent-state";
 
 const quiet: AgentSituation = { open: false, busy: false, streaming: false, waiting: false, discovery: false, attending: false, reflecting: false };
 
@@ -105,5 +105,60 @@ describe("arc", () => {
   it("bows to the same side however the journey is oriented", () => {
     expect(arc({ x: 0, y: 0 }, { x: 0, y: 100 })[1].x).toBeLessThan(0);
     expect(arc({ x: 0, y: 0 }, { x: 0, y: -100 })[1].x).toBeGreaterThan(0);
+  });
+});
+
+describe("keepToGutter", () => {
+  const content = { left: 300, right: 900 };
+
+  it("leaves a destination already in a margin alone", () => {
+    expect(keepToGutter(40, content, 1200, 52)).toBe(40);
+    expect(keepToGutter(1000, content, 1200, 52)).toBe(1000);
+  });
+
+  it("pushes a destination over the content into the nearer margin", () => {
+    expect(keepToGutter(360, content, 1200, 52)).toBeLessThanOrEqual(content.left - 52);
+    expect(keepToGutter(860, content, 1200, 52)).toBeGreaterThanOrEqual(content.right);
+  });
+
+  it("uses the other margin when the nearer one is too narrow to stand in", () => {
+    const hugging = { left: 20, right: 900 };
+    expect(keepToGutter(60, hugging, 1200, 52)).toBeGreaterThanOrEqual(hugging.right);
+  });
+
+  it("stays put when the screen has no margins at all", () => {
+    const full = { left: 0, right: 500 };
+    expect(keepToGutter(200, full, 500, 52)).toBe(200);
+  });
+});
+
+describe("bowAway", () => {
+  it("rounds the content instead of cutting across it, on either side", () => {
+    expect(bowAway({ x: 20 }, { x: 60 }, 500)).toBeLessThan(0);
+    expect(bowAway({ x: 900 }, { x: 960 }, 500)).toBeGreaterThan(0);
+  });
+});
+
+describe("along", () => {
+  const path = arc({ x: 0, y: 0 }, { x: 100, y: 0 });
+
+  it("starts where it starts and ends where it ends", () => {
+    expect(along(path, 0)).toEqual({ x: 0, y: 0 });
+    expect(along(path, 1)).toEqual({ x: 100, y: 0 });
+  });
+
+  it("leaves the straight line in between, which is the whole point of the arc", () => {
+    expect(along(path, .5).y).not.toBeCloseTo(0);
+    expect(along(path, .5).x).toBeCloseTo(50);
+  });
+
+  it("never runs past either end, however the progress is given", () => {
+    expect(along(path, -3)).toEqual({ x: 0, y: 0 });
+    expect(along(path, 9)).toEqual({ x: 100, y: 0 });
+  });
+
+  it("moves in one direction the whole way", () => {
+    const xs = Array.from({ length: 21 }, (_, i) => along(path, i / 20).x);
+    expect(xs.every((x, i) => i === 0 || x >= xs[i - 1])).toBe(true);
   });
 });

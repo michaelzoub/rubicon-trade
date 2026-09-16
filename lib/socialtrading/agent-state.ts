@@ -91,3 +91,40 @@ export function arc(from: { x: number; y: number }, to: { x: number; y: number }
   const midpoint = { x: from.x + dx / 2, y: from.y + dy / 2 };
   return [from, { x: midpoint.x - dy * bow, y: midpoint.y + dx * bow }, to];
 }
+
+/**
+ * Keep to the margins. The agent lives beside what a person is reading, not
+ * over it, so a destination inside the content column is pushed into whichever
+ * gutter is nearer — and only when that gutter is actually wide enough to
+ * stand in. On a narrow screen there are no margins, and it stays where it is.
+ */
+export function keepToGutter(x: number, content: { left: number; right: number }, viewport: number, body: number): number {
+  const margin = 12;
+  const left = { from: margin, to: content.left - body - margin };
+  const right = { from: content.right + margin, to: viewport - body - margin };
+  const fits = (lane: { from: number; to: number }) => lane.to >= lane.from;
+  if (x + body <= content.left || x >= content.right) return x;
+  const nearer = Math.abs(x - content.left) <= Math.abs(x - content.right) ? [left, right] : [right, left];
+  for (const lane of nearer) if (fits(lane)) return Math.min(Math.max(x, lane.from), lane.to);
+  return x;
+}
+
+/** Which way a journey should bow: always away from the middle of the screen,
+ * so the agent rounds the content rather than cutting through it. */
+export const bowAway = (from: { x: number }, to: { x: number }, centre: number, bow = 0.22) =>
+  ((from.x + to.x) / 2 < centre ? -1 : 1) * Math.abs(bow);
+
+/**
+ * A point along the arc. Quadratic through the bowed control point, evaluated
+ * directly rather than handed to a plugin, so the journey is something we can
+ * reason about and test rather than something that either happens or quietly
+ * does not.
+ */
+export function along(path: readonly { x: number; y: number }[], t: number): { x: number; y: number } {
+  const [start, control, end] = path;
+  const u = Math.min(1, Math.max(0, t)), v = 1 - u;
+  return {
+    x: v * v * start.x + 2 * v * u * control.x + u * u * end.x,
+    y: v * v * start.y + 2 * v * u * control.y + u * u * end.y,
+  };
+}

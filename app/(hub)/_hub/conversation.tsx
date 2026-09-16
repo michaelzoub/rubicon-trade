@@ -131,7 +131,7 @@ export function Conversation() {
     <section className="hub-conversation" aria-label="Conversation with your agent">
       {(chats.length > 1 || messages.length > 0 || account) && <ChatHead />}
       {decision && <DecisionSurface question={decision} onClose={() => setDecision(null)} />}
-      <ol hidden={!!decision} ref={list} className="hub-messages" onScroll={e => { const el = e.currentTarget; setStick(el.scrollHeight - el.scrollTop - el.clientHeight < 48); }}>
+      <ol hidden={!!decision} ref={list} className="hub-messages" data-agent-region="conversation" data-agent-weight="3" onScroll={e => { const el = e.currentTarget; setStick(el.scrollHeight - el.scrollTop - el.clientHeight < 48); }}>
         {messages.length === 0 && (
           <li className="hub-welcome">
             <ProfileAvatar profile={state.profile} seed={state.agent?.id ?? userId} themes={state.profile.themes} inferred={learned} className="hub-welcome-badge" />
@@ -142,7 +142,7 @@ export function Conversation() {
         )}
         {messages.map(message => <Row profile={state.profile} key={message.id} message={message} name={name} agentName={state.agent?.name} seed={state.agent?.id ?? userId} themes={state.profile.themes} learned={learned} />)}
       </ol>
-      <form className={`hub-composer${draft.trim() ? " has-draft" : ""}`} onSubmit={e => { e.preventDefault(); submit(); }}>
+      <form data-agent-region="composer" className={`hub-composer${draft.trim() ? " has-draft" : ""}`} onSubmit={e => { e.preventDefault(); submit(); }}>
         <label htmlFor="hub-composer-input" className="sr-only">Message your agent</label>
         <textarea id="hub-composer-input" ref={input} rows={1} value={draft} maxLength={4000} disabled={outOfCredits} onChange={e => setDraft(e.target.value)} onKeyDown={onKey}
           placeholder={outOfCredits ? "Out of credits" : busy ? "Thinking…" : "Ask about a stock, a theme, or change how I work"} />

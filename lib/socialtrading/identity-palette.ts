@@ -52,12 +52,31 @@ export function hslToHex({ h, s, l }: HSL): string {
   return `#${[r, g, b].map(c => c.toString(16).padStart(2, "0")).join("")}`;
 }
 
-/** Circular mean, so a blend of red and violet does not travel through green. */
+/**
+ * How far a blend may pull the leading theme's hue, in degrees. Small on
+ * purpose: neighbouring themes should visibly mix, but two distant ones must
+ * not swing the accent onto a third colour — the short way round from gold to
+ * violet runs through red, which belongs to neither.
+ */
+const PULL = 14;
+
+/** Signed shortest way round the wheel, from one hue to another. */
+const between = (from: number, to: number) => ((to - from + 540) % 360) - 180;
+
+/**
+ * The heaviest theme sets the hue; everything else pulls it, but only so far.
+ * A plain circular mean would invent a third colour — energy and AI averaging
+ * into a pink that belongs to neither — so the pull is bounded and the accent
+ * stays recognisably the thing the person leads with.
+ */
 function blendHue(parts: readonly { hue: number; weight: number }[]): number {
+  const leader = parts.reduce((best, part) => part.weight > best.weight ? part : best);
   const x = parts.reduce((sum, p) => sum + p.weight * Math.cos(p.hue * Math.PI / 180), 0);
   const y = parts.reduce((sum, p) => sum + p.weight * Math.sin(p.hue * Math.PI / 180), 0);
-  if (x === 0 && y === 0) return parts[0]?.hue ?? 0;
-  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  if (x === 0 && y === 0) return leader.hue;
+  const resultant = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  const pull = between(leader.hue, resultant);
+  return (leader.hue + Math.max(-PULL, Math.min(PULL, pull)) + 360) % 360;
 }
 
 /**

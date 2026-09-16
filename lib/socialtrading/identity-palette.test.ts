@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { hexToHsl, hslToHex, identityPalette, identityVars, maturityOf } from "./identity-palette";
+import { THEMES } from "./themes";
 import type { HubState } from "./types";
 
 const learned = (id: string, weight: number, confidence: number): HubState["inferred"][number] =>
@@ -74,5 +75,32 @@ describe("maturityOf", () => {
     expect(maturityOf(1000)).toBe(1);
     expect(maturityOf(-5)).toBe(0);
     expect(maturityOf(30)).toBeGreaterThan(30 / 200);
+  });
+});
+
+describe("hue blending", () => {
+  const hueOf = (themes: Parameters<typeof identityPalette>[1]) => identityPalette("seed", themes, [], 200).hue;
+
+  it("never invents a hue that belongs to no theme the person holds", () => {
+    // Energy is gold and AI is violet; averaging them freely lands on pink, and
+    // even a generous bounded pull swings gold through red on its way there.
+    const energy = hueOf(["energy"]), ai = hueOf(["ai"]), both = hueOf(["energy", "ai"]);
+    const near = (a: number, b: number) => Math.abs(((b - a + 540) % 360) - 180);
+    expect(Math.min(near(both, energy), near(both, ai))).toBeLessThanOrEqual(14.001);
+  });
+
+  it("keeps the accent on whichever theme leads, pulled but not replaced", () => {
+    const crypto = hueOf(["crypto"]);
+    const shaded = identityPalette("seed", ["crypto"], [learned("healthcare", 1, 1)], 200).hue;
+    const pull = Math.abs(((shaded - crypto + 540) % 360) - 180);
+    expect(pull).toBeGreaterThan(0);
+    expect(pull).toBeLessThanOrEqual(14.001);
+  });
+
+  it("stays put when a person holds exactly one theme", () => {
+    for (const theme of ["energy", "tech", "ai", "crypto", "healthcare", "consumer"] as const) {
+      const only = identityPalette("seed", [theme], [], 200);
+      expect(only.hue).toBeCloseTo(hexToHsl(THEMES.find(t => t.id === theme)!.color).h, 4);
+    }
   });
 });

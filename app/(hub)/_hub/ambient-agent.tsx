@@ -4,7 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { ArrowUp, ArrowUpRight, Square, X } from 'lucide-react';
 import { gsap, useGSAP, prefersReducedMotion } from '../../_components/motion';
 import { presenceNote, type PresenceContext } from '@/lib/socialtrading/presence';
-import { AGENT_LABEL, agentState, arc, chooseRegion, dwellSeconds, travelSeconds, type Candidate } from '@/lib/socialtrading/agent-state';
+import { AGENT_LABEL, agentState, along, arc, bowAway, chooseRegion, dwellSeconds, keepToGutter, travelSeconds, type Candidate } from '@/lib/socialtrading/agent-state';
 import { agentAvatarTraits } from '@/lib/socialtrading/avatar';
 import { identityPalette } from '@/lib/socialtrading/identity-palette';
 import { identityDepth, identityStats } from '@/lib/socialtrading/identity';
@@ -125,29 +125,59 @@ export function AmbientAgent({ resolveHref = href => href }: { resolveHref?: (hr
     };
   }, []);
 
+  /**
+   * Whether a place is already taken. Layouts that run edge to edge leave no
+   * margin to reason about, so rather than assume one, this asks the page what
+   * is actually drawn at the point the agent would stand on.
+   */
+  const occupied = useCallback((x: number, y: number) => {
+    const element = document.elementFromPoint(x + BODY / 2, y + BODY / 2);
+    if (!element || root.current?.contains(element)) return false;
+    if (!document.querySelector('main')?.contains(element)) return false;
+    if (element.closest('button, a, input, textarea, img, svg, [role="img"]')) return true;
+    return Array.from(element.childNodes).some(node => node.nodeType === Node.TEXT_NODE && !!node.textContent?.trim());
+  }, []);
+
   /** Places worth standing: the margins beside content that marks itself. */
   const places = useCallback((): Candidate[] => {
     const width = window.innerWidth, height = window.innerHeight;
     const active = document.activeElement as HTMLElement | null;
     const keepClear = composing.current && active ? active.getBoundingClientRect() : null;
+    // The column a person is reading. The agent lives beside it, never on it.
+    const column = document.querySelector('main .container')?.getBoundingClientRect()
+      ?? document.querySelector('main')?.getBoundingClientRect()
+      ?? { left: width / 2, right: width / 2 };
     const found = Array.from(document.querySelectorAll<HTMLElement>('[data-agent-region]')).flatMap((node, index) => {
       const rect = node.getBoundingClientRect();
       if (rect.width === 0 || rect.bottom < 40 || rect.top > height - 40) return [];
       const right = rect.right + 22;
       const x = right + BODY < width - 16 ? right : rect.left - BODY - 22;
-      const point = { x: clamp(x, 16, width - BODY - 16), y: clamp(rect.top + 12, 84, height - BODY - 24) };
+      const point = {
+        x: keepToGutter(clamp(x, 16, width - BODY - 16), column, width, BODY),
+        y: clamp(rect.top + 12, 84, height - BODY - 24),
+      };
       // While the person writes, the agent keeps out of arm's reach of the input.
       if (keepClear && point.x < keepClear.right + 160 && point.x + BODY > keepClear.left - 160 && point.y < keepClear.bottom + 120 && point.y + BODY > keepClear.top - 120) return [];
       return [{ id: `${node.dataset.agentRegion ?? 'region'}-${index}`, ...point, weight: Number(node.dataset.agentWeight ?? 1) || 1 }];
     });
-    if (found.length) return found;
-    // Nothing has marked itself: drift the quiet edges instead of standing still.
-    return [
+    // A place that is taken is tried again hard against the nearest edge, where
+    // there is most often nothing drawn, before it is given up on.
+    const free = found.flatMap(place => {
+      if (!occupied(place.x, place.y)) return [place];
+      const edged = { ...place, x: place.x < width / 2 ? 16 : width - BODY - 16 };
+      return occupied(edged.x, edged.y) ? [] : [edged];
+    });
+    if (free.length) return free;
+
+    // Nothing has marked itself, or everything is taken: drift the quiet edges.
+    const edges = [
       { id: 'edge-left', x: 28, y: height * .38, weight: 1 },
       { id: 'edge-right', x: width - BODY - 28, y: height * .3, weight: 1 },
       { id: 'edge-low', x: width - BODY - 60, y: height * .68, weight: 1 },
-    ].map(p => ({ ...p, x: clamp(p.x, 16, width - BODY - 16), y: clamp(p.y, 84, height - BODY - 24) }));
-  }, []);
+    ].map(p => ({ ...p, x: keepToGutter(clamp(p.x, 16, width - BODY - 16), column, width, BODY), y: clamp(p.y, 84, height - BODY - 24) }));
+    const open = edges.filter(p => !occupied(p.x, p.y));
+    return open.length ? open : edges;
+  }, [occupied]);
 
   // The wander. It chooses somewhere, curves there, rests, and chooses again.
   useGSAP(() => {
@@ -168,9 +198,14 @@ export function AmbientAgent({ resolveHref = href => href }: { resolveHref?: (hr
       const distance = Math.hypot(target.x - from.x, target.y - from.y);
       const seconds = travelSeconds(distance, mode, composing.current);
       const lean = clamp((target.x - from.x) / 90, -7, 7);
-      travel = gsap.to(node, {
-        motionPath: { path: arc(from, target), curviness: 1.35 },
-        duration: seconds, ease: 'creature',
+      // Bowing away from the middle keeps the journey in the margins too, not
+      // just its destination. The curve is walked directly, so a missing plugin
+      // can never leave the agent sitting still while its posture animates.
+      const path = arc(from, target, bowAway(from, target, window.innerWidth / 2));
+      const progress = { at: 0 };
+      travel = gsap.to(progress, {
+        at: 1, duration: seconds, ease: 'creature',
+        onUpdate: () => gsap.set(node, along(path, progress.at)),
         onComplete: () => {
           setSeat({ x: target.x, y: target.y });
           const wait = dwellSeconds(mode, Math.random());

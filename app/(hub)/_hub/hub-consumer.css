@@ -598,8 +598,11 @@
    sure it is, and the dim, small areas are the gaps — which is the point. */
 .hub-knowledge {
   position: relative;
+  /* Every child is absolutely positioned, so this needs a width of its own:
+     as a grid item with none, it collapses and the ring becomes a column. */
+  width: min(560px, 100%);
+  justify-self: center;
   height: min(420px, 52vw);
-  max-width: 560px;
   margin: 8px auto 40px;
   background: radial-gradient(ellipse at center, color-mix(in srgb, var(--id-wash, #f3f8ff) 85%, transparent), transparent 68%);
 }

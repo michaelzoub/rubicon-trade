@@ -6,12 +6,11 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { Flip } from "gsap/Flip";
 import { Draggable } from "gsap/Draggable";
 import { InertiaPlugin } from "gsap/InertiaPlugin";
-import { MotionPathPlugin } from "gsap/MotionPathPlugin";
 import { MorphSVGPlugin } from "gsap/MorphSVGPlugin";
 import { CustomEase } from "gsap/CustomEase";
 import { Observer } from "gsap/Observer";
 
-gsap.registerPlugin(useGSAP, ScrollTrigger, Flip, Draggable, InertiaPlugin, MotionPathPlugin, MorphSVGPlugin, CustomEase, Observer);
+gsap.registerPlugin(useGSAP, ScrollTrigger, Flip, Draggable, InertiaPlugin, MorphSVGPlugin, CustomEase, Observer);
 
 /** Curves the ambient agent moves by. `creature` leaves rest reluctantly and
  * settles without overshoot, the way something alive arrives somewhere;
@@ -32,4 +31,4 @@ export const rubiconMotion = {
 /** True when the visitor asked for less motion. Safe on the server. */
 export const prefersReducedMotion = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-export { gsap, useGSAP, ScrollTrigger, Flip, Draggable, InertiaPlugin, MotionPathPlugin, MorphSVGPlugin, CustomEase, Observer };
+export { gsap, useGSAP, ScrollTrigger, Flip, Draggable, InertiaPlugin, MorphSVGPlugin, CustomEase, Observer };
