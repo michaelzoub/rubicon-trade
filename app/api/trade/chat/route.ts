@@ -50,7 +50,7 @@ export async function POST(request: Request) {
           const status = await brokerage.status(userId).catch(() => null);
           if (status) state.brokerage = { provider: brokerage.provider, connected: status.connected, buyingPower: status.buyingPower, checkedAt: status.checkedAt };
         }
-        assistant.parts = await runAgent({ state, chat, userId, text, emit, signal: request.signal, ledger: supabaseLedger, assistantId: assistant.id, limits: account.limits, holdMicros: account.credits.holdMicros });
+        assistant.parts = await runAgent({ state, chat, userId, text, emit, signal: request.signal, ledger: supabaseLedger, assistantId: assistant.id, limits: account.limits, holdMicros: account.credits.holdMicros, planId: account.planId });
         if (!assistant.parts.some(p => p.type === "text" || p.type === "notice")) assistant.parts.push({ type: "text", text: "Here’s what I found." });
         assistant.status = "done";
       } catch (error) {

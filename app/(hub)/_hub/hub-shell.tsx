@@ -17,11 +17,11 @@ import { agentSelectionKey } from "@/lib/socialtrading/agents/config";
 import type { HubState } from "@/lib/socialtrading/types";
 import { gsap, useGSAP, rubiconMotion } from "../../_components/motion";
 import { ProfileFlow } from "../social-trading";
-import { learnedThemes } from "../profile-card";
 import { AgentPresence } from "./agent-presence";
 import { hubApi, HubRequestError } from "./client";
 import { useAccountSummary } from "./account-state";
 import { HubProvider, useHub } from "./hub-provider";
+import { identityDepth, identityStage, identityStats } from "@/lib/socialtrading/identity";
 import "../socialtrading.css";
 import "./hub.css";
 import "./hub-consumer.css";
@@ -152,7 +152,9 @@ export function Hub({ children, path, resolveHref = href => href }: {
   const routePath = usePathname();
   const pathname = path ?? routePath;
   const router = useRouter();
-  const { state, name, userId, error, clearError, account } = useHub();
+  const { state, name, userId, error, clearError, account, agents } = useHub();
+  const identityStats_ = identityStats(state, agents.length ? agents : state.agent ? [state.agent] : []);
+  const identityStage_ = identityStage(identityDepth(state, identityStats_));
   /** Pages that are about something else carry the agent as one quiet line.
    * Profile, agents and buy already lead with their own identity. */
   const showPresence = pathname !== "/profile" && pathname !== "/agents" && pathname !== "/trade";
@@ -194,7 +196,10 @@ export function Hub({ children, path, resolveHref = href => href }: {
   return (
     <Frame wide
       nav={<TabBar pathname={pathname} onNavigate={navigate} resolveHref={resolveHref} />}
-      accountStatus={<AccountMenu userId={userId} name={name} planName={planName(account)} account={account} themes={state.profile.themes} learned={learnedThemes(state.inferred, state.profile.themes)} profileHref={resolveHref("/profile")} preview={path !== undefined} />}>
+      accountStatus={<AccountMenu userId={userId} name={name} planName={planName(account)} account={account}
+        themes={state.profile.themes} inferred={state.inferred}
+        identity={{ progress: identityStage_.progress, depth: identityStage_.depth, energy: identityStats_.energy }}
+        profileHref={resolveHref("/profile")} plansHref={resolveHref("/plans")} preview={path !== undefined} />}>
       <div className="hub-layout">
         <div ref={stage} className="hub-stage">
           {showPresence && <AgentPresence resolveHref={resolveHref} />}

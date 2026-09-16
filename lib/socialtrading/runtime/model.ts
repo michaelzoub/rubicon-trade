@@ -1,16 +1,18 @@
 import "server-only";
 import { parseOpenRouterUsage, USAGE_ACCOUNTING } from "../credits";
+import { modelForPlan } from "../models";
+import type { PlanId } from "../plans";
 import type { ModelClient, ModelToolCall } from "./types";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 /** Non-streaming OpenRouter completion. Same credentials and model selection as the chat runner. */
-export function openRouterModel(): ModelClient {
+export function openRouterModel(planId: PlanId = "free"): ModelClient {
   return {
     async complete({ messages, tools, toolChoice, signal }) {
       const apiKey = process.env.OPENROUTER_API_KEY;
       if (!apiKey) throw new Error("The agent model is not configured on this deployment.");
-      const model = process.env.SOCIALTRADING_MODEL || "openai/gpt-4.1-mini";
+      const model = modelForPlan(planId);
       const response = await fetch(OPENROUTER_URL, {
         method: "POST", signal,
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "HTTP-Referer": "https://rubiconpay.xyz", "X-Title": "Rubicon background agent" },

@@ -2,7 +2,8 @@ import "server-only";
 import { parseOpenRouterUsage, USAGE_ACCOUNTING, usageToCharge, type CreditLedger } from "../credits";
 import { PERMISSIONS } from "../profile";
 import { describeLimits } from "../trades";
-import { DEFAULT_PLAN, type PlanLimits } from "../plans";
+import { modelForPlan } from "../models";
+import { DEFAULT_PLAN, type PlanId, type PlanLimits } from "../plans";
 import type { Chat, ChatEvent, HubState, Message, MessagePart } from "../types";
 import { profileSummary } from "./tools";
 import { agentVoice } from "../agents/personality";
@@ -81,11 +82,11 @@ async function meteredRound(input: { apiKey: string; model: string; body: Record
  * Every round is metered: a hold is reserved first and settled to the cost
  * OpenRouter reports, so two concurrent turns can never overspend. */
 export async function runAgent(input: { state: HubState; chat: Chat; userId: string; name?: string; text: string; emit: (event: ChatEvent) => void; signal?: AbortSignal;
-  ledger?: CreditLedger; assistantId: string; limits?: PlanLimits; holdMicros?: number }): Promise<MessagePart[]> {
+  ledger?: CreditLedger; assistantId: string; limits?: PlanLimits; holdMicros?: number; planId?: PlanId }): Promise<MessagePart[]> {
   const { state, userId, emit } = input;
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("Your agent isn’t configured on this deployment yet.");
-  const model = process.env.SOCIALTRADING_MODEL || "openai/gpt-4.1-mini";
+  const model = modelForPlan(input.planId ?? "free");
   const limits = input.limits ?? DEFAULT_PLAN.limits, holdMicros = input.holdMicros ?? DEFAULT_PLAN.credits.holdMicros;
   const scope = { userId, agentId: state.agent?.id ?? "default", source: "chat" as const, ref: input.assistantId };
   const parts: MessagePart[] = [];

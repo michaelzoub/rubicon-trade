@@ -8,15 +8,18 @@ import { CHAINS, formatUnits, type ChainId } from "@/lib/crypto/chains";
 import { qrMatrix } from "@/lib/crypto/qr";
 import { formatCredits, type AccountSummary } from "@/lib/socialtrading/plans";
 import type { ThemeId } from "@/lib/socialtrading/themes";
+import type { HubState } from "@/lib/socialtrading/types";
 import { usePrivyConfigured } from "../../providers";
-import { ProfileAvatar } from "../profile-avatar";
 import { useWalletBalanceCache, type WalletBalance } from "./account-state";
+import { IdentityAura } from "./identity-aura";
 import { useLinkedWallets } from "./wallets";
 
 type Props = {
   userId: string; name?: string; planName: string; account: AccountSummary | null;
-  themes: ThemeId[]; learned: ThemeId[];
+  themes: ThemeId[]; inferred: HubState["inferred"];
+  identity: { progress: number; depth: number; energy: number };
   profileHref: string;
+  plansHref: string;
   /** Preview seam: no Privy, so balances and sign-out are unavailable. */
   preview: boolean;
 };
@@ -69,11 +72,12 @@ function LiveMenu(props: Props) {
     signOut={<button type="button" className="hub-account-signout" onClick={() => void logout()}><LogOut size={14} aria-hidden="true" /><span>Sign out</span></button>} />;
 }
 
-function Menu({ userId, name, planName, account, themes, learned, profileHref, preview, wallets, signOut, onOpen }: Props & { wallets: WalletEntry[]; signOut: ReactNode; onOpen?: (open: boolean) => void }) {
+function Menu({ userId, name, planName, account, themes, inferred, identity, profileHref, plansHref, preview, wallets, signOut, onOpen }: Props & { wallets: WalletEntry[]; signOut: ReactNode; onOpen?: (open: boolean) => void }) {
   const id = useId();
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const closing = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pointerWasOpen = useRef<boolean | null>(null);
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
   const change = (value: boolean) => {
@@ -99,8 +103,10 @@ function Menu({ userId, name, planName, account, themes, learned, profileHref, p
     onBlur={event => { if (!root.current?.contains(event.relatedTarget as Node | null)) change(false); }}
     // Focus returns to the card before closing, so the focus event cannot reopen the menu.
     onKeyDown={event => { if (event.key === "Escape") { trigger.current?.focus(); change(false); } }}>
-    <button ref={trigger} type="button" className="hub-account-trigger" aria-haspopup="true" aria-expanded={open} aria-controls={id} onClick={() => change(!open)}>
-      <ProfileAvatar seed={userId} themes={themes} inferred={learned} className="hub-account-avatar" />
+    <button ref={trigger} type="button" className="hub-account-trigger" aria-haspopup="true" aria-expanded={open} aria-controls={id}
+      onPointerDown={() => { pointerWasOpen.current = open; }}
+      onClick={() => { const beforePointer = pointerWasOpen.current; pointerWasOpen.current = null; change(beforePointer === null ? !open : !beforePointer); }}>
+      <AccountOrb seed={userId} themes={themes} inferred={inferred} identity={identity} compact />
       <span className="hub-account-name">{label}</span>
       <ChevronDown size={14} aria-hidden="true" className="hub-account-caret" />
     </button>
@@ -109,15 +115,16 @@ function Menu({ userId, name, planName, account, themes, learned, profileHref, p
         ? <WalletDetail key={shown.address} wallet={shown} onBack={() => setDetail(null)} />
         : <div key="summary" className="hub-account-pane is-summary">
           <Link href={profileHref} className="hub-account-head" onClick={() => change(false)}>
-            <ProfileAvatar seed={userId} themes={themes} inferred={learned} className="hub-account-avatar" />
+            <AccountOrb seed={userId} themes={themes} inferred={inferred} identity={identity} />
             <span className="hub-account-who"><strong>{label}</strong><small>{planName} plan</small></span>
             <ArrowUpRight size={14} aria-hidden="true" className="hub-account-head-arrow" />
           </Link>
           <div className="hub-account-body">
-            <div className="hub-account-row" aria-label="AI credits">
+            <Link href={plansHref} className="hub-account-row is-link" aria-label="AI credits" onClick={() => change(false)}>
               <span className="hub-account-label">AI credits</span>
               <span className={`hub-account-credits is-${credits?.state ?? "unknown"}`}>{credits?.value ?? "—"}</span>
-            </div>
+              <ChevronRight size={14} aria-hidden="true" className="hub-account-chevron" />
+            </Link>
             {!preview && wallets.length === 0 && <Link href={profileHref} className="hub-account-row is-link" onClick={() => change(false)}>
               <span className="hub-account-label">Wallet</span><span className="hub-account-value is-quiet">Add</span><ChevronRight size={14} aria-hidden="true" className="hub-account-chevron" />
             </Link>}
@@ -131,6 +138,18 @@ function Menu({ userId, name, planName, account, themes, learned, profileHref, p
       {signOut && <div className="hub-account-foot">{signOut}</div>}
     </div>
   </div>;
+}
+
+/** The account control uses the same evolving identity object as Profile—not an
+ * agent portrait—so the person remains the center of the product everywhere. */
+function AccountOrb({ seed, themes, inferred, identity, compact = false }: {
+  seed: string; themes: ThemeId[]; inferred: HubState["inferred"];
+  identity: Props["identity"]; compact?: boolean;
+}) {
+  return <span className={`hub-account-orb${compact ? " is-compact" : ""}`} aria-hidden="true">
+    <IdentityAura seed={seed} themes={themes} inferred={inferred} progress={identity.progress}
+      depth={identity.depth} energy={identity.energy} label="" className="hub-account-aura" />
+  </span>;
 }
 
 function walletSummary(wallet: WalletEntry): string {

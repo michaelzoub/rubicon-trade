@@ -200,22 +200,96 @@
 .hub-activity .hub-activity-details > summary { margin-top: .6rem; }
 .hub-activity .hub-event-trade dl { margin-top: .6rem; padding: .65rem .8rem; border-radius: 12px; background: var(--surface-muted); }
 
-/* ---------- Profile ---------- */
-.hub-profile { display: grid; gap: clamp(1.5rem, 3vh, 2rem); }
-.hub-profile-hero { position: relative; isolation: isolate; display: grid; grid-template-columns: 7rem minmax(0, 1fr); align-items: center; gap: 1.75rem; padding: 1.75rem 2rem 1.75rem 1.75rem; border-radius: 28px; background: #fff; box-shadow: 0 0 0 1px rgba(var(--hub-blue-rgb), .14), 0 1px 2px rgba(18, 18, 22, .03), 0 30px 70px -44px rgba(var(--hub-blue-rgb), .5); overflow: hidden; }
-.hub-profile-hero-light { position: absolute; inset: 0; z-index: -1; pointer-events: none; background: radial-gradient(60% 90% at 0% 50%, rgba(var(--hub-blue-rgb), .16), transparent 70%), radial-gradient(50% 80% at 100% 0%, rgba(127, 180, 255, .13), transparent 70%), linear-gradient(160deg, #fff 40%, #f7faff); }
-@media (prefers-reduced-motion: no-preference) { .hub-profile-hero-light { background-size: 130% 130%, 130% 130%, 100% 100%; background-repeat: no-repeat; animation: hub-agent-drift 14s ease-in-out infinite alternate; } }
-.hub-profile-badge.socialtrading-avatar { width: 7rem; height: 7.3rem; margin: 0; filter: drop-shadow(0 14px 22px rgba(var(--hub-blue-rgb), .25)); }
-.hub-profile-who { display: grid; gap: .45rem; min-width: 0; }
-.hub-profile-who .eyebrow { margin: 0; }
-.hub-profile-who .landing-section-title { font-size: clamp(2rem, 3.4vw, 2.75rem); line-height: 1.05; }
-.hub-profile-line { color: var(--muted); font-size: .9375rem; line-height: 1.55; }
-.hub-profile-line strong { color: var(--ink); font-weight: 500; }
-.hub-profile-marks { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .35rem; }
-.hub-profile-mark { display: inline-flex; align-items: center; gap: .35rem; padding: .28rem .65rem; border-radius: 999px; background: rgba(255, 255, 255, .8); color: var(--ink); font-size: .6875rem; font-weight: 500; box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .22); backdrop-filter: blur(6px); }
-.hub-profile-mark svg { color: var(--hub-blue); }
-.hub-profile-mark.is-quiet { color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
-.hub-profile .hub-tell { max-width: none; border-radius: 20px; padding: 1.1rem 1.25rem; }
+/* ---------- Profile: a financial identity, not a settings page ----------
+   The aura is the one loud thing on the page. It is composed per person from
+   their themes, what their agents inferred, how deep the learning goes and how
+   busy the week has been, and the ring around it IS the progression, so no
+   meter appears anywhere else. Everything below it stays deliberately quiet. */
+.hub-profile { display: grid; gap: clamp(2rem, 5vh, 3.25rem); }
+
+.hub-identity { position: relative; isolation: isolate; overflow: clip; display: grid; justify-items: center; gap: .55rem; padding: clamp(1.5rem, 5vh, 3rem) clamp(1rem, 4vw, 2.5rem) clamp(1.75rem, 4vh, 2.5rem); border-radius: clamp(28px, 4vw, 44px); text-align: center; }
+/* Light that spills past the type column, so the page feels lit rather than decorated. */
+.hub-identity-wash { position: absolute; z-index: -1; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(46% 48% at 50% 24%, color-mix(in srgb, var(--aura-glow) 30%, transparent), transparent 76%),
+    radial-gradient(32% 36% at 86% 8%, color-mix(in srgb, var(--aura-glow-2) 24%, transparent), transparent 74%),
+    radial-gradient(34% 32% at 8% 66%, color-mix(in srgb, var(--aura-glow) 16%, transparent), transparent 78%),
+    linear-gradient(170deg, color-mix(in srgb, var(--aura-glow) 7%, #fff), #fff 72%);
+  filter: blur(22px); }
+.hub-identity-orb { position: relative; display: grid; justify-items: center; margin-bottom: .35rem; }
+.hub-aura { display: block; width: clamp(14rem, 32vw, 21rem); aspect-ratio: 1; overflow: visible; }
+.hub-identity-stage { position: absolute; bottom: -.35rem; padding: .34rem .85rem; border-radius: 999px; background: rgba(255, 255, 255, .78); color: var(--ink); font-size: .6875rem; font-weight: 500; letter-spacing: .1em; text-transform: uppercase;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .9), 0 1px 2px rgba(18, 18, 22, .05), 0 10px 26px -14px color-mix(in srgb, var(--aura-deep) 85%, transparent); backdrop-filter: blur(10px); }
+
+/* The name is set far lighter and larger than any other heading in the hub.
+   This page is the only place the product says your name, so it gets the air. */
+.hub-identity-name { font-size: clamp(2.5rem, 6.5vw, 4.25rem); font-weight: 300; line-height: 1; letter-spacing: -.045em; color: var(--ink); }
+.hub-identity-signature { font-size: .625rem; font-weight: 500; letter-spacing: .2em; color: var(--quiet); }
+.hub-identity-line { color: color-mix(in srgb, var(--aura-deep) 80%, var(--ink)); font-size: 1.0625rem; font-weight: 500; letter-spacing: -.01em; }
+.hub-identity-thesis { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; max-width: 34rem; margin-top: .15rem; color: var(--muted); font-size: .9375rem; line-height: 1.65; }
+
+.hub-identity-tallies { display: flex; flex-wrap: wrap; justify-content: center; gap: clamp(1rem, 4vw, 2.75rem); margin-top: 1.35rem; padding: .85rem clamp(1.25rem, 4vw, 2.25rem); border-radius: 999px; background: rgba(255, 255, 255, .72);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .85), 0 1px 2px rgba(18, 18, 22, .04), 0 22px 46px -32px color-mix(in srgb, var(--aura-deep) 75%, transparent); backdrop-filter: blur(14px); }
+.hub-tally { display: grid; justify-items: center; gap: .05rem; cursor: default; }
+.hub-tally-figure { font-family: var(--font-mono); font-size: 1.375rem; font-weight: 500; letter-spacing: -.03em; color: var(--ink); font-variant-numeric: tabular-nums; }
+.hub-tally-label { font-size: .625rem; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: var(--quiet); }
+
+.hub-identity-marks { display: flex; flex-wrap: wrap; justify-content: center; gap: .4rem; margin-top: 1rem; }
+.hub-identity-mark { display: inline-flex; align-items: center; gap: .35rem; padding: .28rem .7rem; border-radius: 999px; background: rgba(255, 255, 255, .7); color: var(--ink); font-size: .6875rem; font-weight: 500; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--aura-deep) 22%, transparent); backdrop-filter: blur(6px); }
+.hub-identity-mark svg { color: color-mix(in srgb, var(--aura-deep) 85%, var(--ink)); }
+.hub-identity-mark.is-quiet { color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+
+/* ---------- Progression: a state to grow into, and one thing to do next ---------- */
+.hub-progress { display: grid; gap: 1.5rem; padding: clamp(1.25rem, 3vw, 1.75rem); border-radius: 26px; background: #fff; box-shadow: inset 0 0 0 1px var(--line), 0 1px 2px rgba(18, 18, 22, .02); }
+.hub-progress-copy { display: grid; gap: .35rem; }
+.hub-progress-copy h2 { font-size: 1.0625rem; font-weight: 500; letter-spacing: -.02em; }
+.hub-progress-copy p { color: var(--muted); font-size: .875rem; line-height: 1.6; }
+.hub-progress-copy strong { color: var(--ink); font-weight: 500; }
+.hub-milestones { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: .5rem; }
+.hub-milestone { display: grid; justify-items: center; gap: .5rem; cursor: default; }
+.hub-milestone:focus-visible { outline: 2px solid color-mix(in srgb, var(--aura-deep) 70%, transparent); outline-offset: 4px; border-radius: 12px; }
+.hub-milestone i { width: 2.4rem; height: 2.4rem; border-radius: 50%; background: var(--surface-muted); box-shadow: inset 0 0 0 1px var(--line); transition: transform 420ms var(--dashboard-ease-out), box-shadow 420ms var(--dashboard-ease-out); }
+.hub-milestone.is-earned i { background: radial-gradient(circle at 34% 28%, #fff, var(--aura-glow) 52%, var(--aura-deep) 120%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .7), 0 6px 16px -8px color-mix(in srgb, var(--aura-deep) 90%, transparent), 0 0 22px -8px color-mix(in srgb, var(--aura-deep) 80%, transparent); }
+.hub-milestone:hover i, .hub-milestone:focus-visible i { transform: translateY(-3px) scale(1.06); }
+.hub-milestone small { color: var(--quiet); font-size: .625rem; line-height: 1.25; text-align: center; }
+.hub-milestone.is-earned small { color: var(--ink); }
+
+/* ---------- Roster: agents as companions ---------- */
+.hub-roster { display: grid; gap: .9rem; }
+.hub-roster-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .75rem; }
+.hub-roster-head h2 { font-size: 1.0625rem; font-weight: 500; letter-spacing: -.02em; }
+.hub-companions { display: grid; grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr)); gap: .75rem; }
+.hub-companion { position: relative; isolation: isolate; overflow: hidden; display: grid; justify-items: center; gap: .2rem; height: 100%; padding: 1.4rem 1rem 1.15rem; border-radius: 24px; background: #fff; text-align: center;
+  box-shadow: inset 0 0 0 1px var(--line), 0 1px 2px rgba(18, 18, 22, .02); transition: transform 420ms var(--dashboard-ease-out), box-shadow 420ms var(--dashboard-ease-out); }
+.hub-companion:hover { transform: translateY(-3px); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--aura-deep) 32%, transparent), 0 26px 52px -32px color-mix(in srgb, var(--aura-deep) 95%, transparent); }
+.hub-companion:focus-visible { outline: 2px solid color-mix(in srgb, var(--aura-deep) 70%, transparent); outline-offset: 3px; }
+.hub-companion-glow { position: absolute; z-index: -1; inset: -45% -25% 45%; pointer-events: none; filter: blur(20px); opacity: .55;
+  background: radial-gradient(58% 58% at 50% 55%, color-mix(in srgb, var(--aura-glow) 78%, transparent), transparent 72%); }
+.hub-companion.is-current { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--aura-deep) 38%, transparent), 0 20px 44px -34px color-mix(in srgb, var(--aura-deep) 90%, transparent); }
+.hub-companion-badge.socialtrading-avatar { width: 4.5rem; height: 4.7rem; margin: 0 0 .5rem; filter: drop-shadow(0 12px 18px color-mix(in srgb, var(--aura-deep) 45%, transparent)); }
+.hub-companion strong { font-size: .875rem; font-weight: 550; letter-spacing: -.01em; }
+.hub-companion small { color: var(--muted); font-size: .75rem; line-height: 1.45; }
+.hub-companion-state { display: inline-flex; align-items: center; gap: .4rem; margin-top: .55rem; color: var(--quiet); font-size: .625rem; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.hub-companion-state i { width: .4rem; height: .4rem; border-radius: 999px; background: currentColor; }
+.hub-companion.is-awake .hub-companion-state { color: color-mix(in srgb, var(--aura-deep) 88%, var(--ink)); }
+.hub-companion.is-new { justify-items: center; align-content: center; background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+.hub-companion.is-new:hover { background: #fff; }
+.hub-companion-mark { display: grid; place-items: center; width: 2.75rem; height: 2.75rem; margin-bottom: .65rem; border-radius: 50%; color: var(--muted); background: var(--surface-muted); transition: transform 420ms var(--dashboard-ease-out); }
+.hub-companion.is-new:hover .hub-companion-mark { transform: translateY(-2px) rotate(90deg); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .hub-companion.is-awake .hub-companion-glow { animation: hub-aura-breathe 6s ease-in-out infinite; }
+  .hub-companion.is-awake .hub-companion-state i { animation: hub-aura-pulse 2.6s ease-out infinite; }
+}
+@keyframes hub-aura-breathe { 0%, 100% { opacity: .42; transform: scale(1); } 50% { opacity: .78; transform: scale(1.07); } }
+@keyframes hub-aura-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--aura-deep) 55%, transparent); } 70%, 100% { box-shadow: 0 0 0 6px transparent; } }
+
+/* On this page the prompt strip wears the person's own colour rather than Rubicon blue,
+   so the whole page reads as one palette. */
+.hub-profile .hub-tell { max-width: none; border-radius: 22px; padding: 1.1rem 1.25rem;
+  background: linear-gradient(140deg, color-mix(in srgb, var(--aura-glow) 26%, #fff), #fff 78%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--aura-deep) 20%, transparent), 0 10px 30px -22px color-mix(in srgb, var(--aura-deep) 70%, transparent); }
+.hub-profile .hub-tell .hub-part-title { color: color-mix(in srgb, var(--aura-deep) 80%, var(--ink)); }
 .hub-facets { display: grid; gap: .9rem; }
 .hub-facet { position: relative; border-radius: 22px; background: #fff; box-shadow: inset 0 0 0 1px var(--line), 0 1px 2px rgba(18, 18, 22, .02); transition: box-shadow 360ms var(--dashboard-ease-out), transform 360ms var(--dashboard-ease-out); }
 .hub-facet:hover { box-shadow: inset 0 0 0 1px rgba(18, 18, 22, .13), 0 18px 40px -32px rgba(18, 18, 22, .3); }
@@ -294,8 +368,11 @@
   .hub-orbit-card .hub-asset-logo { width: 32px; height: 32px; border-radius: 10px; }
   .hub-buy { padding: 1.1rem 1rem 1.15rem; }
   .hub-buy .hub-buy-amount-row input.socialtrading-input { font-size: 2.4rem; }
-  .hub-profile-hero { grid-template-columns: 4.75rem minmax(0, 1fr); gap: 1rem; padding: 1.25rem; }
-  .hub-profile-badge.socialtrading-avatar { width: 4.75rem; height: 4.95rem; }
+  .hub-identity { padding-inline: 0; }
+  .hub-identity-tallies { gap: 1rem .25rem; width: 100%; border-radius: 22px; }
+  .hub-tally { flex: 1 0 40%; }
+  .hub-milestones { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem .5rem; }
+  .hub-companions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hub-facet-head { grid-template-columns: auto minmax(0, 1fr); }
   .hub-facet-toggle { grid-column: 2; justify-self: start; }
   .hub-modes, .hub-zone-fields { grid-template-columns: minmax(0, 1fr); }
@@ -304,7 +381,8 @@
   .hub-save { position: fixed; left: 1rem; right: 1rem; bottom: 1rem; width: auto; margin: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .hub-orbit-card:hover, .hub-orb:hover, .hub-facet:hover .hub-facet-medallion, .hub-mode:hover, .hub-activity .hub-event:hover, .hub-buy .hub-buy-result:hover { transform: none; }
+  .hub-orbit-card:hover, .hub-orb:hover, .hub-facet:hover .hub-facet-medallion, .hub-mode:hover, .hub-activity .hub-event:hover, .hub-buy .hub-buy-result:hover,
+  .hub-companion:hover, .hub-companion.is-new:hover .hub-companion-mark, .hub-milestone:hover i, .hub-milestone:focus-visible i { transform: none; }
   .hub-facet-body { transition: none; }
   .hub-facet-inner { transition: none; }
 }
@@ -407,3 +485,76 @@
 .hub-plot::before { content: ""; position: absolute; inset: 8% -4% -12% -4%; z-index: 0; pointer-events: none;
   background: radial-gradient(ellipse 60% 70% at 50% 100%, rgba(var(--hub-blue-rgb), .1), transparent 70%); }
 .hub-plot .dashboard-data-viz { position: relative; z-index: 1; }
+
+/* ---------- Plans: the ladder is lit, not coloured ----------
+   The page goes true white where the hub is cream, so it reads as a different
+   room. Free sits flat on it, Plus is raised into the Rubicon light, Pro holds
+   the deepest one. The model list is the argument, so nothing decorates it. */
+.hub-plans { position: relative; display: grid; gap: clamp(2rem, 5vh, 3.25rem); }
+.hub-plans-light { position: absolute; z-index: 0; top: -14rem; right: -10rem; width: 42rem; height: 34rem; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(ellipse, rgba(var(--hub-blue-rgb), .13), rgba(var(--hub-blue-rgb), .04) 46%, transparent 72%); }
+@media (prefers-reduced-motion: no-preference) {
+  .hub-plans-light { animation: hub-atmosphere 16s ease-in-out infinite alternate; }
+}
+.hub-plans-head { z-index: 1; margin-bottom: 0; max-width: 40rem; }
+.hub-plans-head p:not(.eyebrow) { max-width: 33rem; }
+
+.hub-plans-grid { z-index: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; align-items: stretch; }
+
+.hub-plan-card { position: relative; display: flex; flex-direction: column; gap: .35rem; padding: 1.6rem 1.4rem 1.4rem; border-radius: 18px; background: #fff;
+  box-shadow: inset 0 0 0 1px var(--line); transition: box-shadow 260ms ease, transform 260ms var(--dashboard-ease-out); }
+.hub-plan-card:hover { transform: translateY(-2px); box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .2), 0 16px 40px -28px rgba(var(--hub-blue-rgb), .45); }
+
+/* Plus: raised into the light. Pro takes the deepest light without leaving white. */
+.hub-plan-card.is-featured { padding-top: 2.1rem; transform: translateY(-1.25rem);
+  background: linear-gradient(180deg, #fff, color-mix(in srgb, var(--hub-blue) 4%, #fff));
+  box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .3), 0 22px 50px -30px rgba(var(--hub-blue-rgb), .55), 0 0 60px -26px rgba(var(--hub-blue-rgb), .4); }
+.hub-plan-card.is-featured:hover { transform: translateY(-1.5rem); }
+.hub-plan-card:last-child { background: linear-gradient(180deg, #fff, color-mix(in srgb, var(--hub-blue) 2%, #fff)); }
+
+.hub-plan-badge { position: absolute; top: .85rem; right: 1.1rem; padding: .2rem .55rem; border-radius: 999px; background: var(--hub-blue); color: #fff;
+  font-size: .625rem; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; box-shadow: 0 4px 14px -6px rgba(var(--hub-blue-rgb), .8); }
+
+.hub-plan-tier { color: var(--hub-blue-ink); font-size: .6875rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.hub-plan-name { margin: .15rem 0 0; font-family: "Caslon 540", Georgia, "Times New Roman", serif; font-size: 1.75rem; font-weight: 400; line-height: 1.1; letter-spacing: -.015em; color: var(--ink); }
+.hub-plan-tagline { margin: .3rem 0 0; min-height: 2.6rem; color: var(--muted); font-size: .8125rem; line-height: 1.5; }
+
+.hub-plan-price { display: flex; align-items: baseline; gap: .2rem; margin: 1rem 0 0; }
+.hub-plan-amount { font-family: "Caslon 540", Georgia, "Times New Roman", serif; font-size: 2.5rem; font-weight: 400; line-height: 1; letter-spacing: -.02em; color: var(--ink); }
+.hub-plan-period { color: var(--quiet); font-size: .8125rem; }
+
+.hub-plan-action { display: grid; gap: .4rem; margin-top: 1.1rem; }
+.hub-plan-cta { width: 100%; padding: .65rem 1rem; border-radius: 10px; background: var(--surface-muted); color: var(--muted); font-size: .8125rem; font-weight: 550;
+  box-shadow: inset 0 0 0 1px var(--line); cursor: not-allowed; }
+.hub-plan-card.is-featured .hub-plan-cta { background: color-mix(in srgb, var(--hub-blue) 10%, #fff); color: var(--hub-blue-ink); box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .28); }
+.hub-plan-soon { color: var(--quiet); font-size: .6875rem; text-align: center; }
+.hub-plan-current { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; margin: 1.1rem 0 1.1rem; padding: .65rem 1rem; border-radius: 10px;
+  background: color-mix(in srgb, var(--hub-blue) 8%, #fff); color: var(--hub-blue-ink); font-size: .8125rem; font-weight: 550; box-shadow: inset 0 0 0 1px var(--hub-blue-line); }
+.hub-plan-current svg { flex-shrink: 0; }
+
+.hub-plan-models { margin-top: 1.4rem; padding-top: 1.1rem; border-top: 1px solid var(--line); }
+.hub-plan-label { color: var(--quiet); font-size: .6875rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.hub-plan-models ul { display: grid; gap: .5rem; margin-top: .7rem; }
+.hub-plan-model { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; }
+.hub-plan-model-name { color: var(--ink); font-size: .875rem; font-weight: 500; letter-spacing: -.005em; }
+.hub-plan-model-lab { color: var(--quiet); font-size: .75rem; white-space: nowrap; }
+.hub-plan-inherits { margin-top: .85rem; color: var(--muted); font-size: .75rem; font-style: italic; }
+
+/* `auto` pins the room block to the card's foot, so three cards with two, three and four
+   models still line up along the bottom instead of ending raggedly. */
+.hub-plan-room { margin-top: auto; padding-top: 1.1rem; border-top: 1px solid var(--line); display: grid; gap: .5rem; }
+.hub-plan-models { margin-bottom: 1.2rem; }
+.hub-plan-room > div { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; }
+.hub-plan-room dt { color: var(--muted); font-size: .75rem; }
+.hub-plan-room dd { margin: 0; color: var(--ink); font-size: .75rem; font-weight: 550; text-align: right; }
+
+.hub-plans-foot { z-index: 1; display: grid; gap: .5rem; justify-items: start; max-width: 42rem; padding-top: .5rem; }
+.hub-plans-foot p { color: var(--muted); font-size: .8125rem; line-height: 1.6; }
+
+@media (max-width: 62rem) {
+  .hub-plans-grid { grid-template-columns: 1fr; gap: 1.1rem; }
+  .hub-plan-card, .hub-plan-card.is-featured { transform: none; padding-top: 1.6rem; }
+  .hub-plan-card:hover, .hub-plan-card.is-featured:hover { transform: none; }
+  .hub-plan-card.is-featured { padding-top: 2.1rem; }
+  .hub-plan-tagline { min-height: 0; }
+}

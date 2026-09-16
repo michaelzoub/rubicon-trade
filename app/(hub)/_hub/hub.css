@@ -280,7 +280,6 @@
 
 /* Profile. */
 .hub-profile { display: grid; gap: 2rem; }
-.hub-profile-badge.socialtrading-avatar { width: 6rem; height: 6.25rem; margin: 0; }
 .hub-tell { padding: 1rem 1.1rem; border-radius: 12px; background: radial-gradient(ellipse at 100% 0%, rgba(var(--hub-blue-rgb), .09), transparent 65%), linear-gradient(120deg, #f8fbff, #edf5ff); box-shadow: inset 0 0 0 1px var(--hub-blue-line), 0 6px 24px -16px rgba(var(--hub-blue-rgb), .18); }
 .hub-tell .hub-part-title { color: var(--hub-blue-ink); }
 .hub-tell .hub-part-title svg { width: 13px; height: 13px; }
@@ -314,7 +313,6 @@
 .socialtrading-main.is-hub { padding-block: 1.5rem 2rem; }
   .hub-nav-link { flex: 1 0 auto; justify-content: center; padding: .55rem .6rem .7rem; font-size: .8125rem; }
   .hub-conversation { min-height: 60vh; max-height: none; }
-  .hub-profile-badge.socialtrading-avatar { width: 4.5rem; height: 4.7rem; }
   .hub-trade-facts, .hub-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hub-detail-price { justify-items: start; }
   .hub-skeleton-grid { grid-template-columns: minmax(0, 1fr); }
@@ -671,7 +669,10 @@
 .hub-account-trigger { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px 0 6px; border-radius: 10px; background: #111; color: #fff; font-size: 12px; font-weight: 500; white-space: nowrap; cursor: pointer; transition: background-color 160ms var(--ease-out); }
 .hub-account-trigger:hover, .hub-account.is-open .hub-account-trigger { background: #232323; }
 .hub-account-trigger:focus-visible { outline: 2px solid #7897d7; outline-offset: 2px; }
-.hub-account-avatar { width: 24px; height: 25px; margin: 0; flex-shrink: 0; }
+.hub-account-orb { position: relative; display: grid; place-items: center; width: 42px; height: 42px; flex: 0 0 auto; border-radius: 50%; overflow: hidden; background: radial-gradient(circle at 35% 28%, #ffffff2e, #ffffff08 48%, #0000 72%); box-shadow: inset 0 0 0 1px #ffffff1f, 0 8px 20px -12px #000; }
+.hub-account-orb::after { content: ""; position: absolute; inset: 4px; border-radius: inherit; pointer-events: none; box-shadow: inset 0 1px 0 #ffffff26; }
+.hub-account-orb.is-compact { width: 26px; height: 26px; }
+.hub-account-aura.hub-aura { width: 155%; max-width: none; height: 155%; transform: scale(1.1); overflow: visible; }
 .hub-account-name { max-width: 10rem; overflow: hidden; text-overflow: ellipsis; }
 .hub-account-caret { color: #ffffff99; transition: transform 200ms var(--ease-out); }
 .hub-account.is-open .hub-account-caret { transform: rotate(180deg); }
@@ -688,7 +689,7 @@
 /* Identity: avatar, name, plan. The whole head opens the profile; the arrow only appears on hover. */
 .hub-account-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 10px 14px; border-radius: 10px; color: #fff; transition: background-color 160ms ease; }
 .hub-account-head:hover, .hub-account-head:focus-visible { background: #ffffff0a; outline: none; }
-.hub-account-head .hub-account-avatar { width: 36px; height: 37px; }
+.hub-account-head .hub-account-orb { margin: -3px 0; }
 .hub-account-who { display: grid; gap: 2px; min-width: 0; }
 .hub-account-who strong { font-size: 14px; font-weight: 600; letter-spacing: -.012em; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hub-account-who small { color: var(--account-quiet); font-size: 12px; line-height: 1.2; }

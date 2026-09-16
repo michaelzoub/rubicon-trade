@@ -237,12 +237,39 @@ it("counts follows and learned assets on the profile and explains the cap with w
   expect(hints.some(h => /follow 5 assets.*Unfollow one/.test(h))).toBe(true);
   expect(hints.some(h => /remember 25 assets.*paused learning/.test(h))).toBe(true);
   expect(container.querySelectorAll(".hub-facet").length).toBeGreaterThan(3);
-  expect(container.querySelector(".hub-profile-hero h1")?.textContent).toBe("Michael");
+  expect(container.querySelector(".hub-identity .hub-identity-name")?.textContent).toBe("Michael");
   expect(container.querySelector("details[name=profile-settings]")).toBeNull();
   const inputs = Array.from(container.querySelectorAll<HTMLInputElement>(".hub-chiplist input"));
   expect(inputs[0].disabled).toBe(true);
   expect(inputs[1].disabled).toBe(false);
   expect(container.querySelector(".hub-plan-summary")?.textContent).toMatch(/Free plan · \$4\.61 credits left/);
+});
+
+it("draws the identity header from what the person has actually done", async () => {
+  await render(PREVIEW_STATE, <ProfileView />, PREVIEW_ACCOUNT);
+  expect(container.querySelector(".hub-identity-name")?.textContent).toBe("Michael");
+  expect(container.querySelector(".hub-identity-line")?.textContent).toBe("AI × Energy");
+  expect(container.querySelector(".hub-identity-signature")?.textContent).toMatch(/^AUR·[0-9A-F]{4}\s+·\s+DAY \d+$/);
+  // One lobe per theme held, and the ring that carries the progression.
+  expect(container.querySelectorAll(".hub-identity .hub-aura [data-lobe]").length).toBe(2);
+  expect(container.querySelector(".hub-identity .hub-aura")?.getAttribute("aria-label")).toMatch(/AI × Energy/);
+  const tallies = Array.from(container.querySelectorAll(".hub-tally")).map(n => n.textContent);
+  expect(tallies).toContain("23signals");
+  expect(tallies).toContain("4watching");
+  expect(container.querySelectorAll(".hub-milestone").length).toBe(8);
+  expect(container.querySelectorAll(".hub-milestone.is-earned").length).toBeGreaterThan(0);
+  expect(container.querySelector(".hub-progress-copy h2")?.textContent).toBeTruthy();
+});
+
+it("still composes an identity for someone who has not chosen anything yet", async () => {
+  const blank = { ...PREVIEW_STATE, profile: { ...PREVIEW_STATE.profile, thesis: "", themes: [], interests: [], completedAt: null }, inferred: [], events: [], trades: [], preferences: [], dislikes: [] };
+  await render(blank, <ProfileView />, PREVIEW_ACCOUNT);
+  expect(container.querySelectorAll(".hub-identity .hub-aura [data-lobe]").length).toBe(3);
+  expect(container.querySelector(".hub-identity-line")?.textContent).toBe("Still open");
+  expect(container.querySelector(".hub-identity-stage")?.textContent).toBe("Forming");
+  expect(container.querySelector(".hub-identity-thesis")).toBeNull();
+  expect(container.querySelectorAll(".hub-milestone.is-earned").length).toBe(0);
+  expect(container.querySelector(".hub-progress-copy p")?.textContent).toMatch(/believe/);
 });
 
 
@@ -266,14 +293,23 @@ it("opens one account menu on hover: identity, credits, a wallet row that reveal
   const account = container.querySelector(".hub-account") as HTMLElement;
   const trigger = account.querySelector(".hub-account-trigger") as HTMLButtonElement;
   expect(trigger.textContent).toContain("Michael");
+  expect(trigger.querySelector(".hub-account-aura")).not.toBeNull();
+  expect(trigger.querySelector("svg[aria-label='Your personalized agent badge']")).toBeNull();
   const menu = account.querySelector(".hub-account-menu") as HTMLElement;
   expect(menu.hidden).toBe(true);
-  await act(async () => trigger.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
+  // A pointer click focuses the trigger first; it should stay open rather than
+  // having that focus-open immediately toggled closed by the click.
+  await act(async () => {
+    trigger.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    trigger.focus();
+    trigger.click();
+  });
   await act(async () => { await new Promise(r => setTimeout(r, 10)); });
   expect(menu.hidden).toBe(false);
   expect(trigger.getAttribute("aria-expanded")).toBe("true");
   expect(Array.from(menu.children).map(n => n.className.split(" ")[0])).toEqual(["hub-account-pane", "hub-account-foot"]);
   expect(menu.querySelector(".hub-account-who")?.textContent).toBe("MichaelFree plan");
+  expect(menu.querySelector(".hub-account-head .hub-account-aura")).not.toBeNull();
   expect(menu.querySelector(".hub-account-credits")?.textContent).toBe("$4.61");
   // The card stays quiet: no separators, no raw address, no explanatory copy.
   expect(menu.textContent).not.toContain("·");

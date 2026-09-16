@@ -8,6 +8,7 @@ import { ProfileAvatar } from "../profile-avatar";
 import { learnedThemes } from "../profile-card";
 import { clock, timeAgo } from "./format";
 import { useHub } from "./hub-provider";
+import { HubLink as Link } from "./navigation";
 import { LimitHint, UsagePill } from "./limits-ui";
 import { PartView } from "./parts";
 
@@ -141,7 +142,7 @@ export function Conversation() {
       </form>
       {account && <div className="hub-composer-meta">
         {outOfCredits
-          ? <p className="hub-limit-hint is-full" role="status">You’ve used your {account.planName} plan credits, so your agent can’t answer or run checks right now. Everything here is saved. Credits pay for the model at its actual cost; paid plans with more credits are coming.</p>
+          ? <p className="hub-limit-hint is-full" role="status">You’ve used your {account.planName} plan credits, so your agent can’t answer or run checks right now. Everything here is saved. <Link className="hub-inline-link" href="/plans">See plans</Link></p>
           : account.credits.balanceMicros < 500_000 ? <p className="hub-limit-hint" role="status">Credits are running low. Each reply costs what the model charges, usually well under a cent.</p> : <span />}
 
       </div>}

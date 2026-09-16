@@ -6,7 +6,8 @@ Design: `docs/superpowers/specs/2026-09-15-free-tier-limits-and-credits-design.m
 
 | Piece | Where | Notes |
 |---|---|---|
-| Plan catalogue | `lib/socialtrading/plans.ts` | Browser-safe. `PLANS.free` today. Adding a plan is one entry. |
+| Plan catalogue | `lib/socialtrading/plans.ts` | Browser-safe. `free`, `plus`, `pro`. Adding a plan is one entry. |
+| Model catalogue | `lib/socialtrading/models.ts` | Browser-safe. Tool-capable OpenRouter models in three cumulative tiers: `fast`, `capable`, `frontier`. |
 | A user's plan and balance | `socialtrading_accounts` | `plan_id`, `limits` (snapshot, `null` = no cap), `credits_micros`. Created on first request with the default plan and its starting credits. |
 | Usage ledger | `socialtrading_usage` | One row per model call: hold, settled cost, tokens, model, OpenRouter request id, `cost_source` (`openrouter` or `estimate`). |
 | Enforcement | server (`limits.ts`, routes) **and** Postgres (`…0004_plans_credits.sql`) | Server answers in words; Postgres re-checks under per-user advisory locks. Same error shape either way. |
@@ -25,6 +26,7 @@ The server refreshes a stale `limits` snapshot when the catalogue changes (`load
 | `agents` | 3 | Rows in `socialtrading_agents`. |
 | `enabledAgents` | 2 | Rows with `enabled = true`. |
 | Credits | $5 | Granted once at account creation. |
+| Models | `fast` | GPT-4.1 Mini, Gemini 3.1 Flash Lite. |
 
 **No new violations.** A change is refused only when it ends above the cap *and* above where it already was. Data saved before a limit existed stays editable as long as the offending part shrinks or holds.
 
@@ -50,8 +52,44 @@ Balances are USD micros (1 USD = 1,000,000). The UI formats them with `formatCre
 
 `app/(hub)/_hub/limits-ui.tsx`: `UsagePill` (appears near or at a cap, muted when full), `LimitHint` (heads-up near the cap, explanation plus remedy at it), `CharCount` (past 80% of a text cap), `PlanNote` (dismissible, remembered per user in `localStorage`), `CreditsChip`. Rules: silence while there is room; count when close or interacting; explain and point at the remedy when full; never an error banner. Watch buttons at the follow cap surface the server's answer instead of failing silently.
 
-## Adding a paid plan
+## Paid plans
 
-1. Add `PLANS.pro` with its limits (`Infinity` for uncapped) and credits.
-2. Set `plan_id = 'pro'` on the user's `socialtrading_accounts` row (and `credits_micros` as the plan grants). The next request snapshots the new limits.
-3. Nothing else changes: routes, triggers, and the UI read the account.
+| | Free | Plus | Pro |
+|---|---|---|---|
+| Price | $0 | $5 / mo | $20 / mo |
+| Models | `fast` | + `capable` | + `frontier` |
+| Credits | $5 once | $5 / mo | $22 / mo |
+| Follows | 5 | 25 | unlimited |
+| Agents | 3 (2 running) | 5 (3 running) | unlimited (10 running) |
+| Chats | 20 | unlimited | unlimited |
+| Learned assets | 25 | 250 | unlimited |
+| Thesis | 1,000 chars | 4,000 | 10,000 |
+
+`Infinity` in the catalogue serialises to `null` in the Postgres snapshot, which SQL already reads as
+"no cap", so the unlimited column needed no migration.
+
+**Nobody can buy one yet.** There is no Stripe integration, no checkout route and no webhook. The
+plans page renders the paid buttons disabled with "Opening soon". To move a user by hand, set
+`plan_id` on their `socialtrading_accounts` row (and `credits_micros` as the plan grants); the next
+request snapshots the new limits and nothing else changes.
+
+## Models
+
+`lib/socialtrading/models.ts` holds nine tool-capable OpenRouter models in three cumulative tiers.
+Tool support is a hard requirement — the agent loop is tool calls, so a model without it cannot run.
+
+Chat picks its model with `modelForPlan(account.planId)`: `SOCIALTRADING_MODEL` wins when set,
+otherwise the priciest model in the plan's top tier. Free resolves to `openai/gpt-4.1-mini`, which is
+exactly what the code called before the catalogue existed.
+
+Background runs still use the free tier's model. `runBackgroundAgent` reads the balance but not the
+plan, so making wake-ups plan-aware needs an account load per run — worth doing once a user can
+actually hold a paid plan.
+
+The agent chooses among its models on its own. There is no model picker, and there should not be one.
+
+## The plans page
+
+`/plans` (`app/(hub)/_hub/plans-view.tsx`), reached from the **AI credits** row in the account popup,
+from **Plan & wallets** in Profile, and from the out-of-credits notice in chat. It is deliberately not
+in `NAV`. The preview renders it at `/preview?view=plans`.

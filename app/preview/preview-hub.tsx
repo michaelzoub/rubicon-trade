@@ -12,6 +12,7 @@ import { HubProvider } from "../(hub)/_hub/hub-provider";
 import { HomeView } from "../(hub)/_hub/home-view";
 import { ExploreView } from "../(hub)/_hub/explore-view";
 import { ActivityView } from "../(hub)/_hub/activity-view";
+import { PlansView } from "../(hub)/_hub/plans-view";
 import { ProfileView } from "../(hub)/_hub/profile-view";
 import { TradeView } from "../(hub)/_hub/trade-view";
 import { AssetDetail } from "../(hub)/_hub/asset-detail";
@@ -48,11 +49,15 @@ const baseApi = {
 };
 const emptyChats = () => [newChat()];
 
-const ROUTES: Record<string, string> = { home: "/", fresh: "/", explore: "/explore", asset: "/explore/stock/VRT", trade: "/trade", activity: "/activity", agents: "/agents", profile: "/profile" };
+const ROUTES: Record<string, string> = { home: "/", fresh: "/", explore: "/explore", asset: "/explore/stock/VRT", trade: "/trade", activity: "/activity", agents: "/agents", profile: "/profile", "profile-fresh": "/profile", plans: "/plans" };
 
 export function PreviewHub({ view, profile, kind, id }: { view: string; profile?: InvestingProfile; kind?: string; id?: string }) {
   const initial = useMemo<HubState>(() => ({ ...structuredClone(PREVIEW_STATE),
-    ...(profile ? { profile, chats: emptyChats(), inferred: [], events: [], trades: [], signals: [], preferences: [], dislikes: [] } : view === "fresh" ? { chats: emptyChats(), inferred: [], events: [], trades: [] } : {}),
+    ...(profile ? { profile, chats: emptyChats(), inferred: [], events: [], trades: [], signals: [], preferences: [], dislikes: [] }
+      : view === "fresh" ? { chats: emptyChats(), inferred: [], events: [], trades: [] }
+      // A brand-new identity: no thesis, no themes, nothing learned, so the aura has only the seed to work with.
+      : view === "profile-fresh" ? { profile: { ...structuredClone(PREVIEW_STATE.profile), thesis: "", themes: [], interests: [], completedAt: null }, chats: emptyChats(), inferred: [], events: [], trades: [], signals: [], preferences: [], dislikes: [] }
+      : {}),
     agent: { ...defaultAgent(), name: "Michael’s agent", description: profile?.thesis ?? "AI inference and the power that feeds it.", enabled: true },
   }), [profile]);
   const api = useMemo(() => {
@@ -135,6 +140,6 @@ export function PreviewHub({ view, profile, kind, id }: { view: string; profile?
       },
     };
   }, [initial]);
-  const content = view === "agents" ? <AgentsView /> : view === "explore" ? <ExploreView /> : view === "trade" ? <TradeView /> : view === "activity" ? <ActivityView /> : view === "profile" ? <ProfileView /> : view === "asset" ? <AssetDetail kind={kind === "crypto" ? "crypto" : "stock"} id={id ?? "VRT"} /> : <HomeView />;
+  const content = view === "agents" ? <AgentsView /> : view === "explore" ? <ExploreView /> : view === "trade" ? <TradeView /> : view === "activity" ? <ActivityView /> : view === "plans" ? <PlansView /> : view === "profile" || view === "profile-fresh" ? <ProfileView /> : view === "asset" ? <AssetDetail kind={kind === "crypto" ? "crypto" : "stock"} id={id ?? "VRT"} /> : <HomeView />;
   return <HubProvider userId={PREVIEW_USER} name="Michael" initialAccount={PREVIEW_ACCOUNT} initial={initial} api={api} chatStream={async () => { throw new Error("Chat replies are unavailable in preview. Explore the sample conversations and hub views."); }}><Hub path={ROUTES[view] ?? "/"} resolveHref={previewHref}>{content}</Hub></HubProvider>;
 }

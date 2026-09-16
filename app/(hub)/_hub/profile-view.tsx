@@ -5,11 +5,12 @@ import { useHubRouter as useRouter } from "./navigation";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { limitsError, PERMISSIONS, type InvestingProfile, type Permission } from "@/lib/socialtrading/profile";
 import { DEFAULT_PLAN, followedAssets, formatCredits, learnedAssets, limitStatus } from "@/lib/socialtrading/plans";
-import { isThemeId, THEMES } from "@/lib/socialtrading/themes";
+import { isThemeId, THEMES, type ThemeId } from "@/lib/socialtrading/themes";
+import { identityDepth, identityLine, identitySignature, identityStage, identityStats, milestones, nextStep } from "@/lib/socialtrading/identity";
 import { shortAddress } from "@/lib/crypto/chains";
 import { CharCount, LimitHint, UsagePill } from "./limits-ui";
 import { gsap, useGSAP, rubiconMotion } from "../../_components/motion";
-import { ProfileAvatar } from "../profile-avatar";
+import { AgentRoster, auraTint, IdentityHero, IdentityProgress } from "./identity";
 import { learnedThemes } from "../profile-card";
 import { ThemeCards } from "../theme-cards";
 import { timeAgo } from "./format";
@@ -64,7 +65,7 @@ function Facet({ icon: Icon, title, summary, action = "Adjust", tone = "", child
 }
 
 export function ProfileView() {
-  const { state, mutate, setDraft, send, name, userId, account } = useHub();
+  const { state, mutate, setDraft, send, name, userId, account, agents, refreshAgents } = useHub();
   const limits = account?.limits ?? DEFAULT_PLAN.limits, planName = account?.planName ?? DEFAULT_PLAN.name;
   const router = useRouter();
   const wallets = useLinkedWallets();
@@ -74,9 +75,9 @@ export function ProfileView() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [savedAt, setSavedAt] = useState<number | null>(null);
-  const hero = useRef<HTMLElement>(null);
   const save_ = useRef<HTMLDivElement>(null);
   useEffect(() => { setProfile(state.profile); setDislikes(state.dislikes); setPreferences(state.preferences); }, [state.profile, state.dislikes, state.preferences]);
+  useEffect(() => { void refreshAgents(); }, [refreshAgents]);
   const dirty = JSON.stringify({ p: profile, d: dislikes, pr: preferences }) !== JSON.stringify({ p: state.profile, d: state.dislikes, pr: state.preferences });
   const learned = learnedThemes(state.inferred, state.profile.themes);
   const inferredAssets = state.inferred.filter(i => !isThemeId(i.id)).sort((a, b) => Math.abs(b.weight * b.confidence) - Math.abs(a.weight * a.confidence));
@@ -88,16 +89,13 @@ export function ProfileView() {
   const attentionFull = attention.atLimit || follows.atLimit;
   const agentName = state.agent?.name ?? (name ? `${name}’s agent` : "Your agent");
   const leaning = [...learned.map(t => THEMES.find(x => x.id === t)!.name), ...inferredAssets.filter(i => i.weight > .25 && i.confidence >= .4).map(i => i.id)].slice(0, 3);
-  const themeNames = THEMES.filter(t => profile.themes.includes(t.id)).map(t => t.name);
+  const themeNames = profile.themes.flatMap(id => THEMES.filter(t => t.id === id).map(t => t.name));
   const signals = state.inferred.reduce((n, i) => n + i.count, 0);
+  const roster = agents.length ? agents : state.agent ? [state.agent] : [];
+  const stats = identityStats(state, roster);
+  const stage = identityStage(identityDepth(state, stats));
+  const agentRoom = Math.max(0, limits.agents - stats.agents);
 
-  useGSAP(() => {
-    const media = gsap.matchMedia();
-    media.add("(prefers-reduced-motion: no-preference)", () => {
-      gsap.fromTo("[data-profile-part]", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: .55, stagger: .07, ease: rubiconMotion.ease.enter, clearProps: "all" });
-    });
-    return () => media.revert();
-  }, { scope: hero });
   useGSAP(() => {
     if (!save_.current) return;
     const media = gsap.matchMedia();
@@ -120,21 +118,22 @@ export function ProfileView() {
   const zone = [money(profile.limits.perTrade) && `${money(profile.limits.perTrade)} a trade`, money(profile.limits.daily) && `${money(profile.limits.daily)} a day`, money(profile.limits.weekly) && `${money(profile.limits.weekly)} a week`].filter(Boolean).join(" · ");
 
   return (
-    <div className="hub-profile">
-      <header ref={hero} className="hub-profile-hero">
-        <span className="hub-profile-hero-light" aria-hidden="true" />
-        <ProfileAvatar seed={state.agent?.id ?? userId} themes={state.profile.themes} inferred={learned} className="hub-profile-badge" />
-        <div className="hub-profile-who">
-          <p className="eyebrow" data-profile-part>Profile</p>
-          <h1 className="landing-section-title" data-profile-part>{name || "You"}</h1>
-          <p className="hub-profile-line" data-profile-part>{agentName} is {leaning.length ? <>learning you · leaning into <strong>{list(leaning)}</strong></> : "learning from how you explore"}.</p>
-          <div className="hub-profile-marks" data-profile-part>
-            {wallets[0] && <span className="hub-profile-mark mono"><Wallet size={12} aria-hidden="true" />{shortAddress(wallets[0].address)}{wallets.length > 1 ? ` +${wallets.length - 1}` : ""}</span>}
-            {themeNames.map(t => <span key={t} className="hub-profile-mark">{t}</span>)}
-            <span className="hub-profile-mark is-quiet">{PERMISSIONS[state.profile.permission]}</span>
-          </div>
+    <div className="hub-profile" style={auraTint(state.profile.themes)}>
+      <IdentityHero name={name || "You"} seed={userId} themes={state.profile.themes} inferred={state.inferred}
+        thesis={state.profile.thesis} line={identityLine(state.profile.themes, state.inferred)}
+        signature={identitySignature(userId, stats.days)} stage={stage} stats={stats}>
+        <div className="hub-identity-marks">
+          {wallets[0] && <span className="hub-identity-mark mono"><Wallet size={12} aria-hidden="true" />{shortAddress(wallets[0].address)}{wallets.length > 1 ? ` +${wallets.length - 1}` : ""}</span>}
+          <span className="hub-identity-mark">{PERMISSIONS[state.profile.permission]}</span>
+          {leaning.length > 0 && <span className="hub-identity-mark is-quiet">{agentName} is leaning into {list(leaning, 2)}</span>}
         </div>
-      </header>
+      </IdentityHero>
+
+      <IdentityProgress stage={stage} step={nextStep(state, stats, limits.agents)} earned={milestones(state, stats)} themes={state.profile.themes} />
+
+      <AgentRoster agents={roster} activeId={state.agent?.id} room={agentRoom}
+        capNote={`${limits.agents} agents is the most the ${planName} plan allows.`}
+        themesOf={agent => agent.id === state.agent?.id ? state.profile.themes : (agent.themes ?? [] as ThemeId[])} />
 
       <section className="hub-tell">
         <p className="hub-part-title"><MessageSquare aria-hidden="true" />Tell your agent</p>
@@ -219,7 +218,7 @@ export function ProfileView() {
             <div className="hub-plan-summary" role="group" aria-label="Plan and usage">
               <div className="hub-plan-summary-row"><span><strong>{account.planName} plan</strong> · {formatCredits(account.credits.balanceMicros)} credits left</span><span>{account.credits.requests ? `${formatCredits(account.credits.spentMicros)} used across ${account.credits.requests} model ${account.credits.requests === 1 ? "call" : "calls"}` : "Nothing spent yet"}</span></div>
               <div className="hub-plan-summary-row"><span>{account.usage.agents} of {limits.agents} agents · {account.usage.enabledAgents} of {limits.enabledAgents} running · {account.usage.chats} of {limits.chats} chats</span><Link className="hub-inline-link" href="/agents">Your team</Link></div>
-              <span>Credits pay for your agent’s model usage at the provider’s actual cost per request. Paid plans with more room and more credits are coming.</span>
+              <div className="hub-plan-summary-row"><span>Credits pay for your agent’s model usage at the provider’s actual cost per request.</span><Link className="hub-inline-link" href="/plans">See plans</Link></div>
             </div>
           </div>}
           <div className="hub-field">
