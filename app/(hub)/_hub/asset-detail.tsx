@@ -12,7 +12,7 @@ import { compact, timeAgo, usd } from "./format";
 import { useHub } from "./hub-provider";
 import { Lens } from "./lens";
 import { ChangeText, Fact, Facts, NewsList, RelevanceLabel, useFollowRoom } from "./parts";
-import { BuyPanel } from "./buy-panel";
+import { openPurchase } from "./purchase";
 
 const RANGES = [
   { id: "7", label: "7D", hue: "#2f80ed" },
@@ -135,7 +135,7 @@ export function AssetDetail({ kind, id }: { kind: Asset["kind"]; id: string }) {
           <div className="hub-asset-actions">
             <button type="button" className="hub-chip-button" onClick={() => signal(watched ? "removed" : "watched", asset)} aria-pressed={watched} data-tooltip={watched ? undefined : follow.title} aria-disabled={!watched && !follow.room}>{watched ? <><EyeOff size={12} aria-hidden="true" />Watching</> : <><Eye size={12} aria-hidden="true" />Add to what I’m watching</>}</button>
             <button type="button" className="hub-chip-button" onClick={() => ask(`What happened with ${asset.symbol} recently?`)}><MessageCircle size={12} aria-hidden="true" />What happened here?</button>
-            {state.profile.permission !== "notify" && <button type="button" className="hub-chip-button" onClick={() => { setDraft(`Buy $50 of ${asset.symbol}`); router.push("/"); }}>Ask my agent to buy $50…</button>}
+            {state.profile.permission !== "notify" && <button type="button" className="hub-chip-button" onClick={() => openPurchase({ asset, amount: "50" })}>Buy $50…</button>}
           </div>
           {!watched && !follow.room && <p className="hub-limit-hint is-full" role="status">{follow.title} <Link className="hub-inline-link" href="/profile">Open profile</Link></p>}
         </section>
@@ -154,8 +154,7 @@ export function AssetDetail({ kind, id }: { kind: Asset["kind"]; id: string }) {
             <button type="button" className="hub-chip-button" onClick={() => ask(`Why did you surface ${asset.symbol}?`)}>Why did you surface this?</button>
           </div>
         </details>
-        {asset.kind === "crypto" && (asset.contracts ? <section data-detail-part><BuyPanel title={`Buy ${asset.symbol}`} preselected={{ symbol: asset.symbol, name: asset.name, contracts: asset.contracts }} /></section>
-          : <section data-detail-part className="hub-detail-why"><p className="hub-part-title">Trade onchain</p><p>{asset.name} has no verified contract on a supported network (Ethereum, Base, Arbitrum, Optimism, Polygon), so it can’t be bought here. <Link className="hub-inline-link" href="/trade">Buy something else</Link></p></section>)}
+        <section data-detail-part><button type="button" className="hub-chip-button" onClick={() => openPurchase({ asset })}>Buy {asset.symbol}</button></section>
         {asset.news.length > 0 && <section data-detail-part><NewsList title="Recent" items={asset.news} /></section>}
       </>}
     </div>

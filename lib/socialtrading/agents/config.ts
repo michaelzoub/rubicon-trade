@@ -18,6 +18,7 @@ export type AgentConfig = {
   id: string;
   /** Theme metadata returned by the agent list for its portrait. */
   themes?: ThemeId[];
+  badge?: { seed: string; traits: ReturnType<typeof import("../avatar").avatarTraits>; ai: boolean };
   name: string;
   description: string;
   capabilities: string[];

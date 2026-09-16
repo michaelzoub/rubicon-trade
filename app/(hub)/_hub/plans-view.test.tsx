@@ -76,10 +76,26 @@ it("disables the paid buttons and says why", async () => {
 
 it("names what each paid tier inherits, so the ladder is cumulative on its face", async () => {
   await render();
+  const rule = (i: number) => container.querySelectorAll("[data-plan-card]")[i].querySelector(".hub-plan-rule")?.textContent;
+  expect(rule(0)).toBe("Fast models");
+  expect(rule(1)).toBe("Free +");
+  expect(rule(2)).toBe("Free & Plus +");
+});
+
+it("gives every card an orb and a crest, and the badge to one card only", async () => {
+  await render();
+  expect(container.querySelectorAll(".hub-plan-orb")).toHaveLength(3);
+  expect(container.querySelectorAll(".hub-plan-crest")).toHaveLength(3);
+  expect(container.querySelectorAll(".hub-plan-badge")).toHaveLength(1);
+  expect(container.querySelector(".hub-plan-card.is-featured .hub-plan-badge")).not.toBeNull();
+});
+
+it("tones each card by plan, so the CSS has something to hang the palette on", async () => {
+  await render();
   const cards = [...container.querySelectorAll("[data-plan-card]")];
-  expect(cards[1].textContent).toContain("Everything in Free");
-  expect(cards[2].textContent).toContain("Everything in Plus");
-  expect(cards[0].textContent).not.toContain("Everything in");
+  expect(cards[0].className).toContain("is-free");
+  expect(cards[1].className).toContain("is-plus");
+  expect(cards[2].className).toContain("is-pro");
 });
 
 it("raises exactly one card", async () => {

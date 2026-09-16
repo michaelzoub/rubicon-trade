@@ -224,7 +224,7 @@ export function ProfileView() {
           <div className="hub-field">
             <p>Wallets for onchain swaps</p>
             <WalletsSection compact />
-            <p className="socialtrading-caption">Swaps settle from your own wallet on Uniswap. Your agent can propose them under the mode above; you always sign. <Link className="hub-inline-link" href="/trade">Open Buy</Link></p>
+            <p className="socialtrading-caption">Swaps settle from your own wallet on Uniswap. Your agent can propose them under the mode above; you always sign.</p>
           </div>
         </Facet>
       </div>

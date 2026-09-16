@@ -1,12 +1,12 @@
 "use client";
 
+import { SpatialMarket } from "./worldview";
 import { Flame, Search, Shapes, Sparkles, Sprout } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { Asset } from "@/lib/socialtrading/types";
 import { isThemeId, THEMES } from "@/lib/socialtrading/themes";
 import { gsap, useGSAP, rubiconMotion } from "../../_components/motion";
 import { ThemeMark } from "../theme-cards";
-import { Constellation, constellation } from "./explore-hero";
 import { useHub } from "./hub-provider";
 import { Lens, type LensItem } from "./lens";
 import { AssetGrid } from "./parts";
@@ -34,7 +34,6 @@ export function ExploreView() {
   const [query, setQuery] = useState("");
   const [theme, setTheme] = useState<string | null>(null);
   const [assets, setAssets] = useState<Asset[] | null>(null);
-  const [featured, setFeatured] = useState<Asset[] | null>(null);
   const [error, setError] = useState("");
   const results = useRef<HTMLElement>(null);
   const search = query.trim();
@@ -54,7 +53,6 @@ export function ExploreView() {
       load().then(list => {
         if (cancelled) return;
         setAssets(list);
-        if (lens === "forYou" && !search) setFeatured(f => f ?? constellation(list));
       }).catch(e => { if (!cancelled) { setAssets([]); setError(e instanceof Error ? e.message : "Market data is unavailable."); } });
     }, search ? 350 : 0);
     return () => { cancelled = true; clearTimeout(handle); };
@@ -82,10 +80,10 @@ export function ExploreView() {
       <section className="hub-explore-hero" aria-label="Explore">
         <header className="hub-view-head hub-explore-copy">
           <p className="eyebrow">Explore</p>
-          <h1 className="landing-section-title">Find your next interest.</h1>
-          <p>Companies, coins, and ideas your agent thinks you’d want a closer look at.</p>
+          <h1 className="landing-section-title">The market, through your eyes.</h1>
+          <p>Ideas come closer as they connect to what you believe.</p>
         </header>
-        {featured && featured.length >= 3 && <Constellation assets={featured} />}
+
       </section>
 
       <div className="hub-explore-controls">
@@ -93,6 +91,8 @@ export function ExploreView() {
         {lens === "forYou" && <label className="hub-search hub-explore-search"><Search size={14} aria-hidden="true" /><span className="sr-only">Search stocks and crypto</span>
           <input value={query} onChange={e => setQuery(e.target.value)} placeholder="A company, a coin, or an idea" maxLength={100} /></label>}
       </div>
+
+      {lens === "forYou" && !search && <SpatialMarket assets={assets ?? []} />}
 
       {lens === "themes" && <div className="hub-orbs" role="group" aria-label="Themes">
         {affinity.map(t => {
@@ -108,7 +108,7 @@ export function ExploreView() {
       <section ref={results} className="hub-explore-results" aria-live="polite">
         {showing && heading && <p className="hub-part-title">{heading}</p>}
         {assets === null && showing && <div className="hub-skeleton-grid" aria-label="Loading" role="status">{[0, 1, 2, 3].map(i => <span key={i} className="rubicon-skeleton hub-skeleton" />)}</div>}
-        {assets && assets.length > 0 && <AssetGrid assets={assets} discovery />}
+        {assets && assets.length > 0 && (lens === "forYou" && !search ? <details className="gravity-all"><summary>All {assets.length} discoveries</summary><AssetGrid assets={assets} /></details> : <AssetGrid assets={assets} discovery />)}
         {assets && assets.length === 0 && <div className="hub-empty">
           <p>{error || (search ? "Nothing matched. Try a company name, a ticker, or an idea." : "Nothing here yet.")}</p>
           {search && <button type="button" className="hub-chip-button" onClick={() => { setDraft(""); void send(`Find me something related to ${search}`); }}>Ask your agent about “{search}”</button>}

@@ -1,2 +1,2 @@
-import { TradeView } from "../_hub/trade-view";
-export default function TradePage() { return <TradeView />; }
+import { redirect } from "next/navigation";
+export default function TradePage() { redirect("/explore"); }

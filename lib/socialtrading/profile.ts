@@ -37,6 +37,8 @@ export type PreferenceSignal = {
 };
 export type InvestingProfile = {
   version: 3;
+  /** Stable visual identity, retained as the agent’s choices evolve. */
+  avatarSeed?: string;
   userId: string;
   thesis: string;
   investorAnswers: InvestorAnswers;
@@ -115,6 +117,7 @@ export function readProfile(raw: string | null, userId: string): InvestingProfil
     // No behavioral collector ships with onboarding. Do not trust arbitrary
     // inferred preferences from browser storage until that feature exists.
     return { ...fresh, thesis: p.thesis, investorAnswers, themes, interests: p.interests, permission: p.permission,
+      avatarSeed: typeof p.avatarSeed === "string" && /^[a-zA-Z0-9-]{1,80}$/.test(p.avatarSeed) ? p.avatarSeed : undefined,
       permissionConfigured,
       limits: p.limits, step, completedAt: step === 6 && typeof p.completedAt === "string" ? p.completedAt : null };
   } catch {

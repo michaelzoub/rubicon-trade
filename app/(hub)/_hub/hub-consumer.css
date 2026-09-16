@@ -486,75 +486,110 @@
   background: radial-gradient(ellipse 60% 70% at 50% 100%, rgba(var(--hub-blue-rgb), .1), transparent 70%); }
 .hub-plot .dashboard-data-viz { position: relative; z-index: 1; }
 
-/* ---------- Plans: the ladder is lit, not coloured ----------
-   The page goes true white where the hub is cream, so it reads as a different
-   room. Free sits flat on it, Plus is raised into the Rubicon light, Pro holds
-   the deepest one. The model list is the argument, so nothing decorates it. */
+
+/* ---------- Plans ----------
+   Three cards on white. Each carries a tone from the aura palette: an orb, a wash across the head
+   and a crest leaving the top corner. The middle card is genuinely larger, not merely nudged up,
+   and holds the strongest light. Everything below the rule is the model list, which is the argument
+   the page makes, so nothing decorates it. */
 .hub-plans { position: relative; display: grid; gap: clamp(2rem, 5vh, 3.25rem); }
-.hub-plans-light { position: absolute; z-index: 0; top: -14rem; right: -10rem; width: 42rem; height: 34rem; border-radius: 50%; pointer-events: none;
-  background: radial-gradient(ellipse, rgba(var(--hub-blue-rgb), .13), rgba(var(--hub-blue-rgb), .04) 46%, transparent 72%); }
+.hub-plans-light { position: absolute; z-index: 0; top: -16rem; left: 50%; width: 52rem; height: 36rem; border-radius: 50%; transform: translateX(-50%); pointer-events: none;
+  background: radial-gradient(ellipse, rgba(var(--hub-blue-rgb), .14), rgba(var(--hub-blue-rgb), .04) 46%, transparent 72%); }
 @media (prefers-reduced-motion: no-preference) {
   .hub-plans-light { animation: hub-atmosphere 16s ease-in-out infinite alternate; }
 }
 .hub-plans-head { z-index: 1; margin-bottom: 0; max-width: 40rem; }
 .hub-plans-head p:not(.eyebrow) { max-width: 33rem; }
 
-.hub-plans-grid { z-index: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; align-items: stretch; }
+/* The featured column is wider, and the row centres so it grows in both directions. */
+.hub-plans-grid { z-index: 1; display: grid; grid-template-columns: 1fr 1.14fr 1fr; gap: clamp(.75rem, 1.4vw, 1.25rem); align-items: center; }
 
-.hub-plan-card { position: relative; display: flex; flex-direction: column; gap: .35rem; padding: 1.6rem 1.4rem 1.4rem; border-radius: 18px; background: #fff;
-  box-shadow: inset 0 0 0 1px var(--line); transition: box-shadow 260ms ease, transform 260ms var(--dashboard-ease-out); }
-.hub-plan-card:hover { transform: translateY(-2px); box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .2), 0 16px 40px -28px rgba(var(--hub-blue-rgb), .45); }
+/* One tone per plan, climbing toward the frontier: an unformed blue-grey, the Rubicon blue,
+   then the violet the product already uses for AI. Everything on a card reads from these two. */
+.hub-plan-card.is-free { --tone-glow: #d6ecff; --tone-deep: #79a4cd; }
+.hub-plan-card.is-plus { --tone-glow: #b9d7ff; --tone-deep: #2f80ed; }
+.hub-plan-card.is-pro  { --tone-glow: #d6c4ff; --tone-deep: #8b6fd4; }
 
-/* Plus: raised into the light. Pro takes the deepest light without leaving white. */
-.hub-plan-card.is-featured { padding-top: 2.1rem; transform: translateY(-1.25rem);
-  background: linear-gradient(180deg, #fff, color-mix(in srgb, var(--hub-blue) 4%, #fff));
-  box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .3), 0 22px 50px -30px rgba(var(--hub-blue-rgb), .55), 0 0 60px -26px rgba(var(--hub-blue-rgb), .4); }
-.hub-plan-card.is-featured:hover { transform: translateY(-1.5rem); }
-.hub-plan-card:last-child { background: linear-gradient(180deg, #fff, color-mix(in srgb, var(--hub-blue) 2%, #fff)); }
+.hub-plan-card { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column;
+  padding: 1.5rem 1.35rem 1.5rem; border-radius: 20px; background: #fff;
+  box-shadow: inset 0 0 0 1px var(--line), 0 10px 30px -24px rgba(24, 24, 27, .5);
+  transition: box-shadow 280ms ease, transform 280ms var(--dashboard-ease-out); }
+.hub-plan-card:hover { transform: translateY(-3px); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone-deep) 34%, transparent), 0 22px 50px -30px color-mix(in srgb, var(--tone-deep) 70%, transparent); }
 
-.hub-plan-badge { position: absolute; top: .85rem; right: 1.1rem; padding: .2rem .55rem; border-radius: 999px; background: var(--hub-blue); color: #fff;
-  font-size: .625rem; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; box-shadow: 0 4px 14px -6px rgba(var(--hub-blue-rgb), .8); }
+/* The wash: the card's tone poured over its head and gone by the price. */
+.hub-plan-wash { position: absolute; z-index: -2; inset: 0 0 auto; height: 16rem; pointer-events: none;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--tone-glow) 58%, #fff), #fff 78%); }
+.hub-plan-crest { position: absolute; z-index: -1; top: -2rem; right: -3.5rem; width: 12rem; height: 8.5rem; color: var(--tone-deep); opacity: .1; pointer-events: none; }
 
-.hub-plan-tier { color: var(--hub-blue-ink); font-size: .6875rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
-.hub-plan-name { margin: .15rem 0 0; font-family: "Caslon 540", Georgia, "Times New Roman", serif; font-size: 1.75rem; font-weight: 400; line-height: 1.1; letter-spacing: -.015em; color: var(--ink); }
-.hub-plan-tagline { margin: .3rem 0 0; min-height: 2.6rem; color: var(--muted); font-size: .8125rem; line-height: 1.5; }
+.hub-plan-head { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; margin-bottom: 1.15rem; }
+/* One lit sphere: highlight up top, the tone's deep edge underneath. */
+.hub-plan-orb { width: 2.6rem; height: 2.6rem; border-radius: 50%; flex-shrink: 0;
+  background:
+    radial-gradient(circle at 32% 26%, rgba(255, 255, 255, .95), rgba(255, 255, 255, 0) 42%),
+    radial-gradient(circle at 68% 76%, color-mix(in srgb, var(--tone-deep) 92%, #000), transparent 62%),
+    linear-gradient(155deg, color-mix(in srgb, var(--tone-glow) 88%, #fff), var(--tone-deep));
+  box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--tone-deep) 85%, transparent), inset 0 -2px 6px -2px color-mix(in srgb, var(--tone-deep) 60%, transparent); }
+.hub-plan-badge { padding: .3rem .6rem; border-radius: 999px; background: rgba(255, 255, 255, .72); color: var(--ink);
+  font-size: .6875rem; font-weight: 550; letter-spacing: -.005em; white-space: nowrap;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone-deep) 26%, transparent), 0 2px 8px -4px rgba(24, 24, 27, .3); backdrop-filter: blur(6px); }
 
-.hub-plan-price { display: flex; align-items: baseline; gap: .2rem; margin: 1rem 0 0; }
-.hub-plan-amount { font-family: "Caslon 540", Georgia, "Times New Roman", serif; font-size: 2.5rem; font-weight: 400; line-height: 1; letter-spacing: -.02em; color: var(--ink); }
+.hub-plan-tier { color: color-mix(in srgb, var(--tone-deep) 78%, #000); font-size: .6875rem; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; }
+.hub-plan-name { margin: .2rem 0 0; font-family: "Caslon 540", Georgia, "Times New Roman", serif; font-size: 1.7rem; font-weight: 400; line-height: 1.12; letter-spacing: -.015em; color: var(--ink); }
+.hub-plan-tagline { margin: .4rem 0 0; min-height: 2.7rem; color: var(--muted); font-size: .8125rem; line-height: 1.5; }
+
+.hub-plan-price { display: flex; align-items: baseline; gap: .25rem; margin: 1.1rem 0 0; }
+.hub-plan-amount { font-family: "Caslon 540", Georgia, "Times New Roman", serif; font-size: 2.35rem; font-weight: 400; line-height: 1; letter-spacing: -.02em; color: var(--ink); }
 .hub-plan-period { color: var(--quiet); font-size: .8125rem; }
 
-.hub-plan-action { display: grid; gap: .4rem; margin-top: 1.1rem; }
-.hub-plan-cta { width: 100%; padding: .65rem 1rem; border-radius: 10px; background: var(--surface-muted); color: var(--muted); font-size: .8125rem; font-weight: 550;
-  box-shadow: inset 0 0 0 1px var(--line); cursor: not-allowed; }
-.hub-plan-card.is-featured .hub-plan-cta { background: color-mix(in srgb, var(--hub-blue) 10%, #fff); color: var(--hub-blue-ink); box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .28); }
+.hub-plan-action { display: grid; gap: .45rem; margin-top: 1.1rem; }
+.hub-plan-cta { width: 100%; padding: .7rem 1rem; border-radius: 11px; background: color-mix(in srgb, var(--surface-muted) 78%, #fff); color: var(--muted);
+  font-size: .8125rem; font-weight: 550; box-shadow: inset 0 0 0 1px var(--line); cursor: not-allowed; }
 .hub-plan-soon { color: var(--quiet); font-size: .6875rem; text-align: center; }
-.hub-plan-current { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; margin: 1.1rem 0 1.1rem; padding: .65rem 1rem; border-radius: 10px;
-  background: color-mix(in srgb, var(--hub-blue) 8%, #fff); color: var(--hub-blue-ink); font-size: .8125rem; font-weight: 550; box-shadow: inset 0 0 0 1px var(--hub-blue-line); }
+.hub-plan-current { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; margin: 1.1rem 0 1.1rem; padding: .7rem 1rem; border-radius: 11px;
+  background: color-mix(in srgb, var(--tone-glow) 40%, #fff); color: color-mix(in srgb, var(--tone-deep) 80%, #000); font-size: .8125rem; font-weight: 550;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone-deep) 30%, transparent); }
 .hub-plan-current svg { flex-shrink: 0; }
 
-.hub-plan-models { margin-top: 1.4rem; padding-top: 1.1rem; border-top: 1px solid var(--line); }
-.hub-plan-label { color: var(--quiet); font-size: .6875rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
-.hub-plan-models ul { display: grid; gap: .5rem; margin-top: .7rem; }
-.hub-plan-model { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; }
-.hub-plan-model-name { color: var(--ink); font-size: .875rem; font-weight: 500; letter-spacing: -.005em; }
-.hub-plan-model-lab { color: var(--quiet); font-size: .75rem; white-space: nowrap; }
-.hub-plan-inherits { margin-top: .85rem; color: var(--muted); font-size: .75rem; font-style: italic; }
+.hub-plan-stats { display: grid; gap: .6rem; margin-top: 1.3rem; }
+.hub-plan-stats li { display: flex; align-items: center; gap: .55rem; color: var(--muted); font-size: .8125rem; line-height: 1.4; }
+.hub-plan-stats svg { flex-shrink: 0; color: color-mix(in srgb, var(--tone-deep) 72%, var(--quiet)); }
+.hub-plan-stats strong { color: var(--ink); font-weight: 600; }
 
-/* `auto` pins the room block to the card's foot, so three cards with two, three and four
-   models still line up along the bottom instead of ending raggedly. */
-.hub-plan-room { margin-top: auto; padding-top: 1.1rem; border-top: 1px solid var(--line); display: grid; gap: .5rem; }
-.hub-plan-models { margin-bottom: 1.2rem; }
-.hub-plan-room > div { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; }
-.hub-plan-room dt { color: var(--muted); font-size: .75rem; }
-.hub-plan-room dd { margin: 0; color: var(--ink); font-size: .75rem; font-weight: 550; text-align: right; }
+/* A rule with its label sitting in the gap: "Free +" reads as the tier below, carried up. */
+.hub-plan-rule { display: flex; align-items: center; gap: .6rem; margin: 1.2rem 0 0; color: var(--quiet); font-size: .625rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.hub-plan-rule::before, .hub-plan-rule::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 
-.hub-plans-foot { z-index: 1; display: grid; gap: .5rem; justify-items: start; max-width: 42rem; padding-top: .5rem; }
+.hub-plan-models { display: grid; gap: .55rem; margin-top: 1rem; }
+.hub-plan-model { display: flex; align-items: center; gap: .55rem; }
+.hub-plan-model svg { flex-shrink: 0; color: color-mix(in srgb, var(--tone-deep) 78%, transparent); }
+.hub-plan-model-name { color: var(--ink); font-size: .8125rem; font-weight: 500; letter-spacing: -.005em; }
+.hub-plan-model-lab { margin-left: auto; color: var(--quiet); font-size: .6875rem; white-space: nowrap; }
+
+/* ---- The featured card: larger, not just higher ---- */
+.hub-plan-card.is-featured { padding: 1.9rem 1.7rem 1.8rem; border-radius: 24px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone-deep) 32%, transparent),
+    0 30px 60px -34px color-mix(in srgb, var(--tone-deep) 85%, transparent),
+    0 0 70px -30px color-mix(in srgb, var(--hub-blue-rgb), .5); }
+.hub-plan-card.is-featured:hover { transform: translateY(-4px); }
+.hub-plan-card.is-featured .hub-plan-wash { height: 19rem; background: linear-gradient(180deg, color-mix(in srgb, var(--tone-glow) 82%, #fff), #fff 80%); }
+.hub-plan-card.is-featured .hub-plan-crest { width: 14rem; height: 10rem; opacity: .14; }
+.hub-plan-card.is-featured .hub-plan-orb { width: 3.1rem; height: 3.1rem; }
+.hub-plan-card.is-featured .hub-plan-name { font-size: 2.05rem; }
+.hub-plan-card.is-featured .hub-plan-tagline { font-size: .875rem; }
+.hub-plan-card.is-featured .hub-plan-amount { font-size: 2.9rem; }
+.hub-plan-card.is-featured .hub-plan-stats li,
+.hub-plan-card.is-featured .hub-plan-model-name { font-size: .875rem; }
+/* The one filled control on the page. It is the plan most people should take, so it looks it. */
+.hub-plan-card.is-featured .hub-plan-cta { background: linear-gradient(180deg, color-mix(in srgb, var(--hub-blue) 92%, #fff), var(--hub-blue));
+  color: #fff; font-size: .875rem; box-shadow: 0 10px 24px -12px rgba(var(--hub-blue-rgb), .9), inset 0 0 0 1px rgba(var(--hub-blue-rgb), .9); }
+.hub-plan-card.is-featured .hub-plan-soon { color: var(--hub-blue-ink); }
+
+.hub-plans-foot { z-index: 1; display: grid; gap: .5rem; justify-items: start; max-width: 42rem; }
 .hub-plans-foot p { color: var(--muted); font-size: .8125rem; line-height: 1.6; }
 
-@media (max-width: 62rem) {
-  .hub-plans-grid { grid-template-columns: 1fr; gap: 1.1rem; }
-  .hub-plan-card, .hub-plan-card.is-featured { transform: none; padding-top: 1.6rem; }
+@media (max-width: 68rem) {
+  .hub-plans-grid { grid-template-columns: 1fr; gap: 1.1rem; max-width: 30rem; }
+  .hub-plan-card, .hub-plan-card.is-featured { padding: 1.6rem 1.4rem; }
   .hub-plan-card:hover, .hub-plan-card.is-featured:hover { transform: none; }
-  .hub-plan-card.is-featured { padding-top: 2.1rem; }
   .hub-plan-tagline { min-height: 0; }
 }

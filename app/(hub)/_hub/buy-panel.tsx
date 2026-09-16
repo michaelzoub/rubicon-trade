@@ -1,6 +1,8 @@
 "use client";
 
-import { useWallets } from "@privy-io/react-auth";
+import { announcePresence } from "@/lib/socialtrading/presence";
+
+import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { ArrowUpRight, Search, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { CHAINS, DEFAULT_CHAIN, explorerAddress, shortAddress, type ChainId } from "@/lib/crypto/chains";
@@ -18,21 +20,26 @@ const USD = /^\d{1,7}(\.\d{1,2})?$/;
  * your wallet. Pays with USDC on the token's chain through Uniswap. Same server
  * path as agent proposals, with `initiator: user`, so agent mode never blocks it.
  * Three moments: choose, amount, sign. Confirmation onchain is the celebration. */
-export function BuyPanel({ preselected, title = "Buy" }: {
+export function BuyPanel({ preselected, title = "Buy", initialQuery = "", initialAmount = "50", onDone }: {
   /** Skip the search: buy this asset, e.g. from its detail page. */
   preselected?: { symbol: string; name: string; contracts: Record<string, string> };
   title?: string;
+  initialQuery?: string; initialAmount?: string; onDone?: () => void;
 }) {
   const { crypto, searchTokens, state } = useHub();
   const { wallets, ready } = useWallets();
-  const [query, setQuery] = useState("");
+  const { connectWallet } = usePrivy();
+  const [balance, setBalance] = useState<{ usdc: number; native: number } | null>(null);
+  const [balanceNote, setBalanceNote] = useState("Balance unavailable");
+  const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<TokenMatch[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [picked, setPicked] = useState<TokenMatch | null>(null);
   const [chainId, setChainId] = useState<ChainId>(DEFAULT_CHAIN);
   const [wallet, setWallet] = useState("");
-  const [amount, setAmount] = useState("50");
+  const [amount, setAmount] = useState(initialAmount);
   const [busy, setBusy] = useState(false);
+  const submitting = useRef(false);
   const [error, setError] = useState("");
   const [tradeId, setTradeId] = useState<string | null>(null);
   const [done, setDone] = useState<{ amount: number; symbol: string } | null>(null);
@@ -63,7 +70,31 @@ export function BuyPanel({ preselected, title = "Buy" }: {
 
   const target = preselected ? { symbol: preselected.symbol, name: preselected.name, chainId, address: preselected.contracts[String(chainId)] } : picked ? { symbol: picked.symbol, name: picked.name, chainId: picked.chainId, address: picked.address } : null;
   const net = target ? CHAINS[target.chainId] : null;
-  const valid = !!target && !!net && USD.test(amount) && Number(amount) > 0 && /^0x[0-9a-fA-F]{40}$/.test(wallet);
+  const selectedWallet = wallets.find(w => w.address.toLowerCase() === wallet);
+  useEffect(() => {
+    let live = true;
+    setBalance(null); setBalanceNote('Checking balance…');
+    if (!selectedWallet || !net) { setBalanceNote('Connect a wallet to see your balance.'); return; }
+    const network = net;
+    (async () => {
+      try {
+        const provider = await selectedWallet.getEthereumProvider();
+        const activeChain = await provider.request({ method: 'eth_chainId' });
+        if (Number(activeChain) !== target?.chainId) { if (live) setBalanceNote(`Balance unavailable until your wallet is on ${network.name}.`); return; }
+        const [usdc, native] = await Promise.all([
+          provider.request({ method: 'eth_call', params: [{ to: network.usdc, data: `0x70a08231${wallet.slice(2).padStart(64, '0')}` }, 'latest'] }),
+          provider.request({ method: 'eth_getBalance', params: [wallet, 'latest'] }),
+        ]);
+        if (typeof usdc !== 'string' || typeof native !== 'string') throw new Error('Unavailable');
+        if (live) setBalance({ usdc: Number(BigInt(usdc))/1e6, native: Number(BigInt(native))/1e18 });
+      } catch { if (live) setBalanceNote('Balance unavailable. Verify funds in your wallet before signing.'); }
+    })();
+    return () => { live = false; };
+    // Refresh for the selected wallet/network, not unstable wallet hook objects.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wallet, target?.chainId, selectedWallet?.chainId]);
+
+  const valid = (!balance || (balance.usdc >= Number(amount) && balance.native > 0)) && !!target && !!net && USD.test(amount) && Number(amount) > 0 && /^0x[0-9a-fA-F]{40}$/.test(wallet);
   const estimate = picked?.priceUsd && USD.test(amount) ? Number(amount) / picked.priceUsd : null;
 
   /** The purchase is complete when the chain says so. That is the moment worth a burst. */
@@ -73,10 +104,10 @@ export function BuyPanel({ preselected, title = "Buy" }: {
   useEffect(() => {
     if (status === "confirmed" && previous.current !== "confirmed" && trade) {
       setDone({ amount: trade.value, symbol: trade.asset.symbol });
-      celebrate(module.current?.querySelector(".hub-swap-result") ?? module.current);
+      if (!onDone) celebrate(module.current?.querySelector(".hub-swap-result") ?? module.current);
     }
     previous.current = status;
-  }, [status, trade, celebrate]);
+  }, [status, trade, celebrate, onDone]);
 
   // Moments arrive rather than appear: results rise in a stagger, the amount stage lifts into place.
   const { contextSafe } = useGSAP(() => {
@@ -92,13 +123,16 @@ export function BuyPanel({ preselected, title = "Buy" }: {
 
   async function buy(e: FormEvent) {
     e.preventDefault();
-    if (!valid || busy || !target || !net) return;
+    if (!valid || busy || submitting.current || !target || !net) return;
+    submitting.current = true;
     setBusy(true); setError(""); setTradeId(null); setDone(null);
     try {
+      announcePresence({ kind: "buy", asset: { id: `${target.chainId}:${target.address}`, symbol: target.symbol.toUpperCase(), name: target.name } });
       const result = await crypto({ action: "propose", chainId: target.chainId, wallet, tokenIn: net.usdc, tokenOut: target.address, amount, slippageBps: 50, note: `Buy ${usd(Number(amount), 2)} of ${target.symbol.toUpperCase()}` });
       if (result.tradeId) setTradeId(result.tradeId);
+      else setError("No quote was returned. Nothing was submitted; try again.");
     } catch (err) { setError(err instanceof Error ? err.message : "The buy could not be set up."); }
-    finally { setBusy(false); }
+    finally { submitting.current = false; setBusy(false); }
   }
   const reset = () => { setPicked(null); setTradeId(null); setDone(null); setQuery(""); setResults(null); };
 
@@ -124,7 +158,7 @@ export function BuyPanel({ preselected, title = "Buy" }: {
       </ul>}
     </div>}
 
-    {target && net && <form className="hub-buy-form" data-buy-stage onSubmit={buy}>
+    {target && net && !tradeId && <form className="hub-buy-form" data-buy-stage onSubmit={buy}>
       <div className="hub-buy-target">
         <AssetLogo asset={{ symbol: target.symbol.toUpperCase() }} />
         <div className="hub-buy-target-copy">
@@ -134,17 +168,20 @@ export function BuyPanel({ preselected, title = "Buy" }: {
         {!preselected && <button type="button" className="hub-chip-button" onClick={reset}>Change</button>}
         {preselected && presetChains.length > 1 && <select className="socialtrading-input hub-buy-chain" aria-label="Network" value={chainId} onChange={e => setChainId(Number(e.target.value) as ChainId)}>{presetChains.map(id => <option key={id} value={id}>{CHAINS[id].name}</option>)}</select>}
       </div>
+      {picked?.kind === "stock" && <p className="purchase-requirements">Tokenized stock exposure · not brokerage shares. Review the issuer and contract before signing.</p>}
       <div className="hub-buy-amount">
         <label htmlFor="buy-amount">How much?</label>
         <div className="hub-buy-amount-row"><span className="hub-buy-currency">$</span><input id="buy-amount" className="socialtrading-input" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value.replace(/[^\d.]/g, ""))} placeholder="50" /></div>
         <div className="hub-buy-presets">{PRESETS.map(p => <button key={p} type="button" className="hub-chip-button" aria-pressed={amount === p} onClick={e => { setAmount(p); pop(e.currentTarget); }}>${p}</button>)}</div>
         {estimate !== null && <p className="hub-buy-estimate" aria-live="polite">≈ {estimate.toLocaleString("en-US", { maximumFractionDigits: estimate < 1 ? 6 : 4 })} {target.symbol.toUpperCase()} at today’s price</p>}
       </div>
-      {wallets.length > 1 && <label className="hub-buy-wallet">From wallet<select className="socialtrading-input mono" value={wallet} onChange={e => setWallet(e.target.value)}>{wallets.map(w => <option key={w.address} value={w.address.toLowerCase()}>{shortAddress(w.address)} · {w.walletClientType === "privy" ? "embedded" : w.walletClientType}</option>)}</select></label>}
-      {ready && wallets.length === 0 && <p className="hub-notice">Connect or create a wallet first (see Wallets). You’ll need USDC on {net.name} plus a little {net.nativeSymbol} for gas.</p>}
+      {wallets.length > 0 && <label className="hub-buy-wallet">From wallet<select className="socialtrading-input mono" value={wallet} onChange={e => setWallet(e.target.value)}>{wallets.map(w => <option key={w.address} value={w.address.toLowerCase()}>{shortAddress(w.address)} · {w.walletClientType === "privy" ? "embedded" : w.walletClientType}</option>)}</select></label>}
+      {ready && wallets.length === 0 && <p className="hub-notice"><button type="button" className="hub-chip-button" onClick={() => connectWallet()}>Connect wallet</button> Connect or create a wallet in your profile first. You’ll need USDC on {net.name} plus a little {net.nativeSymbol} for gas.</p>}
+      <p className="purchase-requirements" role="status">{balance ? `Available: ${balance.usdc.toLocaleString()} USDC · ${balance.native.toLocaleString(undefined, { maximumFractionDigits: 6 })} ${net.nativeSymbol}` : balanceNote}</p>
+      <p className="purchase-requirements">Required: {USD.test(amount) ? amount : "…"} USDC on {net.name}, plus {net.nativeSymbol} for network fees. Maximum slippage: 0.5%.</p>
       {error && <p className="hub-error" role="alert">{error}</p>}
       <div className="hub-trade-actions hub-buy-actions">
-        <button type="submit" className="button button-primary hub-buy-submit" disabled={!valid || busy || !wallets.length}>{busy ? "Getting your quote…" : `Buy ${USD.test(amount) ? usd(Number(amount), 2) : ""} of ${target.symbol.toUpperCase()}`}</button>
+        <button type="submit" className="button button-primary hub-buy-submit" disabled={!valid || busy || !wallets.length}>{busy ? "Getting your quote…" : `Review ${USD.test(amount) ? usd(Number(amount), 2) : ""} of ${target.symbol.toUpperCase()}`}</button>
         <span className="socialtrading-caption">Pays {USD.test(amount) ? amount : "…"} USDC on {net.name}. You see the exact quote, then sign. Gas is extra.</span>
       </div>
     </form>}
@@ -152,9 +189,10 @@ export function BuyPanel({ preselected, title = "Buy" }: {
     {done && <div className="hub-buy-done" role="status">
       <Sparkles size={16} aria-hidden="true" />
       <div><strong>It’s yours.</strong><span>{usd(done.amount, 2)} of {done.symbol.toUpperCase()} settled onchain from your wallet.</span></div>
-      {!preselected && <button type="button" className="hub-chip-button" onClick={reset}>Buy something else</button>}
+      {onDone ? <button type="button" className="hub-chip-button" onClick={onDone}>Return to your world</button> : !preselected && <button type="button" className="hub-chip-button" onClick={reset}>Buy something else</button>}
     </div>}
-    {tradeId && trade && <div className="hub-swap-result"><TradeCard tradeId={tradeId} /></div>}
+    {tradeId && trade && ["rejected", "failed", "blocked"].includes(trade.status) && <button type="button" className="hub-chip-button" onClick={() => { setTradeId(null); setError(""); }}>Start a new quote</button>}
+    {tradeId && trade && <div className="hub-swap-result"><TradeCard tradeId={tradeId} expanded={!!onDone} /></div>}
     {Celebration}
   </section>;
 }

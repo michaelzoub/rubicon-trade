@@ -1,3 +1,4 @@
+import { changeConviction } from "@/lib/socialtrading/worldview";
 import { loadAccount } from "@/lib/socialtrading/account";
 import { newChat } from "@/lib/socialtrading/chats";
 import { assertWithin, requestedAgent, requestedChat, authenticate, bodyOf, failure, HubError, initialize, loadState, saveState } from "@/lib/socialtrading/server";
@@ -28,7 +29,13 @@ export async function POST(request: Request) {
     if (body.action === "initialize") return Response.json({ state, account });
     if (body.revision !== state.revision) throw new HubError(409, "Your workspace changed. Refresh before editing.");
     let chatId: string | undefined;
-    if (body.action === "agent") {
+    if (body.action === "conviction") {
+      if (typeof body.id !== "string" || typeof body.text !== "string" || typeof body.strength !== "number" || (body.remove !== undefined && typeof body.remove !== "boolean")) throw new HubError(400, "Invalid belief.");
+      const beforeBelief = structuredClone(state);
+      try { changeConviction(state, { id: body.id, text: body.text, strength: body.strength, remove: body.remove }); } catch (e) { throw new HubError(400, e instanceof Error ? e.message : "Invalid belief."); }
+      assertWithin(profileViolation(beforeBelief, state, limits));
+      recordEvent(state, "profile", state.worldview!.memories.at(-1)!.title, "You corrected your living thesis.");
+    } else if (body.action === "agent") {
       // Identity, voice, tools, and outreach behavior are system-owned. This
       // surface only changes what the agent follows and what it may do.
       const changed: string[] = [];

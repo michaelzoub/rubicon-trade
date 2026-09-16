@@ -1,5 +1,6 @@
 "use client";
 
+import { changeConviction } from "@/lib/socialtrading/worldview";
 import { useMemo, useState } from "react";
 import { defaultAgent } from "@/lib/socialtrading/agents/config";
 import { generatedAgentDescription, generatedAgentName } from "@/lib/socialtrading/agents/naming";
@@ -9,12 +10,12 @@ import type { RunRecord } from "@/lib/socialtrading/runtime/types";
 import type { CryptoAction, StateAction } from "../(hub)/_hub/client";
 import { Hub } from "../(hub)/_hub/hub-shell";
 import { HubProvider } from "../(hub)/_hub/hub-provider";
+import { ThesisView } from "../(hub)/_hub/worldview";
 import { HomeView } from "../(hub)/_hub/home-view";
 import { ExploreView } from "../(hub)/_hub/explore-view";
 import { ActivityView } from "../(hub)/_hub/activity-view";
 import { PlansView } from "../(hub)/_hub/plans-view";
 import { ProfileView } from "../(hub)/_hub/profile-view";
-import { TradeView } from "../(hub)/_hub/trade-view";
 import { AssetDetail } from "../(hub)/_hub/asset-detail";
 import { PREVIEW_ACCOUNT, PREVIEW_ASSETS, PREVIEW_STATE, PREVIEW_TOKENS, PREVIEW_USER, PREVIEW_WALLET } from "./fixture";
 import { latestChat, newChat } from "@/lib/socialtrading/chats";
@@ -49,7 +50,7 @@ const baseApi = {
 };
 const emptyChats = () => [newChat()];
 
-const ROUTES: Record<string, string> = { home: "/", fresh: "/", explore: "/explore", asset: "/explore/stock/VRT", trade: "/trade", activity: "/activity", agents: "/agents", profile: "/profile", "profile-fresh": "/profile", plans: "/plans" };
+const ROUTES: Record<string, string> = { thesis: "/thesis", home: "/", fresh: "/", explore: "/explore", asset: "/explore/stock/VRT", trade: "/explore", activity: "/activity", agents: "/agents", profile: "/profile", "profile-fresh": "/profile", plans: "/plans" };
 
 export function PreviewHub({ view, profile, kind, id }: { view: string; profile?: InvestingProfile; kind?: string; id?: string }) {
   const initial = useMemo<HubState>(() => ({ ...structuredClone(PREVIEW_STATE),
@@ -119,6 +120,7 @@ export function PreviewHub({ view, profile, kind, id }: { view: string; profile?
       },
       post: async (_token: unknown, _revision: number, action: StateAction, id = "default") => {
         const state = structuredClone(states.get(id)!);
+        if (action.action === "conviction") changeConviction(state, action);
         if (action.action === "agent") {
           if (action.thesis !== undefined) state.profile.thesis = action.thesis;
           if (action.interests) state.profile.interests = action.interests;
@@ -140,6 +142,6 @@ export function PreviewHub({ view, profile, kind, id }: { view: string; profile?
       },
     };
   }, [initial]);
-  const content = view === "agents" ? <AgentsView /> : view === "explore" ? <ExploreView /> : view === "trade" ? <TradeView /> : view === "activity" ? <ActivityView /> : view === "plans" ? <PlansView /> : view === "profile" || view === "profile-fresh" ? <ProfileView /> : view === "asset" ? <AssetDetail kind={kind === "crypto" ? "crypto" : "stock"} id={id ?? "VRT"} /> : <HomeView />;
+  const content = view === "thesis" ? <ThesisView /> : view === "agents" ? <AgentsView /> : view === "explore" ? <ExploreView /> : view === "trade" ? <ExploreView /> : view === "activity" ? <ActivityView /> : view === "plans" ? <PlansView /> : view === "profile" || view === "profile-fresh" ? <ProfileView /> : view === "asset" ? <AssetDetail kind={kind === "crypto" ? "crypto" : "stock"} id={id ?? "VRT"} /> : <HomeView />;
   return <HubProvider userId={PREVIEW_USER} name="Michael" initialAccount={PREVIEW_ACCOUNT} initial={initial} api={api} chatStream={async () => { throw new Error("Chat replies are unavailable in preview. Explore the sample conversations and hub views."); }}><Hub path={ROUTES[view] ?? "/"} resolveHref={previewHref}>{content}</Hub></HubProvider>;
 }

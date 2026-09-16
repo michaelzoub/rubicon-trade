@@ -1,3 +1,4 @@
+import { convictionsOf } from "../worldview";
 import "server-only";
 import { limitsError, PERMISSIONS, type InvestingProfile, type Interest, type Permission } from "../profile";
 import { isThemeId, THEMES, type ThemeId } from "../themes";
@@ -37,6 +38,7 @@ const list = (v: unknown, max = 20) => Array.isArray(v) ? v.filter((s): s is str
 export function profileSummary(state: HubState) {
   const p = state.profile;
   return {
+    convictions: convictionsOf(state).map(c => ({ belief: c.text, strength: c.strength, origin: c.origin })),
     thesis: p.thesis, themes: p.themes.map(themeName), watching: p.interests.map(i => i.symbol || i.name),
     onboarding: {
       investmentKnowledge: p.investorAnswers.knowledge === null ? "not answered" : ["just starting", "knows the basics", "comfortable", "experienced", "very experienced"][p.investorAnswers.knowledge],

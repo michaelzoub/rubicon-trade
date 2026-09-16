@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Asset } from "@/lib/socialtrading/types";
+import { ThesisView } from "./worldview";
 import { Conversation } from "./conversation";
 import { useHub } from "./hub-provider";
 import { AssetGrid } from "./parts";
@@ -24,6 +25,7 @@ export function HomeView() {
   }, [market, quiet, state.profile.themes, state.profile.interests]);
   return (
     <div className="hub-home">
+      <ThesisView compact />
       <Conversation />
       {quiet && assets && assets.length > 0 && <div className="hub-home-opportunities"><AssetGrid title="A few things in your world right now" assets={assets} dense /></div>}
     </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { MemoryView } from "./worldview";
 import { ArrowLeftRight, BadgeCheck, Bot, Orbit, Sparkles } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import type { ActivityEvent, TradeIntent } from "@/lib/socialtrading/types";
@@ -26,7 +27,7 @@ const KIND_ICON = { learning: Sparkles, profile: BadgeCheck, agent: Bot, trade: 
 /** A trade that cannot move until the person acts. */
 export const needsYou = (trade?: TradeIntent) => !!trade && (trade.status === "approval_required" || (!!trade.crypto && trade.status === "reserved" && trade.crypto.phase === "ready"));
 
-export function ActivityView() {
+export function ActivityRecords() {
   const { state } = useHub();
   const [filter, setFilter] = useState<Filter>("all");
   const root = useRef<HTMLDivElement>(null);
@@ -112,3 +113,5 @@ export function ActivityView() {
     </div>
   );
 }
+
+export function ActivityView() { return <><MemoryView /><details className="hub-activity-details"><summary>Trade records & routine activity</summary><ActivityRecords /></details></>; }

@@ -64,28 +64,24 @@ async function type(value: string) {
   await act(async () => { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); });
 }
 
-it("carries navigation inside the one header band, with the conversation and the agent presence line", async () => {
+it("carries navigation inside the one header band, with the conversation and persistent agent orb", async () => {
   await render(PREVIEW_STATE);
-  expect(Array.from(container.querySelectorAll(".hub-nav-link")).map(a => a.textContent)).toEqual(["Home", "Explore", "Buy", "Activity", "Manage agents", "Profile"]);
+  expect(Array.from(container.querySelectorAll(".hub-nav-link")).map(a => a.textContent)).toEqual(["Home", "Explore", "Memory"]);
   // The tab bar rides in the header rather than forming a second sticky band.
   expect(container.querySelector(".site-header .hub-nav")).not.toBeNull();
   expect(container.querySelectorAll(".hub-row").length).toBe(PREVIEW_STATE.chats[0].messages.length);
   expect(container.textContent).toContain("Michael’s agent");
   expect(container.querySelector(".hub-trade")?.textContent).toContain("Approve");
-  // The profile rail is gone. Its card now waits, hidden, behind the presence
-  // pill and only appears on hover or focus.
   expect(container.querySelector(".hub-layout > .socialtrading-profile")).toBeNull();
-  expect((container.querySelector(".hub-presence-card") as HTMLElement).hidden).toBe(true);
-  expect(container.querySelector(".hub-presence-card .socialtrading-profile-card")?.textContent).toContain("Ask before acting");
-  const presence = container.querySelector(".hub-presence")!;
-  expect(presence.getAttribute("href")).toBe("/agents");
-  // Hovering the pill reveals the card; leaving it puts the card away again.
-  await act(async () => container.querySelector(".hub-presence-anchor")!.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
-  expect((container.querySelector(".hub-presence-card") as HTMLElement).hidden).toBe(false);
-  await act(async () => { container.querySelector(".hub-presence-anchor")!.dispatchEvent(new MouseEvent("mouseout", { bubbles: true })); await new Promise(r => setTimeout(r, 200)); });
-  expect((container.querySelector(".hub-presence-card") as HTMLElement).hidden).toBe(true);
-  expect(presence.textContent).toContain("Michael’s agent");
-  expect(presence.textContent).toContain("Watching");
+  const presence = container.querySelector<HTMLButtonElement>(".ambient-orb")!;
+  expect(container.querySelector(".hub-stage .ambient-agent")).toBeNull();
+  expect(presence.getAttribute("aria-expanded")).toBe("false");
+  await act(async () => presence.click());
+  expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+  expect(document.activeElement?.getAttribute("aria-label")).toBe("Ask your agent");
+  await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.activeElement).toBe(presence);
 });
 
 it("keeps Home to the conversation and shows every stock and crypto order on Activity", async () => {
@@ -347,4 +343,60 @@ it("opens one account menu on hover: identity, credits, a wallet row that reveal
   expect(menu.hidden).toBe(true);
   expect(trigger.getAttribute("aria-expanded")).toBe("false");
   privy.sendTransaction.mockReset();
+});
+
+it("surfaces brief contextual thoughts once and respects a quiet period", async () => {
+  await render(PREVIEW_STATE);
+  const announce = (id: string) => window.dispatchEvent(new CustomEvent('rubicon:presence', { detail: { kind: 'revisit', asset: { id, symbol: id, name: id, themes: ['energy'] } } }));
+  await act(async () => { announce('VRT'); });
+  expect(container.querySelector('.ambient-nudge')?.textContent).toContain('your Energy thesis');
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Dismiss thought"]')!.click());
+  await act(async () => { announce('VRT'); announce('CEG'); });
+  expect(container.querySelector('.ambient-nudge')).toBeNull();
+});
+
+it("sends from the orb through the shared conversation", async () => {
+  events.script = [{ type: 'text', text: 'Your thesis focuses on energy infrastructure.' }];
+  await render(PREVIEW_STATE);
+  await act(async () => container.querySelector<HTMLButtonElement>('.ambient-orb')!.click());
+  const input = container.querySelector<HTMLTextAreaElement>('.ambient-panel textarea')!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(input, 'What is my thesis?');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  expect(container.querySelector<HTMLButtonElement>('.ambient-panel [aria-label="Send message"]')!.disabled).toBe(false);
+  await act(async () => container.querySelector('.ambient-panel form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+  expect(input.value).toBe('');
+});
+
+it("opens a contextual purchase from chat with the requested amount and restores focus on close", async () => {
+  await render(PREVIEW_STATE);
+  await type("buy $500 of NVDA");
+  const sendButton = container.querySelector<HTMLButtonElement>('[aria-label="Send"]')!;
+  sendButton.focus();
+  await act(async () => sendButton.click());
+  const dialog = container.querySelector<HTMLDialogElement>('.rubicon-purchase')!;
+  expect(dialog.open).toBe(true);
+  expect((dialog.querySelector('#buy-search') as HTMLInputElement).value).toBe('NVDA');
+  expect(events.posted).toHaveLength(0);
+  await act(async () => { await new Promise(r => setTimeout(r, 350)); });
+  await act(async () => dialog.querySelector<HTMLButtonElement>('.hub-buy-result')!.click());
+  expect((dialog.querySelector('#buy-amount') as HTMLInputElement).value).toBe('500');
+  expect(dialog.textContent).toContain('Tokenized stock exposure');
+  expect(events.posted).toHaveLength(0);
+  await act(async () => dialog.querySelector<HTMLButtonElement>('[aria-label="Close purchase"]')!.click());
+  expect(dialog.open).toBe(false);
+  expect(container.querySelector('.hub-conversation')).not.toBeNull();
+  expect(document.activeElement).toBe(container.querySelector('.hub-composer textarea'));
+});
+
+it("opens command navigation by shortcut and filters destinations", async () => {
+  await render(PREVIEW_STATE);
+  await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true })));
+  const dialog = container.querySelector<HTMLDialogElement>('.rubicon-command')!;
+  expect(dialog.open).toBe(true);
+  await setValue(dialog.querySelector('input')!, 'memory');
+  expect(Array.from(dialog.querySelectorAll('[data-command]')).map(n => n.textContent)).toEqual(['Memory']);
+  await act(async () => dialog.dispatchEvent(new Event('cancel', { cancelable: true })));
+  expect(dialog.open).toBe(false);
 });

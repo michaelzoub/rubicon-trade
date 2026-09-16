@@ -1,3 +1,5 @@
+import { captureWorldview } from "./worldview";
+import { agentAvatarTraits } from "./avatar";
 import { isThemeId } from "./themes";
 import "server-only";
 import { PrivyClient } from "@privy-io/node";
@@ -60,9 +62,11 @@ export async function loadState(userId: string, agentId = "default"): Promise<Hu
 }
 /** Every agent the user owns, oldest first, with the column-backed enabled flag. */
 export async function listAgents(userId: string): Promise<AgentConfig[]> {
-  const { data, error } = await database().from("socialtrading_agents").select("agent_id,enabled,agent:state->agent,themes:state->profile->themes").eq("user_id", userId).order("updated_at", { ascending: true });
+  const { data, error } = await database().from("socialtrading_agents").select("agent_id,enabled,agent:state->agent,themes:state->profile->themes,badgeProfile:state->profile").eq("user_id", userId).order("updated_at", { ascending: true });
   if (error) throw new HubError(503, "Your agents could not be loaded.");
-  return (data ?? []).map(row => ({ ...normalizeAgent(row.agent, row.agent_id, row.enabled === true), themes: Array.isArray(row.themes) ? row.themes.filter(isThemeId) : [] }));
+  return (data ?? []).map(row => ({ ...normalizeAgent(row.agent, row.agent_id, row.enabled === true), themes: Array.isArray(row.themes) ? row.themes.filter(isThemeId) : [],
+    ...(row.badgeProfile ? (() => { const profile = readProfile(JSON.stringify(row.badgeProfile), userId); return { badge: { seed: profile.avatarSeed ?? row.agent_id, traits: agentAvatarTraits(row.agent_id, profile), ai: (profile.investorAnswers.aiPriority ?? 0) >= 3 } }; })() : {}),
+  }));
 }
 /** Flips scheduled runs for one agent. Postgres enforces the per-user cap; this only translates the outcome. */
 export async function setAgentEnabled(userId: string, agentId: string, enabled: boolean, limits: PlanLimits) {
@@ -99,6 +103,7 @@ export async function insertAgent(userId: string, state: HubState, limits: PlanL
 /** Per chat. Older turns fall off; the chat itself stays. */
 export const MAX_MESSAGES = 200;
 export async function saveState(userId: string, state: HubState, limits?: PlanLimits) {
+  captureWorldview(state);
   state.profile.updatedAt = new Date().toISOString();
   for (const chat of state.chats) if (chat.messages.length > MAX_MESSAGES) chat.messages.splice(0, chat.messages.length - MAX_MESSAGES);
   delete (state as HubState & { messages?: unknown }).messages;

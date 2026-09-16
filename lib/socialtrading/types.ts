@@ -49,6 +49,7 @@ export type TradeIntent = {
   brokerage?: { provider: "robinhood"; status: "not_connected" | "pending" | "submitted" | "filled" | "rejected" | "unknown"; orderId?: string; at: string; detail?: string };
 };
 export type HubState = {
+  worldview?: import("./worldview").Worldview;
   agent?: import("./agents/config").AgentConfig;
   revision: number; profile: InvestingProfile; dislikes: string[]; preferences: string[];
   inferred: LearnedInterest[]; signals: { id: string; action: SignalAction; target: string; at: string }[];

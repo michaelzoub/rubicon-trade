@@ -21,7 +21,7 @@ export function cryptoStatus(trade: TradeIntent): string {
   }
 }
 
-export function CryptoTradeCard({ trade }: { trade: TradeIntent }) {
+export function CryptoTradeCard({ trade, expanded = false }: { trade: TradeIntent; expanded?: boolean }) {
   const { state, crypto, busy: chatting } = useHub(), { connectWallet } = usePrivy(), { wallets } = useWallets();
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [recovery, setRecovery] = useState(""), [raw, setRaw] = useState(false);
   const lock = useRef(false), c = trade.crypto!, r = c.request, net = chain(r.chainId);
@@ -72,7 +72,7 @@ export function CryptoTradeCard({ trade }: { trade: TradeIntent }) {
     <p className="hub-trade-policy">{trade.policy.reason}</p>
     <p className="hub-trade-brokerage">{c.detail}</p>
     {c.hash && <p className="hub-trade-brokerage">Transaction <a className="mono hub-inline-link" href={explorerTx(r.chainId, c.hash)} target="_blank" rel="noopener noreferrer">{shortAddress(c.hash)}<ArrowUpRight size={12} aria-hidden="true" /></a></p>}
-    <details className="hub-disclosure hub-trade-disclosure">
+    <details className="hub-disclosure hub-trade-disclosure" open={expanded}>
       <summary>Details</summary>
       <div className="hub-disclosure-body">
         <dl className="hub-trade-facts">

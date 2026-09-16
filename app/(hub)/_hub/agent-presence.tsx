@@ -62,7 +62,7 @@ export function AgentPresence({ resolveHref = (href: string) => href }: { resolv
       <Link ref={trigger} href={resolveHref("/agents")} className={`hub-presence${awake ? " is-awake" : ""}`}
         aria-describedby={open ? id : undefined}
         aria-label={`${agentName}. ${status}. Open your agents.`}>
-        <ProfileAvatar seed={state.agent?.id ?? state.profile.userId} themes={state.profile.themes} inferred={learnedIds} className="hub-presence-badge" />
+        <ProfileAvatar profile={state.profile} seed={state.agent?.id ?? state.profile.userId} themes={state.profile.themes} inferred={learnedIds} className="hub-presence-badge" />
         <span className="hub-presence-copy">
           <strong>{agentName}</strong>
           <span className="hub-presence-status">{status}</span>

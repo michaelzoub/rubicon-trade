@@ -1,4 +1,5 @@
 "use client";
+import { openPurchase } from "./purchase";
 
 import { ArrowUpRight, Check, Eye, EyeOff, HelpCircle, X } from "lucide-react";
 import { HubLink as Link } from "./navigation";
@@ -71,7 +72,7 @@ export function AssetCard({ asset, dense = false }: { asset: Asset; dense?: bool
       <div className="hub-asset-foot">
         <RelevanceLabel asset={asset} />
         {!dense && asset.reason && <p className="hub-asset-reason">{asset.reason}</p>}
-        <div className="hub-asset-actions">
+        <div className="hub-asset-actions"><button type="button" className="hub-chip-button" onClick={() => openPurchase({ asset })}>Buy</button>
           <button type="button" className="hub-chip-button" onClick={() => signal(watched ? "removed" : "watched", asset)} aria-pressed={watched} data-tooltip={watched ? undefined : follow.title} aria-disabled={!watched && !follow.room}>
             {watched ? <><EyeOff size={12} aria-hidden="true" />Watching</> : <><Eye size={12} aria-hidden="true" />Watch</>}
           </button>
@@ -126,7 +127,7 @@ function DiscoveryCard({ asset }: { asset: Asset }) {
       <span className="hub-discovery-name"><strong>{asset.name}</strong><small>{asset.symbol} <ChangeText value={asset.change} /></small></span>
       {asset.description && <p className="hub-discovery-description">{asset.description}</p>}
     </Link>
-    <div className="hub-discovery-actions">
+    <div className="hub-discovery-actions"><button type="button" className="hub-chip-button" onClick={() => openPurchase({ asset })}>Buy</button>
       <button type="button" className="hub-chip-button" disabled={pending || busy || (!watched && !follow.room)} data-tooltip={follow.title} aria-pressed={watched} onClick={() => void act(watched ? "removed" : "watched")}>{watched ? <Check size={14} /> : <Eye size={14} />}{watched ? "Watching" : "Watch"}</button>
       <button type="button" className="hub-chip-button" disabled={busy || pending} onClick={() => { router.push("/"); void send(`Tell me about ${asset.name} (${asset.symbol}) and why it might interest me.`); }}>Ask agent</button>
       <button type="button" className="hub-discovery-dismiss" disabled={pending || busy} data-tooltip="Not for me" aria-label={`Not interested in ${asset.symbol}`} onClick={() => void act("dismissed")}><X size={15} /></button>
@@ -187,7 +188,7 @@ const TRADE_STATUS: Record<TradeIntent["status"], string> = {
 };
 export { TRADE_STATUS };
 
-export function TradeCard({ tradeId }: { tradeId: string }) {
+export function TradeCard({ tradeId, expanded = false }: { tradeId: string; expanded?: boolean }) {
   const { state, mutate } = useHub();
   const trade = state.trades.find(t => t.id === tradeId);
   const root = useEnter<HTMLDivElement>();
@@ -200,7 +201,7 @@ export function TradeCard({ tradeId }: { tradeId: string }) {
     gsap.fromTo(status.current, { opacity: 0, y: -4 }, { opacity: 1, y: 0, duration: .3, ease: rubiconMotion.ease.enter, clearProps: "all" });
   }, [trade]);
   if (!trade) return <div className="hub-notice">This trade is no longer available.</div>;
-  if (trade.crypto) return <CryptoTradeCard trade={trade} />;
+  if (trade.crypto) return <CryptoTradeCard trade={trade} expanded={expanded} />;
   const pending = trade.status === "approval_required";
   const connected = state.brokerage?.connected ?? false;
   return <div ref={root} className={`hub-trade is-${trade.status}${pending ? " hub-priority-card" : ""}`} role="group" aria-label="Trade confirmation">

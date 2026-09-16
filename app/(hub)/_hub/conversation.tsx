@@ -1,5 +1,6 @@
 "use client";
 
+import { DecisionSurface } from "./worldview";
 import { ArrowUp, ChevronDown, MessageSquarePlus, Square, Trash2 } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { Message } from "@/lib/socialtrading/types";
@@ -19,13 +20,13 @@ const STARTERS = [
   "Why do you think I’d like this?",
 ];
 
-function Row({ message, name, agentName, seed, themes, learned }: { message: Message; name?: string; agentName?: string; seed: string; themes: Parameters<typeof ProfileAvatar>[0]["themes"]; learned: Parameters<typeof ProfileAvatar>[0]["inferred"] }) {
+function Row({ message, name, agentName, seed, themes, learned, profile }: { profile: Parameters<typeof ProfileAvatar>[0]["profile"]; message: Message; name?: string; agentName?: string; seed: string; themes: Parameters<typeof ProfileAvatar>[0]["themes"]; learned: Parameters<typeof ProfileAvatar>[0]["inferred"] }) {
   const user = message.role === "user";
   const streaming = message.status === "streaming";
   const empty = message.parts.length === 0;
   return (
     <li className={`hub-row is-${message.role}${streaming ? " is-streaming" : ""}`} data-message={message.id}>
-      {!user && <span className="hub-row-avatar" aria-hidden="true"><ProfileAvatar seed={seed} themes={themes} inferred={learned} className="hub-row-badge" /></span>}
+      {!user && <span className="hub-row-avatar" aria-hidden="true"><ProfileAvatar profile={profile} seed={seed} themes={themes} inferred={learned} className="hub-row-badge" /></span>}
       <div className="hub-row-body">
         <p className="hub-row-meta"><span>{user ? "You" : agentName ?? (name ? `${name}’s agent` : "Your agent")}</span><time dateTime={message.at}>{clock(message.at)}</time>{message.via === "background" && <em className="hub-row-via">Reached out</em>}</p>
         <div className="hub-row-content">
@@ -89,6 +90,7 @@ export function Conversation() {
   const list = useRef<HTMLOListElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const [stick, setStick] = useState(true);
+  const [decision, setDecision] = useState<string | null>(null);
   const learned = learnedThemes(state.inferred, state.profile.themes);
   const outOfCredits = !!account && account.credits.balanceMicros < account.credits.holdMicros;
 
@@ -112,6 +114,7 @@ export function Conversation() {
   function submit() {
     if (!draft.trim() || busy || outOfCredits) return;
     setStick(true);
+    if (/should i|why.*care|what.*means|compare|worth|thesis/i.test(draft)) setDecision(draft.trim());
     void send(draft);
   }
   function onKey(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -121,16 +124,17 @@ export function Conversation() {
   return (
     <section className="hub-conversation" aria-label="Conversation with your agent">
       {(chats.length > 1 || messages.length > 0 || account) && <ChatHead />}
-      <ol ref={list} className="hub-messages" onScroll={e => { const el = e.currentTarget; setStick(el.scrollHeight - el.scrollTop - el.clientHeight < 48); }}>
+      {decision && <DecisionSurface question={decision} onClose={() => setDecision(null)} />}
+      <ol hidden={!!decision} ref={list} className="hub-messages" onScroll={e => { const el = e.currentTarget; setStick(el.scrollHeight - el.scrollTop - el.clientHeight < 48); }}>
         {messages.length === 0 && (
           <li className="hub-welcome">
-            <ProfileAvatar seed={userId} themes={state.profile.themes} inferred={learned} className="hub-welcome-badge" />
+            <ProfileAvatar profile={state.profile} seed={state.agent?.id ?? userId} themes={state.profile.themes} inferred={learned} className="hub-welcome-badge" />
             <h1 className="landing-section-title">{name ? `Hi ${name}.` : "Hi."} I’ve read your thesis.</h1>
             <p>Ask me what’s moving, tell me what you’re curious about, or change anything about how I work. I’ll keep learning as we go.</p>
             <div className="hub-starters">{STARTERS.map(s => <button key={s} type="button" className="hub-chip-button" disabled={outOfCredits} onClick={() => { setStick(true); void send(s); }}>{s}</button>)}</div>
           </li>
         )}
-        {messages.map(message => <Row key={message.id} message={message} name={name} agentName={state.agent?.name} seed={state.agent?.id ?? userId} themes={state.profile.themes} learned={learned} />)}
+        {messages.map(message => <Row profile={state.profile} key={message.id} message={message} name={name} agentName={state.agent?.name} seed={state.agent?.id ?? userId} themes={state.profile.themes} learned={learned} />)}
       </ol>
       <form className={`hub-composer${draft.trim() ? " has-draft" : ""}`} onSubmit={e => { e.preventDefault(); submit(); }}>
         <label htmlFor="hub-composer-input" className="sr-only">Message your agent</label>

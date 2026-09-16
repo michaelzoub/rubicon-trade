@@ -57,7 +57,7 @@ export function SwapForm({ receive, contracts, title = "Trade onchain", onPropos
   return <section className="hub-swap" aria-labelledby="swap-title">
     <div className="hub-trade-head"><p id="swap-title" className="hub-part-title">{title}</p><span className="hub-trade-status">Uniswap · you sign</span></div>
     <p className="hub-section-lead">Swap from a wallet you control. This is your decision: your agent’s mode and spending limits apply only to trades it proposes. You review the exact quote, then sign in your wallet.</p>
-    {ready && wallets.length === 0 && <p className="hub-notice">Connect or create a wallet first. Manage wallets on the <HubLink className="hub-inline-link" href="/trade">Trade</HubLink> page.</p>}
+    {ready && wallets.length === 0 && <p className="hub-notice">Connect or create a wallet first. Manage wallets on the <HubLink className="hub-inline-link" href="/profile">Profile</HubLink> page.</p>}
     <form className="hub-swap-form" onSubmit={submit}>
       <label className="hub-swap-field">Network
         <select className="socialtrading-input" value={chainId} onChange={e => setChainId(Number(e.target.value) as ChainId)}>{chains.map(id => <option key={id} value={id}>{CHAINS[id].name}</option>)}</select>

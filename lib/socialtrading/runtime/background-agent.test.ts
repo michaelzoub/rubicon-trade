@@ -35,6 +35,15 @@ const deps = (model: ModelClient) => ({ store, model, registry, services: {}, no
 beforeEach(() => { store = new MemoryRuntimeStore(() => NOW); store.seed(USER, agentState()); vi.clearAllMocks(); });
 
 describe("runBackgroundAgent", () => {
+  it("keeps uneventful checks out of the feed while retaining private research notes", async () => {
+    const model = scriptedModel([{ toolCalls: [call("remember", { notes: ["No fresh news; checked the watchlist."] })] }, { content: "SILENT" }]);
+    const outcome = await runBackgroundAgent(job, deps(model));
+    expect(outcome.summary).toBe("");
+    expect(store.runs[0].summary).toBe("");
+    expect((await store.readMemory(USER, "agent-a")).notes).toEqual(["No fresh news; checked the watchlist."]);
+    expect(store.notifications).toHaveLength(0);
+  });
+
   it("hydrates the agent, exposes only read-only tools, and stays quiet when nothing clears the bar", async () => {
     const model = scriptedModel([{ toolCalls: [call("get_asset", { id: "VRT", kind: "stock" })] }, { toolCalls: [call("remember", { notes: ["VRT flat; watch for guidance."] })] }, { content: "Checked VRT; nothing moved." }]);
     const outcome = await runBackgroundAgent(job, deps(model));

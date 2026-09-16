@@ -33,16 +33,17 @@ afterEach(async () => { await act(async () => root.unmount()); container.remove(
 const render = async () => { await act(async () => root.render(<HubProvider userId="preview-user" name="Michael" initial={PREVIEW_STATE} initialAccount={PREVIEW_ACCOUNT} api={api}><ExploreView /></HubProvider>)); await act(async () => { await new Promise(r => setTimeout(r, 10)); }); };
 const tab = (label: string) => Array.from(container.querySelectorAll<HTMLButtonElement>(".hub-lens-item")).find(b => b.textContent === label)!;
 
-it("opens on a constellation of stocks and tokens and lists them together under For you", async () => {
+it("opens a spatial market and assembles reasoning when an idea is selected", async () => {
   await render();
   expect(Array.from(container.querySelectorAll(".hub-lens-item")).map(b => b.textContent)).toEqual(["For you", "Themes", "New", "Moving"]);
   expect(tab("For you").getAttribute("aria-selected")).toBe("true");
-  const orbit = Array.from(container.querySelectorAll(".hub-orbit-card")).map(a => a.getAttribute("href"));
-  expect(orbit).toHaveLength(5);
-  expect(orbit).toContain("/explore/crypto/dogecoin");
-  expect(orbit).toContain("/explore/stock/VRT");
+  const objects = Array.from(container.querySelectorAll<HTMLButtonElement>(".wv-market-object"));
+  expect(objects.some(a => a.textContent?.includes("DOGE"))).toBe(true);
+  expect(objects.some(a => a.textContent?.includes("VRT"))).toBe(true);
+  await act(async () => objects.find(a => a.textContent?.includes("VRT"))!.click());
+  expect(container.querySelector('[aria-label="Decision workspace"]')?.textContent).toContain("YOUR BELIEF");
   expect(container.querySelector(".hub-explore-results .hub-part-title")?.textContent).toBe("Picked for you");
-  const grid = Array.from(container.querySelectorAll(".hub-discovery-card")).map(c => c.getAttribute("data-asset"));
+  const grid = Array.from(container.querySelectorAll(".gravity-all .hub-asset")).map(c => c.getAttribute("data-asset"));
   expect(grid).toContain("DOGE");
   expect(grid).toContain("VRT");
   expect(calls.map(c => c.kind).sort()).toEqual(["crypto", "stock"]);

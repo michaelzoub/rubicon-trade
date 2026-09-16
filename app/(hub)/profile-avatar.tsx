@@ -1,7 +1,8 @@
 "use client";
 
 import { useId, useRef } from "react";
-import { avatarTraits } from "@/lib/socialtrading/avatar";
+import type { InvestingProfile } from "@/lib/socialtrading/profile";
+import { agentAvatarTraits } from "@/lib/socialtrading/avatar";
 import { badgePalette, type ThemeId } from "@/lib/socialtrading/themes";
 import { gsap, useGSAP, rubiconMotion } from "../_components/motion";
 
@@ -10,10 +11,11 @@ const INNER = "M100 24 165 62V137L100 175 35 137V62Z";
 
 /** A layered, softly bevelled badge. Account seed fixes the face; selected
  * themes blend the material palette without replacing the user's identity. */
-export function ProfileAvatar({ seed, themes = [], inferred = [], className }: { seed: string; themes?: ThemeId[]; inferred?: ThemeId[]; className?: string }) {
-  const traits = avatarTraits(seed);
+export function ProfileAvatar({ seed, themes = [], inferred = [], className, profile, badge }: { badge?: import("@/lib/socialtrading/agents/config").AgentConfig["badge"]; profile?: InvestingProfile; seed: string; themes?: ThemeId[]; inferred?: ThemeId[]; className?: string }) {
+  const traits = profile ? agentAvatarTraits(seed, profile) : badge?.traits ?? agentAvatarTraits(seed);
   const palette = badgePalette(themes, traits.color, inferred);
   const motifs = new Set([...themes, ...inferred]);
+  if (profile ? (profile.investorAnswers.aiPriority ?? 0) >= 3 : badge?.ai) motifs.add("ai");
   const previous = useRef(palette);
   const id = useId().replace(/:/g, "");
   const root = useRef<SVGSVGElement>(null);

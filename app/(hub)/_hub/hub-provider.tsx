@@ -1,10 +1,12 @@
 "use client";
+import { openPurchase, purchaseIntent } from "./purchase";
 import type { InvestingProfile } from "@/lib/socialtrading/profile";
 import { agentSelectionKey, type AgentConfig } from "@/lib/socialtrading/agents/config";
 
 import { usePrivy } from "@privy-io/react-auth";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Asset, Chat, ChatEvent, HubState, Message, MessagePart, ProfileChange, SignalAction } from "@/lib/socialtrading/types";
+import { announcePresence } from "@/lib/socialtrading/presence";
 import { latestChat } from "@/lib/socialtrading/chats";
 import type { AccountSummary } from "@/lib/socialtrading/plans";
 import { hubApi, HubRequestError, streamChat, type CryptoAction, type CryptoResult, type StateAction } from "./client";
@@ -117,7 +119,14 @@ export function HubProvider({ userId, name, initial, initialAccount = null, api:
   /** Responses may carry the account beside the state; take it whenever it appears. */
   const absorb = useCallback(<T extends { account?: AccountSummary }>(result: T) => { if (result.account) setAccount(result.account); return result; }, []);
   const refreshAccount = useCallback(async () => {
-    try { absorb(await api.load(token, activeId.current)); } catch { /* the next state response refreshes it */ }
+    const epoch = generation.current;
+    try {
+      const result = absorb(await api.load(token, activeId.current));
+      if (epoch === generation.current && result.state) {
+        const fresh = result.state;
+        setState(current => fresh.revision > current.revision ? fresh : current);
+      }
+    } catch { /* the next state response refreshes it */ }
   }, [api, token, absorb]);
 
   // Background checks spend credits even while this page is idle.
@@ -273,7 +282,14 @@ export function HubProvider({ userId, name, initial, initialAccount = null, api:
         result = await api.post(token, revision.current, body, activeId.current);
       }
       absorb(result);
-      if (epoch === generation.current) setState(current => result.state.revision >= current.revision ? result.state : current);
+      if (epoch === generation.current) {
+        setState(current => result.state.revision >= current.revision ? result.state : current);
+        if (action === "opened" && typeof asset !== "string") {
+          const target = asset.kind === "crypto" ? asset.id : asset.symbol;
+          const visits = result.state.signals.filter(s => s.action === "opened" && s.target === target && Date.parse(s.at) > Date.now() - 7 * 86400_000);
+          if (visits.length >= 3) announcePresence({ kind: "revisit", asset });
+        }
+      }
       return true;
     } catch (e) {
       if (epoch === generation.current) setError(e instanceof Error ? e.message : "Couldn’t save that. Try again.");
@@ -286,6 +302,8 @@ export function HubProvider({ userId, name, initial, initialAccount = null, api:
   const send = useCallback(async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || busy || operation.current) return;
+    const purchase = purchaseIntent(trimmed);
+    if (purchase) { openPurchase(purchase); setDraft(""); return; }
     operation.current = true;
     const at = new Date().toISOString(), chatId = activeChat.current;
     let assistant: Message = { id: `pending-assistant`, role: "assistant", at, parts: [], status: "streaming" };

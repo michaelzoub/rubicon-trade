@@ -30,6 +30,8 @@ it("shows one living card per agent, reveals an agent in a dialog, and wakes a r
   const list = new Map([["a", a], ["b", b]]);
   const agents = () => ({ agents: [...list.values()].map(s => ({ ...s.agent!, themes: s.profile.themes })), account: PREVIEW_ACCOUNT });
   const runs: Record<string, RunRecord[]> = { a: [{ id: "r1", trigger: "cron", slot: null, status: "succeeded", startedAt: new Date().toISOString(), finishedAt: null, summary: "Vertiv raised guidance; nothing else moved.", decision: null, error: null, notified: false }], b: [] };
+  runs.a.unshift({ ...runs.a[0], id: "quiet", summary: "" });
+  runs.a.unshift({ ...runs.a[0], id: "failed", status: "failed", summary: "The run failed." });
   const setAgentEnabled = vi.fn(async (_t: unknown, id: string, enabled: boolean) => { list.get(id)!.agent!.enabled = enabled; return agents(); });
   const api = { agents: async () => agents(), load: async (_t: unknown, id = "default") => ({ state: list.get(id) ?? null }), runs: async (_t: unknown, id: string) => ({ runs: runs[id] ?? [] }), setAgentEnabled };
 
@@ -53,6 +55,8 @@ it("shows one living card per agent, reveals an agent in a dialog, and wakes a r
   expect(dialog!.textContent).toContain("Paying attention to");
   expect(dialog!.textContent).toContain("VRT");
   expect(dialog!.textContent).toContain("Vertiv raised guidance");
+  expect(dialog!.querySelectorAll(".hub-reveal-noticed li")).toHaveLength(1);
+  expect(dialog!.textContent).not.toContain("The run failed.");
   expect(dialog!.textContent).toContain("Let it rest");
   expect(dialog!.textContent).toContain("Say goodbye");
   await act(async () => { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });

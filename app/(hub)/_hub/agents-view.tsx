@@ -19,8 +19,8 @@ type Glimpse = { state: HubState | null; runs: RunRecord[] };
 
 const rgb = (hex: string) => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)).join(", ");
 /** Per-agent colour: the same blend the badge wears, so card and avatar agree. */
-function identity(agent: AgentConfig, themes: ThemeId[]): CSSProperties {
-  const palette = badgePalette(themes, avatarTraits(agent.id).color);
+function identity(agent: AgentConfig, themes: ThemeId[], profile?: HubState["profile"]): CSSProperties {
+  const palette = badgePalette(themes, avatarTraits(profile?.avatarSeed ?? agent.badge?.seed ?? agent.id).color);
   return { "--agent-light": palette.light, "--agent-color": palette.color, "--agent-dark": palette.dark, "--agent-rgb": rgb(palette.color) } as CSSProperties;
 }
 /** Everything the agent has its eye on, in the order a person would say it: what they named, what they told it, what it picked up. */
@@ -76,11 +76,12 @@ export function AgentsView() {
     <ul className="hub-agent-grid" aria-label="Your agents">
       {agents.map(agent => {
         const themes = themesOf(agent), look = glimpses[agent.id], last = look?.runs[0];
-        const watching = attention(look?.state ?? (agent.id === state.agent?.id ? state : null)).slice(0, 4);
-        return <li key={agent.id} className={`hub-agent-card${agent.enabled ? " is-analyzing" : " is-resting"}`} style={identity(agent, themes)}>
+        const agentState = agent.id === state.agent?.id ? state : look?.state;
+        const watching = attention(agentState ?? null).slice(0, 4);
+        return <li key={agent.id} className={`hub-agent-card${agent.enabled ? " is-analyzing" : " is-resting"}`} style={identity(agent, themes, agentState?.profile)}>
           <button type="button" className="hub-agent-card-open" aria-label={`Reveal ${agent.name}`} onClick={e => open(agent, e.currentTarget)} />
           <div className="hub-agent-card-head">
-            <ProfileAvatar seed={agent.id} themes={themes} className="hub-agent-card-badge" />
+            <ProfileAvatar badge={agent.badge} profile={agentState?.profile} seed={agent.id} themes={themes} className="hub-agent-card-badge" />
             <span className={`hub-agent-status${agent.enabled ? " is-live" : ""}`}><i aria-hidden="true" />{agent.enabled ? "Analyzing" : "Resting"}</span>
           </div>
           <div className="hub-agent-card-copy">
@@ -103,7 +104,7 @@ export function AgentsView() {
       </li>
     </ul>
 
-    {current && <AgentReveal agent={current} themes={themesOf(current)} look={glimpses[current.id]} busy={busy} canRest={agents.length > 1} capReached={capReached} planName={planName}
+    {current && <AgentReveal agent={current} themes={themesOf(current)} look={current.id === state.agent?.id ? { state, runs: glimpses[current.id]?.runs ?? [] } : glimpses[current.id]} busy={busy} canRest={agents.length > 1} capReached={capReached} planName={planName}
       onClose={close}
       onWake={enabled => void wake(current, enabled)}
       onLook={async () => { const outcome = await runNow(current.id); void glimpse(current.id); return outcome; }}
@@ -127,14 +128,14 @@ function AgentReveal({ agent, themes, look, busy, canRest, capReached, planName,
     return () => document.removeEventListener("keydown", key);
   }, [onClose]);
   const watching = attention(look?.state ?? null);
-  const recent = (look?.runs ?? []).filter(r => r.status !== "running").slice(0, 3);
+  const recent = (look?.runs ?? []).filter(r => r.status === "succeeded" && Boolean(r.summary?.trim())).slice(0, 3);
   const look_ = async () => { setLooking(true); setOutcome(null); try { setOutcome(await onLook()); } finally { setLooking(false); } };
 
   return createPortal(<div className="hub-reveal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-    <div ref={panel} role="dialog" aria-modal="true" aria-labelledby="hub-reveal-name" tabIndex={-1} className="rubicon-hover-surface hub-reveal" style={identity(agent, themes)}>
+    <div ref={panel} role="dialog" aria-modal="true" aria-labelledby="hub-reveal-name" tabIndex={-1} className="rubicon-hover-surface hub-reveal" style={identity(agent, themes, look?.state?.profile)}>
       <button type="button" className="hub-reveal-close" aria-label="Close" onClick={onClose}><X size={14} aria-hidden="true" /></button>
       <header className="hub-reveal-head">
-        <ProfileAvatar seed={agent.id} themes={themes} className="hub-reveal-badge" />
+        <ProfileAvatar badge={agent.badge} profile={look?.state?.profile} seed={agent.id} themes={themes} className="hub-reveal-badge" />
         <div className="hub-reveal-who">
           <h2 id="hub-reveal-name">{agent.name}</h2>
           <p>{purpose(agent, themes)}</p>
@@ -149,10 +150,10 @@ function AgentReveal({ agent, themes, look, busy, canRest, capReached, planName,
       </section>
       <section className="hub-reveal-section" aria-label="Recently noticed">
         <p className="hub-reveal-label">Recently noticed</p>
-        {outcome && <p className="hub-reveal-fresh" role="status">{outcome.status === "succeeded" ? (outcome.notification ? <>It reached out: <strong>{outcome.notification.title}</strong>. It’s waiting in your conversation.</> : <>It looked and stayed quiet. {outcome.summary}</>) : outcome.status === "skipped" ? outcome.summary : "It couldn’t finish looking. Try again in a moment."}</p>}
+        {outcome && <p className="hub-reveal-fresh" role="status">{outcome.status === "succeeded" ? (outcome.summary || "Nothing new worth highlighting right now.") : outcome.status === "skipped" ? outcome.summary : "It couldn’t finish looking. Try again in a moment."}</p>}
         {look === undefined ? <p className="hub-reveal-quiet">Looking back…</p>
           : recent.length ? <ul className="hub-reveal-noticed">{recent.map(run => <li key={run.id}><p>{noticed(run)}</p><small>{timeAgo(run.startedAt)}</small></li>)}</ul>
-          : !outcome && <p className="hub-reveal-quiet">Nothing yet. Ask it to take a look.</p>}
+          : !outcome && <p className="hub-reveal-quiet">Nothing new worth highlighting right now.</p>}
       </section>
       <div className="hub-reveal-actions">
         <button type="button" className="hub-reveal-action is-primary" disabled={busy || looking} onClick={() => void look_()}>{looking ? "Looking…" : "Take a look now"}</button>

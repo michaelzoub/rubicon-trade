@@ -7,7 +7,7 @@ import type { LearnedInterest } from "@/lib/socialtrading/types";
 import { Card } from "../_components/ui";
 import { gsap, useGSAP, rubiconMotion } from "../_components/motion";
 import { badgePalette, isThemeId, THEMES, type ThemeId } from "@/lib/socialtrading/themes";
-import { avatarTraits } from "@/lib/socialtrading/avatar";
+import { agentAvatarTraits, avatarTraits } from "@/lib/socialtrading/avatar";
 import { ProfileAvatar } from "./profile-avatar";
 
 export const money = (value: string) => value && Number.isFinite(Number(value))
@@ -49,9 +49,15 @@ export function ProfileCard({ profile, name, agentName, avatarSeed, inferred = [
 }) {
   const root = useRef<HTMLElement>(null);
   const final = profile.step === 6;
+  const traits = agentAvatarTraits(avatarSeed ?? profile.userId, profile);
+  const attributes = [
+    ["Pattern", ["Stripes", "Prism", "Orbit", "Circuit"][traits.pattern]],
+    ["Eyes", ["Bright", "Upturned", "Wink", "Spectacles"][traits.eyes]],
+    ["Emblem", ["Diamond", "Halo"][traits.accessory]],
+  ];
   const themes = THEMES.filter(t => profile.themes.includes(t.id));
   const learned = learnedThemes(inferred, profile.themes);
-  const palette = badgePalette(profile.themes, avatarTraits(avatarSeed ?? profile.userId).color, learned);
+  const palette = badgePalette(profile.themes, avatarTraits(profile.avatarSeed ?? avatarSeed ?? profile.userId).color, learned);
   const identity = themes.length ? themes.map(t => t.name).join(" × ") : "Your agent is learning you";
   const learnedAssets = inferred.filter(i => !isThemeId(i.id) && i.weight > .25 && i.confidence >= .4).sort((a, b) => b.weight * b.confidence - a.weight * a.confidence).slice(0, 4);
   const status = compact ? (learned.length || learnedAssets.length ? `Learning · ${[...learned.map(t => THEMES.find(x => x.id === t)!.name), ...learnedAssets.map(a => a.id)].slice(0, 3).join(", ")}` : "Learning from how you explore")
@@ -73,11 +79,14 @@ export function ProfileCard({ profile, name, agentName, avatarSeed, inferred = [
     <aside ref={root} className={`socialtrading-profile${compact ? " is-compact" : ""}`} aria-label="Your live agent profile">
       <Card className={`socialtrading-profile-card${final ? " is-complete" : ""}`} style={{ "--profile-tint": palette.light, "--profile-accent": palette.color } as CSSProperties}>
         <div className="socialtrading-profile-identity" data-profile-reveal>
-          <ProfileAvatar seed={avatarSeed ?? profile.userId} themes={profile.themes} inferred={learned} />
+          <ProfileAvatar profile={profile} seed={avatarSeed ?? profile.userId} themes={profile.themes} inferred={learned} />
           <h2>{agentName ?? (name ? `${name}’s agent` : "Your agent")}</h2>
           <p key={identity}>{identity}</p>
         </div>
         <dl className="socialtrading-profile-details" data-profile-reveal>
+          <ProfileDetail label="Badge attributes" value={JSON.stringify(traits)}>
+            <div className="socialtrading-profile-interests">{attributes.map(([label, value]) => <span key={label}>{label} · {value}</span>)}</div>
+          </ProfileDetail>
           <ProfileDetail label="Your point of view" value={profile.thesis}>
             <p className={`socialtrading-profile-thesis${!profile.thesis.trim() ? " is-empty" : ""}`}>
               {profile.thesis.trim() || "No thesis yet"}

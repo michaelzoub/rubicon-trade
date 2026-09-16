@@ -140,7 +140,7 @@ export function AgentRoster({ agents, activeId, themesOf, room, capNote }: {
         return <li key={agent.id} data-companion>
           <Link href="/agents" className={`hub-companion${agent.enabled ? " is-awake" : ""}${agent.id === activeId ? " is-current" : ""}`} style={auraTint(themes)}>
             <span className="hub-companion-glow" aria-hidden="true" />
-            <ProfileAvatar seed={agent.id} themes={themes} className="hub-companion-badge" />
+            <ProfileAvatar badge={agent.badge} seed={agent.id} themes={themes} className="hub-companion-badge" />
             <strong>{agent.name}</strong>
             <small>{named || agent.description || "Finding its shape"}</small>
             <span className="hub-companion-state"><i aria-hidden="true" />{agent.enabled ? "Looking around" : "Resting"}</span>

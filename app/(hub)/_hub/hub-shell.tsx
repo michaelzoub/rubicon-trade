@@ -1,10 +1,13 @@
 "use client";
 
 import { usePrivy } from "@privy-io/react-auth";
-import { ArrowLeftRight, Bot, Clock, Compass, MessageCircle, UserRound } from "lucide-react";
+import { Clock, Compass, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { PurchaseDialog } from "./purchase-dialog";
+import { CommandMenu } from "./command-menu";
+import "./refinements.css";
 import { AccountMenu } from "./account-menu";
 import { HoverTooltips } from "../../_components/hover-tooltips";
 import { planName } from "./limits-ui";
@@ -17,7 +20,7 @@ import { agentSelectionKey } from "@/lib/socialtrading/agents/config";
 import type { HubState } from "@/lib/socialtrading/types";
 import { gsap, useGSAP, rubiconMotion } from "../../_components/motion";
 import { ProfileFlow } from "../social-trading";
-import { AgentPresence } from "./agent-presence";
+import { AmbientAgent } from "./ambient-agent";
 import { hubApi, HubRequestError } from "./client";
 import { useAccountSummary } from "./account-state";
 import { HubProvider, useHub } from "./hub-provider";
@@ -29,10 +32,7 @@ import "./hub-consumer.css";
 export const NAV = [
   { href: "/", label: "Home", icon: MessageCircle, exact: true },
   { href: "/explore", label: "Explore", icon: Compass, exact: false },
-  { href: "/trade", label: "Buy", icon: ArrowLeftRight, exact: true },
-  { href: "/activity", label: "Activity", icon: Clock, exact: true },
-  { href: "/agents", label: "Manage agents", icon: Bot, exact: true },
-  { href: "/profile", label: "Profile", icon: UserRound, exact: true },
+  { href: "/activity", label: "Memory", icon: Clock, exact: true },
 ] as const;
 
 function Frame({ children, wide = false, accountStatus, nav }: { children: ReactNode; wide?: boolean; accountStatus?: ReactNode; nav?: ReactNode }) {
@@ -136,7 +136,7 @@ function TabBar({ pathname, onNavigate, resolveHref }: { pathname: string; onNav
       {NAV.map(item => {
         const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
         return <Link key={item.href} href={resolveHref(item.href)} className={`hub-nav-link${active ? " is-active" : ""}`} aria-current={active ? "page" : undefined} onClick={e => onNavigate(e, item.href)}>
-          <item.icon size={15} strokeWidth={1.7} aria-hidden="true" /><span>{item.label}</span>
+          <span>{item.label}</span>
         </Link>;
       })}
       <span ref={mark} className="hub-nav-mark" aria-hidden="true" />
@@ -155,9 +155,6 @@ export function Hub({ children, path, resolveHref = href => href }: {
   const { state, name, userId, error, clearError, account, agents } = useHub();
   const identityStats_ = identityStats(state, agents.length ? agents : state.agent ? [state.agent] : []);
   const identityStage_ = identityStage(identityDepth(state, identityStats_));
-  /** Pages that are about something else carry the agent as one quiet line.
-   * Profile, agents and buy already lead with their own identity. */
-  const showPresence = pathname !== "/profile" && pathname !== "/agents" && pathname !== "/trade";
   const stage = useRef<HTMLDivElement>(null);
   const previousPath = useRef(pathname);
   const direction = useRef(1);
@@ -195,14 +192,15 @@ export function Hub({ children, path, resolveHref = href => href }: {
 
   return (
     <Frame wide
-      nav={<TabBar pathname={pathname} onNavigate={navigate} resolveHref={resolveHref} />}
+      nav={<div className="rubicon-navigation"><TabBar pathname={pathname} onNavigate={navigate} resolveHref={resolveHref} /><CommandMenu resolveHref={resolveHref}/></div>}
       accountStatus={<AccountMenu userId={userId} name={name} planName={planName(account)} account={account}
         themes={state.profile.themes} inferred={state.inferred}
         identity={{ progress: identityStage_.progress, depth: identityStage_.depth, energy: identityStats_.energy }}
         profileHref={resolveHref("/profile")} plansHref={resolveHref("/plans")} preview={path !== undefined} />}>
+      <AmbientAgent resolveHref={resolveHref} />
+      <PurchaseDialog />
       <div className="hub-layout">
         <div ref={stage} className="hub-stage">
-          {showPresence && <AgentPresence resolveHref={resolveHref} />}
           {error && <p className="hub-error" role="alert">{error} <button type="button" onClick={clearError}>Dismiss</button></p>}
           <div key={state.agent?.id ?? "default"}>{children}</div>
         </div>

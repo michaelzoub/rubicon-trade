@@ -286,7 +286,10 @@ export function ProfileFlow({ userId, name, onComplete, completing = false, serv
   });
 
   useEffect(() => {
-    try { if (persist) setProfile(readProfile(localStorage.getItem(profileKey(userId)), userId)); }
+    try {
+      const draft = persist ? readProfile(localStorage.getItem(profileKey(userId)), userId) : newProfile(userId);
+      setProfile({ ...draft, avatarSeed: draft.avatarSeed ?? crypto.randomUUID() });
+    }
     catch { setStorageError("Browser storage is unavailable. Your profile will only last for this visit."); }
     setLoaded(true);
   }, [userId, persist]);

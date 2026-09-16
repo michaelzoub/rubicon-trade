@@ -1,0 +1,59 @@
+/* The presence sits outside page transitions: one continuous entity. */
+.ambient-agent{position:fixed;right:max(28px,env(safe-area-inset-right));bottom:max(24px,env(safe-area-inset-bottom));z-index:80;color:#28354b;font-family:inherit}
+.ambient-dock{display:flex;align-items:center;justify-content:flex-end;gap:10px}
+.ambient-caption{font-size:11px;color:#758094;letter-spacing:.015em;opacity:0;transition:opacity .2s;pointer-events:none}
+.ambient-agent:hover .ambient-caption,.ambient-agent:focus-within .ambient-caption,.ambient-agent[data-state="researching"] .ambient-caption,.ambient-agent[data-state="waiting"] .ambient-caption,.ambient-agent[data-state="acting"] .ambient-caption{opacity:1}
+.ambient-orb{position:relative;display:grid;place-items:center;width:62px;height:62px;padding:0;border:0;background:none;border-radius:50%;cursor:grab;touch-action:none;isolation:isolate}
+.ambient-orb:active{cursor:grabbing}.ambient-orb:focus-visible{outline:2px solid #527bb5;outline-offset:5px}
+.ambient-halo{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle,#adcfff55 20%,#aacaff33 48%,transparent 72%);opacity:.5}
+.ambient-core{position:relative;width:39px;height:39px;overflow:hidden;border-radius:50%;background:radial-gradient(ellipse at 30% 23%,#ffffff 0%,#e1f0ff 20%,#91bfff 40%,#447bc2 70%,#244b86 100%);box-shadow:inset -4px -6px 8px #24457738,inset 2px 2px 5px #ffffffe0,0 6px 16px #36619b24,0 0 0 1px #6499d920;will-change:transform}
+.ambient-core>span{position:absolute;inset:5px -8px;transform:rotate(-38deg);border-radius:50%;border:3px solid #ffffff60;filter:blur(3px)}
+.ambient-orbit{position:absolute;inset:5px;border:1px solid #8ab1e72b;border-radius:50%;transform:rotate(-25deg) scaleY(.83);pointer-events:none}
+.ambient-agent[data-state="noticed"] .ambient-orbit{border-color:#70a9f0a8;inset:0}
+.ambient-agent[data-state="waiting"] .ambient-core{background:radial-gradient(ellipse at 30% 23%,#fffbe9,#ded3ad 35%,#aa9964 70%,#756844)}
+.ambient-agent[data-state="reconsidering"] .ambient-orbit{transform:rotate(35deg) scaleY(.6)}
+.ambient-agent[data-state="ready"] .ambient-core{box-shadow:inset 2px 2px 5px #fff,0 0 22px #98c6ff70}
+.ambient-panel{position:absolute;right:0;bottom:78px;width:min(400px,calc(100vw - 32px));background:#ffffff;border:1px solid #dfe6f0;border-radius:22px;box-shadow:0 18px 70px #263a551a,0 3px 10px #263a5507;overflow:hidden;transform-origin:bottom right}
+.ambient-panel header{display:flex;align-items:center;justify-content:space-between;padding:22px 23px 17px;border-bottom:1px solid #edf1f7}
+.ambient-eyebrow{font-size:9px;letter-spacing:.15em;color:#788aa6}.ambient-panel h2{margin:6px 0 0;font-size:16px;font-weight:500}
+.ambient-panel button,.ambient-nudge button{cursor:pointer}.ambient-panel header button,.ambient-nudge>button{display:grid;place-items:center;border:0;background:transparent;color:#788599;width:32px;height:32px;border-radius:50%}
+.ambient-panel button:focus-visible,.ambient-nudge button:focus-visible{outline:2px solid #527bb5;outline-offset:2px}
+.ambient-log{max-height:min(400px,45dvh);overflow-y:auto;overscroll-behavior:contain;padding:20px 23px;overflow-wrap:anywhere}
+.ambient-empty{padding:18px 0 28px}.ambient-empty h3{font-family:inherit;font-size:27px;font-weight:400;line-height:1.2;letter-spacing:-.6px;margin:0 0 15px}.ambient-empty p{font-size:12px;line-height:1.7;color:#788497;max-width:275px}
+.ambient-message{font-size:13px;line-height:1.65;margin-bottom:20px}.ambient-message small{display:block;font-size:10px;color:#788599;margin-bottom:5px}.ambient-message.is-user{background:#f2f6fc;padding:12px 14px;border-radius:13px;margin-left:25px}.ambient-message:last-child{margin-bottom:0}
+.ambient-thought{font-size:13px;line-height:1.7;background:#f2f6fc;padding:14px;border-radius:12px;margin:0 0 16px}
+.ambient-status{font-size:10px;color:#788599;margin:0;padding:0 23px 12px}
+.ambient-panel form{display:flex;gap:8px;align-items:center;margin:0 15px;padding:7px 8px 7px 14px;border:1px solid #e0e7f1;border-radius:12px;background:#f8faff}.ambient-panel input{min-width:0;flex:1;background:transparent;border:0;outline:none;font:inherit;font-size:13px;color:inherit}.ambient-panel form:focus-within{border-color:#8cb2e8}.ambient-panel form button{background:#4779bb;border:0;color:white;width:32px;height:32px;border-radius:9px;display:grid;place-items:center}.ambient-panel form button:disabled{opacity:.35;cursor:default}
+.ambient-panel footer{padding:12px 20px 16px;display:flex;justify-content:space-between;gap:10px;color:#7b889d;font-size:9px}.ambient-panel footer a{display:flex;align-items:center;gap:3px;color:#54739c;text-decoration:none}
+.ambient-nudge{position:absolute;right:4px;bottom:76px;width:min(310px,calc(100vw - 40px));display:flex;padding:14px 9px 14px 18px;background:#ffffff;border:1px solid #e0e7f1;border-radius:17px 17px 4px 17px;box-shadow:0 8px 35px #334b7012}.ambient-nudge-copy{flex:1;border:0;background:none;text-align:left;padding:0;font:inherit;font-size:12px;line-height:1.7;color:#52647d}.ambient-nudge-copy span{display:flex;align-items:center;gap:6px;font-size:10px;color:#647f9f;margin-top:8px}
+@media(max-width:640px){.ambient-agent{right:16px;bottom:max(16px,env(safe-area-inset-bottom))}.ambient-caption{display:none}.ambient-panel{bottom:72px}.ambient-orb{width:54px;height:54px}.ambient-log{max-height:40dvh}}
+@media(prefers-reduced-motion:reduce){.ambient-caption{transition:none}.ambient-core{will-change:auto}}
+.ambient-detail-link{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#54739c;margin-top:8px}.ambient-message p{margin:4px 0;white-space:pre-wrap}.ambient-status a{color:#54739c;margin-left:6px}
+
+/* A shared spatial origin connects presence, thought and composer. */
+.ambient-agent{left:0;top:0;right:auto;bottom:auto;width:64px;height:64px;transition:filter 1.2s,opacity 1.2s}
+.ambient-agent[data-quiet="true"]{opacity:.38;filter:saturate(.65)}
+.ambient-dock{position:absolute;left:0;top:0;width:64px;height:64px;z-index:2}
+.ambient-orb{cursor:pointer;width:64px;height:64px}.ambient-orb:active{cursor:pointer}
+.ambient-core{width:34px;height:34px;background:radial-gradient(ellipse at 32% 22%,#fff 0%,#eef7ff 19%,#b3d7ff 42%,#6c9edc 72%,#487bb7 100%);box-shadow:inset -3px -4px 9px #386ca52b,inset 2px 2px 6px #fff,0 5px 20px #769cca22}
+.ambient-caption{position:absolute;top:68px;left:4px;width:180px;font-size:10px;opacity:0!important}.ambient-agent:hover:not([data-open="true"]) .ambient-caption,.ambient-agent:focus-within:not([data-open="true"]) .ambient-caption{opacity:1!important}
+.ambient-panel{left:0;top:0;right:auto;bottom:auto;width:min(520px,calc(100vw - 32px));max-height: min(570px,calc(100dvh - 112px));display:flex;flex-direction:column;transform-origin:32px 32px;border:1px solid #fff;border-radius:32px;background:linear-gradient(145deg,#f3f8fff5,#fffffffa 42%,#fff);box-shadow:0 24px 90px #45628b1c,0 2px 12px #45628b08;backdrop-filter:blur(24px);overflow:auto}
+.ambient-panel header{padding:24px 24px 14px 80px;border:0;min-height:80px;flex-shrink:0}.ambient-eyebrow{font-size:8px;letter-spacing:.18em;color:#8194b0}.ambient-panel h2{font-size:13px;color:#61748e;margin-top:5px;font-weight:400}
+.ambient-log{padding:18px 34px 16px;max-height:300px;min-height:70px;flex:1;scrollbar-width:thin;scrollbar-color:#dce5f0 transparent}
+.ambient-empty{padding:10px 0 20px}.ambient-empty h3{font-size:39px;font-weight:400;line-height:1.14;letter-spacing:-1.6px;color:#344965}.ambient-empty p{max-width:320px;font-size:13px;line-height:1.8;margin:16px 0 0;color:#8a96a7}
+.ambient-message{font-size:14px;line-height:1.85;margin-bottom:24px;color:#455873}.ambient-message small{font-size:9px;letter-spacing:.08em;color:#94a1b2;margin-bottom:8px}.ambient-message.is-user{padding:0 0 0 16px;margin-left:36px;background:none;border-radius:0;border-left:1px solid #ccdaed;color:#7a889a}.ambient-thought{background:none;padding:0 0 18px;border-radius:0;border-bottom:1px solid #e6edf6;color:#5d7596}
+.ambient-prompts{display:flex;gap:16px;padding:0 34px 22px;flex-wrap:wrap}.ambient-prompts button{display:flex;gap:6px;align-items:center;background:none;border:0;padding:0;color:#7189a8;font:inherit;font-size:10px;text-align:left}.ambient-prompts button:hover{color:#305d94}
+.ambient-status{padding:0 34px 12px;font-size:10px;color:#91a1b7;min-height:24px}.ambient-panel form{margin:0 24px;padding:13px 12px 13px 18px;border-radius:22px;border:1px solid #e4edf8;background:linear-gradient(110deg,#edf5ff99,#fff);flex-shrink:0}.ambient-panel input{font-size:14px}.ambient-panel input::placeholder{color:#91a2b8}.ambient-panel form:focus-within{border-color:#a6c6ef;box-shadow:0 0 24px #a9cbff18}.ambient-panel form button{width:34px;height:34px;border-radius:50%;background:#7198cc}.ambient-panel footer{padding:14px 30px 23px;font-size:9px;flex-shrink:0}
+.ambient-nudge{left:0;top:72px;right:auto;bottom:auto;border-radius:4px 20px 20px 20px;background:#ffffffed;width:min(300px,calc(100vw - 40px));backdrop-filter:blur(15px)}
+.ambient-agent[data-state="waiting"] .ambient-core{background:radial-gradient(ellipse at 30% 23%,#fff,#e1efff 35%,#9ebbe0 70%,#7391b7)}
+.ambient-agent[data-state="waiting"] .ambient-orbit{border-style:dashed;border-color:#85a6d466}
+.ambient-agent[data-state="listening"] .ambient-core{box-shadow:inset 2px 2px 6px #fff,0 0 24px #a8cfff88}
+.ambient-agent[data-state="researching"] .ambient-orbit{border-top-color:#6996d4;border-bottom-color:#b2cff255}
+.ambient-agent[data-state="assembling"] .ambient-orbit{inset:-4px;border-color:#9fbfe15c}
+.ambient-agent[data-state="acting"] .ambient-core{filter:saturate(1.2);box-shadow:inset 2px 2px 6px #fff,0 0 18px #8ebbef70}
+.ambient-agent[data-state="reflecting"] .ambient-core{filter:saturate(.65)}
+@media(max-width:640px){.ambient-agent{right:auto;bottom:auto}.ambient-panel{bottom:auto;border-radius:27px}.ambient-log{padding:14px 25px;max-height:35dvh}.ambient-empty h3{font-size:32px}.ambient-prompts{padding:0 25px 20px}.ambient-panel footer{gap:8px}.ambient-panel header{padding-left:76px}}
+@media(prefers-reduced-motion:reduce){.ambient-agent{transition:none}}
+.ambient-panel input:focus{outline:none!important;box-shadow:none!important}
+.ambient-panel textarea{min-width:0;flex:1;resize:none;border:0;background:transparent;font:inherit;font-size:14px;line-height:1.6;color:inherit;padding:2px 0;outline:none!important;box-shadow:none!important}.ambient-panel textarea::placeholder{color:#91a2b8}.ambient-panel form{align-items:flex-end}
+.ambient-agent .ambient-panel textarea:focus-visible{outline:none!important;box-shadow:none!important}
