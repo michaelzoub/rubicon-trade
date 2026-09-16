@@ -26,14 +26,19 @@ SaaS navigation is added to solve a problem.
 
 ### Motion spine — `app/_components/motion.ts`
 
-Registers `Flip`, `Draggable`, `InertiaPlugin`, `MotionPathPlugin`,
-`MorphSVGPlugin`, `CustomEase` and `Observer` alongside the existing
-`ScrollTrigger`. Adds two `CustomEase` curves: `creature` (accelerates out of
+Registers `Flip`, `Draggable`, `InertiaPlugin`, `MorphSVGPlugin`, `CustomEase`
+and `Observer` alongside the existing `ScrollTrigger`. A duplicate `motion.tsx`
+that shadowed this module is removed: TypeScript resolved `.ts` and Next
+resolved `.tsx`, so typecheck and tests agreed on a module the app never ran. Adds two `CustomEase` curves: `creature` (accelerates out of
 rest, settles without overshoot) and `breath` (asymmetric rise and fall).
 
 These are load-bearing. Flip is what lets Explore reorganize rather than
 re-render. Draggable with InertiaPlugin is what makes Memory's time tactile.
-MotionPath is what makes the agent travel like a creature rather than lerp.
+
+The agent's travel deliberately uses no plugin. MotionPathPlugin was tried and
+failed silently — posture animated while the body never moved — so the arc is
+evaluated directly from its control points. Movement is the one thing that must
+not depend on a plugin resolving.
 
 ### Procedural identity colour — `lib/socialtrading/identity-palette.ts`
 
@@ -45,6 +50,12 @@ Chroma scales with identity depth. A new account's accent is near-neutral; a
 developed identity's is fully saturated, so colour *is* the progression. Both
 lightness and chroma are clamped into a fixed band, so no mix of themes can
 break the light Rubicon base.
+
+Hue comes from the heaviest theme, pulled toward the blend of the rest by at
+most 14 degrees. A free circular mean invents a third colour — energy and AI
+average into a pink belonging to neither, and even a generous bounded pull
+swings gold through red on the way to violet. Neighbouring themes still mix
+visibly; distant ones shade the accent without replacing it.
 
 Profile's arbitrary green is removed by adopting these tokens, not by
 restyling.
@@ -74,11 +85,17 @@ silhouette, with pattern and theme motifs dropped at small size. MorphSVG
 morphs mouth and eye paths between expressions.
 
 **Autonomy.** A perpetual wander loop replaces the pointer magnet. It picks a
-weighted region of interest, travels along a quadratic MotionPath over 6-14s
-banking into the turn, dwells 4-10s, and picks again. A continuous breath runs
-underneath. Regions are elements marked `data-agent-region`; weight rises for
-what just became relevant and decays. Positions resolve into the gutter beside
-content with a collision check, so the agent never lands on text.
+weighted region of interest, walks a quadratic arc there over 6-14s banking into
+the turn, dwells 4-10s, and picks again. A continuous breath runs underneath.
+Regions are elements marked `data-agent-region`; weight rises for what just
+became relevant and decays.
+
+Placement does not assume a margin exists — layouts that run edge to edge have
+none. A destination is pushed into the nearer gutter when one fits, then checked
+against what the page actually draws at that point; a taken place is retried
+hard against the viewport edge before it is given up. The path bows away from
+the middle, so the journey stays clear of the reading column as well as the
+destination.
 
 **Attention without travel.** Hovering a glossed object does not summon it. It
 rotates to face the object, offsets its pupils toward it, and warms its glow.
