@@ -44,6 +44,7 @@ vi.mock("./client", async importOriginal => {
 import { Hub } from "./hub-shell";
 import { HubProvider } from "./hub-provider";
 import { HomeView } from "./home-view";
+import { GLOSS_ID } from "./gloss";
 import { TradeView } from "./trade-view";
 import { AssetGrid } from "./parts";
 import { ProfileView } from "./profile-view";
@@ -55,6 +56,9 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(prefers-reduced-motion: reduce)", media: query, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() }));
   events.script = []; events.posted = [];
+  // The account card teaches itself once per person; tests that are not about
+  // that moment start on the far side of it.
+  localStorage.setItem("rubicon:account-discovered:v1", "1");
   container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
@@ -430,4 +434,61 @@ it("opens command navigation by shortcut and filters destinations", async () => 
   expect(Array.from(dialog.querySelectorAll('[data-command]')).map(n => n.textContent)).toEqual(['Memory']);
   await act(async () => dialog.dispatchEvent(new Event('cancel', { cancelable: true })));
   expect(dialog.open).toBe(false);
+});
+
+it("leaves Home calm, and keeps the thesis in what reaching for something reveals", async () => {
+  await render(PREVIEW_STATE);
+
+  // The thesis no longer holds a section of its own above the conversation.
+  expect(container.querySelector(".wv-thesis")).toBeNull();
+  expect(container.querySelector(".hub-home")?.children.length).toBeLessThanOrEqual(2);
+
+  // It is still here: what the agent said reveals the belief behind it.
+  const said = Array.from(container.querySelectorAll<HTMLElement>(".hub-row.is-assistant .hub-row-content"));
+  expect(said.length).toBeGreaterThan(0);
+  expect(said.some(node => node.getAttribute("aria-describedby") === GLOSS_ID)).toBe(true);
+  // And it is reachable without a pointer.
+  expect(said.filter(node => node.getAttribute("aria-describedby") === GLOSS_ID).every(node => node.tabIndex === 0)).toBe(true);
+});
+
+it("teaches the account card once, then leaves quiet affordances behind", async () => {
+  localStorage.removeItem("rubicon:account-discovered:v1");
+  await render(PREVIEW_STATE, <HomeView />, PREVIEW_ACCOUNT);
+  const trigger = container.querySelector<HTMLButtonElement>(".hub-account-trigger")!;
+  const open = async () => act(async () => {
+    trigger.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    trigger.focus(); trigger.click();
+  });
+
+  await open();
+  const menu = container.querySelector<HTMLElement>(".hub-account-menu")!;
+  expect(menu.hidden).toBe(false);
+  expect(menu.classList.contains("is-discovering")).toBe(true);
+  expect(Array.from(menu.querySelectorAll(".hub-discover-tag")).map(t => t.textContent)).toEqual(["Profile", "Plan", "Deposit", "Sign out"]);
+
+  // Every labelled thing is genuinely an action, not a caption.
+  const actions = Array.from(menu.querySelectorAll<HTMLElement>("[data-discover]"));
+  expect(actions.every(node => node.matches("a, button") || !!node.querySelector("a, button"))).toBe(true);
+  // The labels are decoration over controls that already name themselves.
+  expect(menu.querySelectorAll('.hub-discover-tag[aria-hidden="true"]').length).toBe(4);
+
+  // It holds long enough to read, then recedes for good.
+  await act(async () => { await new Promise(r => setTimeout(r, 2800)); });
+  expect(menu.classList.contains("is-discovering")).toBe(false);
+  expect(container.querySelector(".hub-discover-tag")).toBeNull();
+
+  // Opening it again never explains itself a second time.
+  await open(); await open();
+  expect(container.querySelector(".hub-account-menu")?.classList.contains("is-discovering")).toBe(false);
+  // What stays is the chevron already on every row.
+  expect(container.querySelectorAll(".hub-account-chevron").length).toBeGreaterThan(0);
+});
+
+it("keeps the shortcut without printing it on the page", async () => {
+  await render(PREVIEW_STATE);
+  const trigger = container.querySelector<HTMLButtonElement>(".rubicon-command-trigger")!;
+  expect(trigger.querySelector("kbd")).toBeNull();
+  expect(trigger.getAttribute("aria-keyshortcuts")).toBe("Meta+k Control+k");
+  expect(container.querySelector(".rubicon-command footer")).toBeNull();
+  expect(container.textContent).not.toContain("Enter to open");
 });

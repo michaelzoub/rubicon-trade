@@ -8,6 +8,7 @@ import { limitStatus } from "@/lib/socialtrading/plans";
 import { ProfileAvatar } from "../profile-avatar";
 import { learnedThemes } from "../profile-card";
 import { clock, timeAgo } from "./format";
+import { messageGloss, useGloss } from "./gloss";
 import { useHub } from "./hub-provider";
 import { HubLink as Link } from "./navigation";
 import { LimitHint, UsagePill } from "./limits-ui";
@@ -21,15 +22,20 @@ const STARTERS = [
 ];
 
 function Row({ message, name, agentName, seed, themes, learned, profile }: { profile: Parameters<typeof ProfileAvatar>[0]["profile"]; message: Message; name?: string; agentName?: string; seed: string; themes: Parameters<typeof ProfileAvatar>[0]["themes"]; learned: Parameters<typeof ProfileAvatar>[0]["inferred"] }) {
+  const { state } = useHub();
+  const gloss = useGloss();
   const user = message.role === "user";
   const streaming = message.status === "streaming";
   const empty = message.parts.length === 0;
+  // Reaching for what the agent said reveals the belief underneath it.
+  const said = message.parts.map(part => "text" in part ? part.text : "").join(" ");
+  const why = user || streaming ? null : messageGloss(said, state);
   return (
     <li className={`hub-row is-${message.role}${streaming ? " is-streaming" : ""}`} data-message={message.id}>
       {!user && <span className="hub-row-avatar" aria-hidden="true"><ProfileAvatar profile={profile} seed={seed} themes={themes} inferred={learned} className="hub-row-badge" /></span>}
       <div className="hub-row-body">
         <p className="hub-row-meta"><span>{user ? "You" : agentName ?? (name ? `${name}’s agent` : "Your agent")}</span><time dateTime={message.at}>{clock(message.at)}</time>{message.via === "background" && <em className="hub-row-via">Reached out</em>}</p>
-        <div className="hub-row-content">
+        <div className="hub-row-content" tabIndex={why ? 0 : undefined} {...gloss(why)}>
           {message.parts.map((part, i) => <PartView key={i} part={part} />)}
           {streaming && empty && <p className="hub-thinking" role="status" aria-live="polite"><span /><span /><span /></p>}
           {streaming && !empty && <span className="hub-caret" aria-hidden="true" />}

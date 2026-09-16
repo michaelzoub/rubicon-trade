@@ -35,17 +35,16 @@ export function CommandMenu({ resolveHref }: { resolveHref: (href: string) => st
     }, 250);
     return () => { live = false; clearTimeout(timer); };
   }, [open, query, market]);
-  return <><button className="rubicon-command-trigger" onClick={show} aria-label="Search or jump to anything" aria-keyshortcuts="Meta+k Control+k"><Search size={14}/><kbd>⌘ K</kbd></button>
+  return <><button className="rubicon-command-trigger" onClick={show} aria-label="Search or jump to anything" aria-keyshortcuts="Meta+k Control+k"><Search size={15}/></button>
     <dialog className="rubicon-command dashboard-theme" ref={dialog} aria-label="Jump to anything" onPointerDown={e => e.stopPropagation()} onCancel={e => { e.preventDefault(); close(); }} onKeyDown={e => {
       e.stopPropagation();
       if (!['ArrowDown', 'ArrowUp'].includes(e.key)) return;
       e.preventDefault(); const nodes = Array.from(dialog.current?.querySelectorAll<HTMLElement>('[data-command]') ?? []);
       if (!nodes.length) return; const at = nodes.indexOf(document.activeElement as HTMLElement); nodes[(at + (e.key === 'ArrowDown' ? 1 : -1) + nodes.length) % nodes.length]?.focus();
     }}>
-      <header><Search size={18}/><input ref={input} aria-label="Search destinations and assets" value={query} onChange={e => setQuery(e.target.value)} placeholder="Where does your mind go?" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); dialog.current?.querySelector<HTMLButtonElement>('[data-command]')?.click(); } }}/><button aria-label="Close search" onClick={close}><X size={16}/></button></header>
+      <header><Search size={18}/><input ref={input} aria-label="Search destinations and assets" value={query} onChange={e => setQuery(e.target.value)} placeholder="Look for something" onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); dialog.current?.querySelector<HTMLButtonElement>('[data-command]')?.click(); } }}/><button aria-label="Close search" onClick={close}><X size={16}/></button></header>
       <div className="command-results">{destinations.filter(([name]) => name.toLowerCase().includes(query.toLowerCase())).map(([name, href]) => <button data-command key={href} onClick={() => go(href)}><span>{name}</span><ArrowUpRight size={14}/></button>)}
       {query.trim().length >= 2 && chats.filter(chat => chat.title.toLowerCase().includes(query.toLowerCase())).slice(0, 5).map(chat => <button data-command key={chat.id} onClick={() => { selectChat(chat.id); go('/'); }}><span>{chat.title}</span><small>Conversation</small></button>)}
       {assets.map(asset => <button data-command key={`${asset.kind}:${asset.id}`} onClick={() => go(`/explore/${asset.kind}/${encodeURIComponent(asset.id)}`)}><span><strong>{asset.symbol}</strong> {asset.name}</span><small>{asset.kind}</small></button>)}{status && <p role="status">{status}</p>}</div>
-      <footer>↑ ↓ to move · Enter to open · Esc to return</footer>
     </dialog></>;
 }

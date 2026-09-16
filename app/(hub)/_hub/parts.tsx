@@ -10,6 +10,7 @@ import { PERMISSIONS } from "@/lib/socialtrading/profile";
 import { followedAssets, limitStatus } from "@/lib/socialtrading/plans";
 import { gsap, useGSAP, rubiconMotion } from "../../_components/motion";
 import { compact, pct, timeAgo, usd } from "./format";
+import { assetGloss, useGloss } from "./gloss";
 import { useHub } from "./hub-provider";
 import { CryptoTradeCard } from "./crypto-trade-card";
 
@@ -57,6 +58,7 @@ export function useFollowRoom() {
 
 export function AssetCard({ asset, dense = false }: { asset: Asset; dense?: boolean }) {
   const { state, signal, send, busy } = useHub();
+  const gloss = useGloss();
   const router = useRouter();
   const follow = useFollowRoom();
   const watched = state.profile.interests.some(i => i.id === asset.id || i.symbol?.toUpperCase() === asset.symbol.toUpperCase());
@@ -64,7 +66,7 @@ export function AssetCard({ asset, dense = false }: { asset: Asset; dense?: bool
   function open() { signal("opened", asset); router.push(assetHref(asset)); }
   return (
     <article className={`hub-asset${dense ? " is-dense" : ""}${important ? " hub-priority-card" : ""}`} data-asset={asset.symbol}>
-      <button type="button" className="hub-asset-main" onClick={open} aria-label={`Open ${asset.name}`}>
+      <button type="button" className="hub-asset-main" onClick={open} aria-label={`Open ${asset.name}`} {...gloss(assetGloss(asset, state))}>
         <span className="hub-asset-id"><strong>{asset.symbol}</strong><span>{asset.name}</span></span>
         <Sparkline points={asset.chart.slice(-40)} />
         <span className="hub-asset-price"><span>{usd(asset.price)}</span><ChangeText value={asset.change} /></span>

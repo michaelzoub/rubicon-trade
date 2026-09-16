@@ -6,3 +6,49 @@
 .rubicon-purchase .hub-trade-status{background:#ffffff0b;border-color:#ffffff20;color:#c9d6e7}.rubicon-purchase .hub-notice{background:#ffffff08;border-color:#ffffff20;color:#c9d6e7}.rubicon-purchase .hub-buy-done strong{color:#e6f3ff}.rubicon-purchase .hub-buy-done span{color:#b6c9df}.rubicon-purchase .hub-buy-target{border-color:#ffffff18}.rubicon-purchase .hub-buy-search-box input{border:0;background:transparent}.ambient-panel footer{flex-wrap:wrap;gap:10px}
 .rubicon-purchase{--quiet:#a9b7c8;--line:#ffffff20;--surface-muted:#202833;--hub-blue:#b7d2f5;--hub-blue-ink:#14243a}.rubicon-purchase .hub-buy-target{background:#ffffff07;box-shadow:inset 0 0 0 1px #ffffff18}.rubicon-purchase .hub-buy-form{gap:14px}.rubicon-purchase .hub-buy-form .purchase-requirements{margin:0;line-height:1.7}.rubicon-purchase .hub-buy-amount{margin:12px 0}.rubicon-purchase .hub-buy .button.button-primary.hub-buy-submit,.rubicon-purchase .hub-buy .button.button-primary.hub-buy-submit:not(:disabled):hover{background:linear-gradient(#e2edfc,#aecbed);border-color:#d9eaff80;border-radius:12px;color:#132035;box-shadow:0 3px 0 #65809f,0 8px 24px #0005}.rubicon-purchase .hub-buy .hub-buy-result,.rubicon-purchase .hub-buy .hub-buy-result:hover{background:#ffffff06;box-shadow:inset 0 0 0 1px #ffffff20}.rubicon-purchase .hub-buy-result-price{grid-column:2/-1;display:flex;justify-content:space-between}.rubicon-purchase .hub-buy .hub-buy-amount-row input.socialtrading-input:focus-visible{outline:1px solid #b7d2f5;outline-offset:4px}.rubicon-purchase .hub-buy-results .hub-label{background:#253348;color:#d1e2fa}
 .purchase-backdrop{position:fixed;inset:0;z-index:1000;background:#0b1116aa;backdrop-filter:blur(12px)}.purchase-backdrop[hidden]{display:none}.purchase-backdrop .rubicon-purchase{z-index:1}
+
+/* The account card teaches itself once. On a person's first open every action
+   draws its own edge and says what it is; afterwards the edge and the label go
+   and the chevrons carry it, so the interaction is learned rather than
+   re-explained on every visit. */
+.hub-account-menu [data-discover] {
+  position: relative;
+  border-radius: 11px;
+  box-shadow: inset 0 0 0 calc(var(--discover, 0) * 1px) color-mix(in srgb, var(--id-accent, #6d93c6) calc(var(--discover, 0) * 70%), transparent);
+  background-color: color-mix(in srgb, var(--id-wash, #f3f8ff) calc(var(--discover, 0) * 80%), transparent);
+}
+.hub-discover-tag {
+  position: absolute;
+  right: 34px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 9px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #fff;
+  background: var(--id-accent, #6d93c6);
+  pointer-events: none;
+}
+.hub-account-foot .hub-discover-tag { right: 14px; }
+
+/* What stays afterwards: a hairline between actions and the chevron already
+   on each row. Quiet, permanent, enough. */
+.hub-account-body > * + * { border-top: 1px solid color-mix(in srgb, var(--id-accent, #dde5f0) 14%, transparent); }
+.hub-account-chevron, .hub-account-head-arrow { opacity: .45; transition: opacity .2s, transform .2s; }
+.hub-account-row:hover .hub-account-chevron, .hub-account-head:hover .hub-account-head-arrow { opacity: 1; transform: translateX(2px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-account-chevron, .hub-account-head-arrow { transition: none; }
+}
+
+/* Search, not a launcher. The shortcut still works; it is no longer printed on
+   the page, and the surface belongs to the same world as everything else. */
+.rubicon-command-trigger kbd { display: none; }
+.rubicon-command { background: linear-gradient(150deg, color-mix(in srgb, var(--id-wash, #f6f9ff) 90%, #fff), #fff 60%); border-color: color-mix(in srgb, var(--id-accent, #dbe3ed) 20%, transparent); border-radius: 26px; }
+.rubicon-command header { border-bottom-color: color-mix(in srgb, var(--id-accent, #e3eaf3) 14%, transparent); padding: 24px 24px 20px; }
+.rubicon-command header svg:first-child { color: color-mix(in srgb, var(--id-accent, #7b8ea6) 70%, transparent); }
+.rubicon-command footer { display: none; }
+.command-results > button:hover, .command-results > button:focus-visible { background: color-mix(in srgb, var(--id-wash, #eaf2ff) 70%, transparent); }
