@@ -3,18 +3,26 @@
 import { useRef, type CSSProperties, type ReactNode } from "react";
 import { Plus, Sparkles } from "lucide-react";
 import type { AgentConfig } from "@/lib/socialtrading/agents/config";
-import { AURA, AURA_UNFORMED, identityLine, type IdentityStage, type IdentityStats, type Milestone } from "@/lib/socialtrading/identity";
+import { identityLine, type IdentityStage, type IdentityStats, type Milestone } from "@/lib/socialtrading/identity";
 import type { ThemeId } from "@/lib/socialtrading/themes";
 import { gsap, useGSAP, rubiconMotion } from "../../_components/motion";
 import { ProfileAvatar } from "../profile-avatar";
 import { HubLink as Link } from "./navigation";
 import { IdentityAura } from "./identity-aura";
 
-/** The pastel a set of themes casts on a surface. First theme leads; a second one tints the far corner. */
-export function auraTint(themes: readonly ThemeId[] = []): CSSProperties {
-  const tones = themes.filter(id => id in AURA).map(id => AURA[id]);
-  const first = tones[0] ?? AURA_UNFORMED[0], second = tones[1] ?? tones[0] ?? AURA_UNFORMED[1];
-  return { "--aura-glow": first.glow, "--aura-deep": first.deep, "--aura-glow-2": second.glow } as CSSProperties;
+/**
+ * The atmosphere a surface sits in. Colour is no longer picked per theme — one
+ * accent is derived from the whole worldview high in the tree, and everything
+ * here is a shade of it, so nothing on this page can arrive at a hue the rest
+ * of the product does not wear. `shift` separates neighbours by depth alone.
+ */
+export function auraTint(shift = 0): CSSProperties {
+  const step = Math.min(1, Math.max(0, shift));
+  return {
+    "--aura-glow": `color-mix(in srgb, var(--id-accent-soft) ${Math.round(92 - step * 26)}%, #fff)`,
+    "--aura-glow-2": `color-mix(in srgb, var(--id-wash) ${Math.round(90 - step * 22)}%, #fff)`,
+    "--aura-deep": `color-mix(in srgb, var(--id-accent-deep) ${Math.round(88 - step * 20)}%, transparent)`,
+  } as CSSProperties;
 }
 
 /** A number that counts itself up the first time it is seen. */
@@ -59,7 +67,7 @@ export function IdentityHero({ name, seed, themes, inferred, thesis, line, signa
     return () => media.revert();
   }, { scope: root });
 
-  return <header ref={root} className="hub-identity" style={auraTint(themes)}>
+  return <header ref={root} className="hub-identity" style={auraTint()}>
     <span className="hub-identity-wash" aria-hidden="true" />
     <div className="hub-identity-orb">
       <IdentityAura seed={seed} themes={themes} inferred={inferred} progress={stage.progress} depth={stage.depth} energy={stats.energy}
@@ -86,7 +94,6 @@ export function IdentityProgress({ stage, step, earned, themes = [] }: { stage: 
   const count = earned.filter(m => m.earned).length;
   // Each medallion takes the next of the person's own theme colours, so the row
   // reads as their palette rather than eight identical beads.
-  const tones = (held: readonly ThemeId[], index: number): ThemeId[] => held.length ? [held[index % held.length]] : [];
   useGSAP(() => {
     const media = gsap.matchMedia();
     media.add("(prefers-reduced-motion: no-preference)", () => {
@@ -102,7 +109,7 @@ export function IdentityProgress({ stage, step, earned, themes = [] }: { stage: 
     </div>
     <ul className="hub-milestones" aria-label={`Milestones, ${count} of ${earned.length} reached`}>
       {earned.map((milestone, index) => <li key={milestone.id}>
-        <span className={`hub-milestone${milestone.earned ? " is-earned" : ""}`} data-milestone style={auraTint(tones(themes, index))}
+        <span className={`hub-milestone${milestone.earned ? " is-earned" : ""}`} data-milestone style={auraTint((index % 4) / 4)}
           data-tooltip={milestone.earned ? `${milestone.name} — reached` : milestone.note}
           tabIndex={0} role="img" aria-label={`${milestone.name}: ${milestone.earned ? "reached" : milestone.note}`}>
           <i aria-hidden="true" />
@@ -138,7 +145,7 @@ export function AgentRoster({ agents, activeId, themesOf, room, capNote }: {
         const themes = themesOf(agent);
         const named = themes.length ? identityLine(themes) : "";
         return <li key={agent.id} data-companion>
-          <Link href="/agents" className={`hub-companion${agent.enabled ? " is-awake" : ""}${agent.id === activeId ? " is-current" : ""}`} style={auraTint(themes)}>
+          <Link href="/agents" className={`hub-companion${agent.enabled ? " is-awake" : ""}${agent.id === activeId ? " is-current" : ""}`} style={auraTint()}>
             <span className="hub-companion-glow" aria-hidden="true" />
             <ProfileAvatar badge={agent.badge} seed={agent.id} themes={themes} className="hub-companion-badge" />
             <strong>{agent.name}</strong>

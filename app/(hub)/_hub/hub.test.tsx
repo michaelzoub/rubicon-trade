@@ -44,6 +44,9 @@ vi.mock("./client", async importOriginal => {
 import { Hub } from "./hub-shell";
 import { HubProvider } from "./hub-provider";
 import { HomeView } from "./home-view";
+import { knowledgeOf } from "@/lib/socialtrading/knowledge";
+import { identityDepth, identityStats } from "@/lib/socialtrading/identity";
+import { identityPalette } from "@/lib/socialtrading/identity-palette";
 import { GLOSS_ID } from "./gloss";
 import { TradeView } from "./trade-view";
 import { AssetGrid } from "./parts";
@@ -491,4 +494,40 @@ it("keeps the shortcut without printing it on the page", async () => {
   expect(trigger.getAttribute("aria-keyshortcuts")).toBe("Meta+k Control+k");
   expect(container.querySelector(".rubicon-command footer")).toBeNull();
   expect(container.textContent).not.toContain("Enter to open");
+});
+
+it("draws what the agent knows as a shape, with the gaps visible", async () => {
+  await render(PREVIEW_STATE, <ProfileView />, PREVIEW_ACCOUNT);
+  const stats = identityStats(PREVIEW_STATE, PREVIEW_STATE.agent ? [PREVIEW_STATE.agent] : []);
+  const areas = knowledgeOf(PREVIEW_STATE, stats, identityDepth(PREVIEW_STATE, stats));
+
+  const bodies = Array.from(container.querySelectorAll<HTMLElement>(".hub-knowledge-area"));
+  expect(bodies).toHaveLength(areas.length);
+  // Size is how much it holds; colour is how sure it is. Both are read, not printed.
+  expect(bodies[0].style.getPropertyValue("--known")).toBe(String(areas[0].known));
+  expect(bodies[0].style.getPropertyValue("--sure")).toBe(String(areas[0].confidence));
+  // A gap is marked as one, so the empty places are the visible thing.
+  expect(bodies.filter(b => b.dataset.gap).length).toBe(areas.filter(a => a.gap).length);
+  // Reaching for an area reveals it rather than the page stating it.
+  expect(bodies[0].getAttribute("aria-describedby")).toBe(GLOSS_ID);
+  expect(bodies.every(b => (b.getAttribute("aria-label") ?? "").length > 0)).toBe(true);
+
+  // Choosing an area goes to where that part of the person is actually edited.
+  expect(areas.every(area => container.querySelector(`[data-facet="${area.facet}"]`))).toBe(true);
+});
+
+it("wears one accent derived from the worldview, and none of its own", async () => {
+  await render(PREVIEW_STATE, <ProfileView />, PREVIEW_ACCOUNT);
+  const profile = container.querySelector<HTMLElement>(".hub-profile")!;
+  // Every tone on the page is a shade of the identity accent set high in the tree.
+  for (const token of ["--aura-glow", "--aura-glow-2", "--aura-deep"]) {
+    expect(profile.style.getPropertyValue(token)).toMatch(/var\(--id-(accent|accent-soft|accent-deep|wash)\)/);
+  }
+  const layout = container.querySelector<HTMLElement>(".hub-layout")!;
+  const accent = layout.style.getPropertyValue("--id-accent");
+  expect(accent).toMatch(/^#[0-9a-f]{6}$/);
+  // The accent follows what the person believes, not a colour chosen for them.
+  const palette = identityPalette("preview-user", PREVIEW_STATE.profile.themes, PREVIEW_STATE.inferred,
+    identityDepth(PREVIEW_STATE, identityStats(PREVIEW_STATE, PREVIEW_STATE.agent ? [PREVIEW_STATE.agent] : [])));
+  expect(accent).toBe(palette.accent);
 });

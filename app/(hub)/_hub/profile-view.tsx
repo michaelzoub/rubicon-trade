@@ -2,7 +2,7 @@
 
 import { Bell, Brain, Check, Compass, MessageSquare, Plus, Quote, ShieldCheck, SlidersHorizontal, Wallet, X, type LucideIcon } from "lucide-react";
 import { useHubRouter as useRouter } from "./navigation";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type CSSProperties } from "react";
 import { limitsError, PERMISSIONS, type InvestingProfile, type Permission } from "@/lib/socialtrading/profile";
 import { DEFAULT_PLAN, followedAssets, formatCredits, learnedAssets, limitStatus } from "@/lib/socialtrading/plans";
 import { isThemeId, THEMES, type ThemeId } from "@/lib/socialtrading/themes";
@@ -11,6 +11,9 @@ import { shortAddress } from "@/lib/crypto/chains";
 import { CharCount, LimitHint, UsagePill } from "./limits-ui";
 import { gsap, useGSAP, rubiconMotion } from "../../_components/motion";
 import { AgentRoster, auraTint, IdentityHero, IdentityProgress } from "./identity";
+import { knowledgeOf, knowledgePoint, type KnowledgeArea } from "@/lib/socialtrading/knowledge";
+import { useGloss } from "./gloss";
+import { prefersReducedMotion } from "../../_components/motion";
 import { learnedThemes } from "../profile-card";
 import { ThemeCards } from "../theme-cards";
 import { timeAgo } from "./format";
@@ -50,11 +53,47 @@ function ChipList({ items, onRemove, onAdd, placeholder, empty, full }: { items:
   </div>;
 }
 
+/**
+ * What the agent knows, as a shape rather than a list. Each area is a body
+ * sized by how much it holds and coloured by how sure it is, so the gaps are
+ * the visible thing. Reaching for one says what it knows; choosing one opens
+ * the part of the page where it is changed.
+ */
+function KnowledgeField({ areas }: { areas: KnowledgeArea[] }) {
+  const gloss = useGloss();
+  const field = useRef<HTMLDivElement>(null);
+
+  useGSAP(() => {
+    if (prefersReducedMotion()) return;
+    gsap.fromTo("[data-area]", { scale: .4, opacity: 0 }, { scale: 1, opacity: 1, duration: .9, stagger: .06, ease: "creature" });
+  }, { scope: field, dependencies: [areas.map(a => a.known.toFixed(2)).join()], revertOnUpdate: true });
+
+  const open = (facet: string) => {
+    const section = document.querySelector<HTMLElement>(`[data-facet="${CSS.escape(facet)}"]`);
+    section?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "center" });
+    section?.querySelector<HTMLButtonElement>(".hub-facet-toggle")?.focus();
+  };
+
+  return <div ref={field} className="hub-knowledge" data-agent-region="identity" aria-label="What your agent knows about you">
+    {areas.map((area, index) => {
+      const at = knowledgePoint(index, areas.length);
+      return <button key={area.id} type="button" className="hub-knowledge-area" data-area data-gap={area.gap ? "true" : undefined}
+        style={{ left: `${at.x}%`, top: `${at.y}%`, "--known": area.known, "--sure": area.confidence } as CSSProperties}
+        aria-label={`${area.name}. ${area.detail}.${area.gap ? ` ${area.gap}.` : ""}`}
+        onClick={() => open(area.facet)}
+        {...gloss({ title: area.name, lines: [{ label: "What it knows", value: area.detail }, ...(area.gap ? [{ label: "What would fill this", value: area.gap }] : [])] })}>
+        <span className="hub-knowledge-body" aria-hidden="true" />
+        <span className="hub-knowledge-name">{area.name}</span>
+      </button>;
+    })}
+  </div>;
+}
+
 /** One facet of the person: a heading, the current state in words, and the editor behind "Adjust". */
 function Facet({ icon: Icon, title, summary, action = "Adjust", tone = "", children }: { icon: LucideIcon; title: string; summary: ReactNode; action?: string; tone?: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const id = useId();
-  return <section className={`hub-facet${open ? " is-open" : ""} ${tone}`} aria-labelledby={`${id}-title`}>
+  return <section className={`hub-facet${open ? " is-open" : ""} ${tone}`} data-facet={title} aria-labelledby={`${id}-title`}>
     <div className="hub-facet-head">
       <span className="hub-facet-medallion" aria-hidden="true"><Icon size={16} strokeWidth={1.7} /></span>
       <div className="hub-facet-copy"><h2 id={`${id}-title`}>{title}</h2><div className="hub-facet-summary">{summary}</div></div>
@@ -118,7 +157,7 @@ export function ProfileView() {
   const zone = [money(profile.limits.perTrade) && `${money(profile.limits.perTrade)} a trade`, money(profile.limits.daily) && `${money(profile.limits.daily)} a day`, money(profile.limits.weekly) && `${money(profile.limits.weekly)} a week`].filter(Boolean).join(" · ");
 
   return (
-    <div className="hub-profile" style={auraTint(state.profile.themes)}>
+    <div className="hub-profile" style={auraTint()}>
       <IdentityHero name={name || "You"} seed={userId} themes={state.profile.themes} inferred={state.inferred}
         thesis={state.profile.thesis} line={identityLine(state.profile.themes, state.inferred)}
         signature={identitySignature(userId, stats.days)} stage={stage} stats={stats}>
@@ -128,6 +167,8 @@ export function ProfileView() {
           {leaning.length > 0 && <span className="hub-identity-mark is-quiet">{agentName} is leaning into {list(leaning, 2)}</span>}
         </div>
       </IdentityHero>
+
+      <KnowledgeField areas={knowledgeOf(state, stats, identityDepth(state, stats))} />
 
       <IdentityProgress stage={stage} step={nextStep(state, stats, limits.agents)} earned={milestones(state, stats)} themes={state.profile.themes} />
 

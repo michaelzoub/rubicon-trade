@@ -593,3 +593,60 @@
   .hub-plan-card:hover, .hub-plan-card.is-featured:hover { transform: none; }
   .hub-plan-tagline { min-height: 0; }
 }
+
+/* What the agent knows, as a shape. Size is how much it holds, colour is how
+   sure it is, and the dim, small areas are the gaps — which is the point. */
+.hub-knowledge {
+  position: relative;
+  height: min(420px, 52vw);
+  max-width: 560px;
+  margin: 8px auto 40px;
+  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--id-wash, #f3f8ff) 85%, transparent), transparent 68%);
+}
+.hub-knowledge-area {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.hub-knowledge-body {
+  display: block;
+  width: calc(18px + var(--known, 0) * 46px);
+  height: calc(18px + var(--known, 0) * 46px);
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 28%, #fff 5%,
+    color-mix(in srgb, var(--id-accent-soft, #dbe9fb) calc(40% + var(--sure, 0) * 45%), #fff) 30%,
+    color-mix(in srgb, var(--id-accent, #7aa3d6) calc(18% + var(--sure, 0) * 72%), #fff) 78%,
+    color-mix(in srgb, var(--id-accent-deep, #4a6b93) calc(30% + var(--sure, 0) * 70%), #fff));
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--id-accent-deep, #4a6b93) calc(6% + var(--sure, 0) * 20%), transparent);
+  transition: transform .3s cubic-bezier(.2, .8, .3, 1);
+}
+.hub-knowledge-name {
+  font-size: 10px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--id-accent-deep, #4a6b93) 74%, transparent);
+  opacity: calc(.42 + var(--known, 0) * .58);
+  white-space: nowrap;
+}
+/* A gap is drawn as an outline waiting to be filled, not as a failure. */
+.hub-knowledge-area[data-gap] .hub-knowledge-body {
+  background: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--id-accent, #9db6d6) 34%, transparent);
+}
+.hub-knowledge-area:hover .hub-knowledge-body,
+.hub-knowledge-area:focus-visible .hub-knowledge-body { transform: scale(1.14); }
+.hub-knowledge-area:hover .hub-knowledge-name,
+.hub-knowledge-area:focus-visible .hub-knowledge-name { opacity: 1; }
+.hub-knowledge-area:focus-visible { outline: 2px solid var(--id-accent, #4b94ed); outline-offset: 6px; border-radius: 12px; }
+
+@media (max-width: 640px) {
+  .hub-knowledge { height: 340px; }
+  .hub-knowledge-name { font-size: 9px; }
+}
+@media (prefers-reduced-motion: reduce) { .hub-knowledge-body { transition: none; } }
