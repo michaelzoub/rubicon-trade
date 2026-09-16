@@ -7,7 +7,7 @@ import { PREVIEW_STATE } from "@/app/preview/fixture";
 import { defaultAgent } from "@/lib/socialtrading/agents/config";
 import { HubProvider, useHub, type HubContextValue } from "./hub-provider";
 import { HubRequestError } from "./client";
-vi.mock("@privy-io/react-auth", () => ({ usePrivy: () => ({ getAccessToken: async () => "token" }) }));
+vi.mock("@privy-io/react-auth", () => ({ useSign7702Authorization: () => ({ signAuthorization: vi.fn() }), usePrivy: () => ({ getAccessToken: async () => "token" }) }));
 
 it("toggles scheduled runs across agents, surfaces the cap, and lands on a remaining agent after deletion", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);

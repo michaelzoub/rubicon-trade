@@ -5,7 +5,7 @@ import { announcePresence } from "@/lib/socialtrading/presence";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { ArrowUpRight, Search, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { CHAINS, DEFAULT_CHAIN, explorerAddress, shortAddress, type ChainId } from "@/lib/crypto/chains";
+import { CHAINS, DEFAULT_CHAIN, explorerAddress, feeReserveUsd, shortAddress, type ChainId } from "@/lib/crypto/chains";
 import type { TokenMatch } from "@/lib/crypto/search";
 import { useCelebration } from "../../_components/celebration";
 import { gsap, useGSAP, rubiconMotion } from "../../_components/motion";
@@ -29,7 +29,7 @@ export function BuyPanel({ preselected, title = "Buy", initialQuery = "", initia
   const { crypto, searchTokens, state } = useHub();
   const { wallets, ready } = useWallets();
   const { connectWallet } = usePrivy();
-  const [balance, setBalance] = useState<{ usdc: number; native: number } | null>(null);
+  const [balance, setBalance] = useState<{ usdc: number } | null>(null);
   const [balanceNote, setBalanceNote] = useState("Balance unavailable");
   const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<TokenMatch[] | null>(null);
@@ -74,27 +74,32 @@ export function BuyPanel({ preselected, title = "Buy", initialQuery = "", initia
   useEffect(() => {
     let live = true;
     setBalance(null); setBalanceNote('Checking balance…');
-    if (!selectedWallet || !net) { setBalanceNote('Connect a wallet to see your balance.'); return; }
-    const network = net;
+    if (!selectedWallet || !net || !target) { setBalanceNote('Connect a wallet to see your balance.'); return; }
+    const network = net, chainId = target.chainId;
     (async () => {
       try {
         const provider = await selectedWallet.getEthereumProvider();
-        const activeChain = await provider.request({ method: 'eth_chainId' });
-        if (Number(activeChain) !== target?.chainId) { if (live) setBalanceNote(`Balance unavailable until your wallet is on ${network.name}.`); return; }
-        const [usdc, native] = await Promise.all([
-          provider.request({ method: 'eth_call', params: [{ to: network.usdc, data: `0x70a08231${wallet.slice(2).padStart(64, '0')}` }, 'latest'] }),
-          provider.request({ method: 'eth_getBalance', params: [wallet, 'latest'] }),
-        ]);
-        if (typeof usdc !== 'string' || typeof native !== 'string') throw new Error('Unavailable');
-        if (live) setBalance({ usdc: Number(BigInt(usdc))/1e6, native: Number(BigInt(native))/1e18 });
-      } catch { if (live) setBalanceNote('Balance unavailable. Verify funds in your wallet before signing.'); }
+        // Read on the chain being bought on. An embedded wallet switches silently,
+        // so the balance no longer goes unknown just because the wallet sat
+        // elsewhere — and an unknown balance is what let a broke wallet reach the
+        // signing step and come back with a raw node error.
+        if (Number(await provider.request({ method: 'eth_chainId' })) !== chainId) await selectedWallet.switchChain(chainId);
+        // USDC is the whole story now: it buys the asset and pays the fee.
+        const usdc = await provider.request({ method: 'eth_call', params: [{ to: network.usdc, data: `0x70a08231${wallet.slice(2).padStart(64, '0')}` }, 'latest'] });
+        if (typeof usdc !== 'string') throw new Error('Unavailable');
+        if (live) setBalance({ usdc: Number(BigInt(usdc))/1e6 });
+      } catch { if (live) setBalanceNote(`Balance unavailable on ${network.name}. Check your wallet before signing.`); }
     })();
     return () => { live = false; };
     // Refresh for the selected wallet/network, not unstable wallet hook objects.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallet, target?.chainId, selectedWallet?.chainId]);
 
-  const valid = (!balance || (balance.usdc >= Number(amount) && balance.native > 0)) && !!target && !!net && USD.test(amount) && Number(amount) > 0 && /^0x[0-9a-fA-F]{40}$/.test(wallet);
+  const reserve = target ? feeReserveUsd(target.chainId) : 0;
+  const shortfall = balance && USD.test(amount) && balance.usdc < Number(amount) + reserve
+    ? `You have ${balance.usdc.toFixed(2)} USDC. This buy needs ${(Number(amount) + reserve).toFixed(2)} including the network fee.`
+    : "";
+  const valid = !shortfall && !!target && !!net && USD.test(amount) && Number(amount) > 0 && /^0x[0-9a-fA-F]{40}$/.test(wallet);
   const estimate = picked?.priceUsd && USD.test(amount) ? Number(amount) / picked.priceUsd : null;
 
   /** The purchase is complete when the chain says so. That is the moment worth a burst. */
@@ -176,13 +181,14 @@ export function BuyPanel({ preselected, title = "Buy", initialQuery = "", initia
         {estimate !== null && <p className="hub-buy-estimate" aria-live="polite">≈ {estimate.toLocaleString("en-US", { maximumFractionDigits: estimate < 1 ? 6 : 4 })} {target.symbol.toUpperCase()} at today’s price</p>}
       </div>
       {wallets.length > 0 && <label className="hub-buy-wallet">From wallet<select className="socialtrading-input mono" value={wallet} onChange={e => setWallet(e.target.value)}>{wallets.map(w => <option key={w.address} value={w.address.toLowerCase()}>{shortAddress(w.address)} · {w.walletClientType === "privy" ? "embedded" : w.walletClientType}</option>)}</select></label>}
-      {ready && wallets.length === 0 && <p className="hub-notice"><button type="button" className="hub-chip-button" onClick={() => connectWallet()}>Connect wallet</button> Connect or create a wallet in your profile first. You’ll need USDC on {net.name} plus a little {net.nativeSymbol} for gas.</p>}
-      <p className="purchase-requirements" role="status">{balance ? `Available: ${balance.usdc.toLocaleString()} USDC · ${balance.native.toLocaleString(undefined, { maximumFractionDigits: 6 })} ${net.nativeSymbol}` : balanceNote}</p>
-      <p className="purchase-requirements">Required: {USD.test(amount) ? amount : "…"} USDC on {net.name}, plus {net.nativeSymbol} for network fees. Maximum slippage: 0.5%.</p>
+      {ready && wallets.length === 0 && <p className="hub-notice"><button type="button" className="hub-chip-button" onClick={() => connectWallet()}>Connect wallet</button> Connect or create a wallet in your profile first. You’ll need USDC on {net.name} — no {net.nativeSymbol} required.</p>}
+      <p className="purchase-requirements" role="status">{balance ? `Available: ${balance.usdc.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC on ${net.name}` : balanceNote}</p>
+      <p className="purchase-requirements">Required: {USD.test(amount) ? amount : "…"} USDC on {net.name}. The network fee comes out of your USDC too, so you never need {net.nativeSymbol}. Maximum slippage: 0.5%.</p>
+      {shortfall && <p className="hub-notice" role="status">{shortfall}</p>}
       {error && <p className="hub-error" role="alert">{error}</p>}
       <div className="hub-trade-actions hub-buy-actions">
         <button type="submit" className="button button-primary hub-buy-submit" disabled={!valid || busy || !wallets.length}>{busy ? "Getting your quote…" : `Review ${USD.test(amount) ? usd(Number(amount), 2) : ""} of ${target.symbol.toUpperCase()}`}</button>
-        <span className="socialtrading-caption">Pays {USD.test(amount) ? amount : "…"} USDC on {net.name}. You see the exact quote, then sign. Gas is extra.</span>
+        <span className="socialtrading-caption">Pays {USD.test(amount) ? amount : "…"} USDC on {net.name}. You see the exact quote, then sign once.</span>
       </div>
     </form>}
 

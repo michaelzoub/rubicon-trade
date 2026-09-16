@@ -1,7 +1,7 @@
 import type { InvestingProfile } from "@/lib/socialtrading/profile";
 import type { AgentConfig } from "@/lib/socialtrading/agents/config";
 import type { Asset, ChatEvent, HubState, SignalAction } from "@/lib/socialtrading/types";
-import type { Transaction } from "@/lib/crypto/types";
+import type { SwapBatch, Transaction } from "@/lib/crypto/types";
 import type { TokenMatch } from "@/lib/crypto/search";
 import type { RunOutcome, RunRecord } from "@/lib/socialtrading/runtime/types";
 import type { AccountSummary, LimitKey } from "@/lib/socialtrading/plans";
@@ -40,8 +40,8 @@ export type StateAction =
 export type CryptoAction =
   | { action: "propose"; chainId: number; wallet: string; tokenIn: string; tokenOut: string; amount: string; slippageBps?: number; note?: string }
   | { action: "prepare" | "reject" | "status"; tradeId: string }
-  | { action: "submitted"; tradeId: string; hash: string };
-export type CryptoResult = { state: HubState; tradeId?: string; transaction?: Transaction; step?: "approval" | "swap"; expiresAt?: number };
+  | { action: "submitted"; tradeId: string; hash: string; userOpHash?: string };
+export type CryptoResult = { state: HubState; tradeId?: string; batch?: SwapBatch; transaction?: Transaction; step?: "approval" | "swap"; expiresAt?: number };
 
 export const hubApi = {
   wallets: (token: Token) => request<{ wallets: string[] }>(token, "/api/trade/crypto", { cache: "no-store" }),

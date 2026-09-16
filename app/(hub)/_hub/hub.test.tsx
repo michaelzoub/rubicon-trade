@@ -9,7 +9,14 @@ import { newChat } from "@/lib/socialtrading/chats";
 
 const events = vi.hoisted(() => ({ script: [] as ChatEvent[], posted: [] as unknown[] }));
 const privy = vi.hoisted(() => ({ sendTransaction: vi.fn(), linkWallet: vi.fn(), connectWallet: vi.fn(), createWallet: vi.fn(), switchChain: vi.fn(), logout: vi.fn() }));
+// Signing is exercised against viem in lib/crypto/aa.test.ts; here we only care
+// that the card hands the bundler exactly the batch the server authorized.
+const gasless = vi.hoisted(() => ({ sendSwapBatch: vi.fn() }));
+vi.mock("@/lib/crypto/gasless", () => ({ sendSwapBatch: gasless.sendSwapBatch }));
+const BATCH = { chainId: 8453, sender: "0x1111111111111111111111111111111111111111", paymaster: "circle-usdc",
+  calls: [{ to: "0x2222222222222222222222222222222222222222", value: "0", data: "0xabcdef" }], callData: "0xb61d27f6" };
 vi.mock("@privy-io/react-auth", () => ({
+  useSign7702Authorization: () => ({ signAuthorization: vi.fn(async () => ({ r: "0x1", s: "0x2", yParity: 0, address: "0x0", chainId: 8453, nonce: 0 })) }),
   usePrivy: () => ({ getAccessToken: async () => "token", ready: true, authenticated: true, user: { id: "preview-user", linkedAccounts: [{ type: "wallet", chainType: "ethereum", address: "0x1111111111111111111111111111111111111111", walletClientType: "privy" }] }, linkWallet: privy.linkWallet, connectWallet: privy.connectWallet, createWallet: privy.createWallet, logout: privy.logout }),
   useWallets: () => ({ ready: true, wallets: [{ address: "0x1111111111111111111111111111111111111111", walletClientType: "privy", switchChain: privy.switchChain, getEthereumProvider: async () => ({ request: privy.sendTransaction }) }] }),
   useLoginWithEmail: () => ({ sendCode: vi.fn(), loginWithCode: vi.fn(), state: { status: "initial" } }),
@@ -26,7 +33,7 @@ vi.mock("./client", async importOriginal => {
       searchTokens: async (_t: unknown, q: string) => ({ tokens: PREVIEW_TOKENS.filter(t => t.symbol.toLowerCase().includes(q.toLowerCase())) }),
       crypto: async (_t: unknown, _r: number, body: Record<string, unknown>) => {
         events.posted.push(body);
-        if (body.action === "prepare") return { state: { ...PREVIEW_STATE, revision: 13 }, transaction: { chainId: 8453, from: PREVIEW_WALLET, to: "0x2222222222222222222222222222222222222222", data: "0xabcdef", value: "0" }, step: "swap", expiresAt: Date.now() + 60_000 };
+        if (body.action === "prepare") return { state: { ...PREVIEW_STATE, revision: 13 }, batch: BATCH, step: "swap", expiresAt: Date.now() + 60_000 };
         if (body.action === "propose") return { state: { ...PREVIEW_STATE, revision: 14 }, tradeId: "t2" };
         return { state: { ...PREVIEW_STATE, revision: 15 } };
       },
@@ -137,7 +144,7 @@ it("adds the Rubicon-blue priority treatment only to high-importance cards", asy
 });
 
 it("shows an onchain swap in human units and walks prepare → sign → submitted → status", async () => {
-  privy.sendTransaction.mockResolvedValue(`0x${"ab".repeat(32)}`);
+  gasless.sendSwapBatch.mockResolvedValue({ userOpHash: `0x${"cd".repeat(32)}`, hash: `0x${"ab".repeat(32)}` });
   await render(PREVIEW_STATE);
   const card = Array.from(container.querySelectorAll(".hub-trade--crypto")).at(-1)!;
   expect(card.textContent).toContain("Swap · Uniswap on Base");
@@ -150,10 +157,30 @@ it("shows an onchain swap in human units and walks prepare → sign → submitte
   await act(async () => sign.click());
   await act(async () => { await new Promise(r => setTimeout(r, 10)); });
   expect(privy.switchChain).toHaveBeenCalledWith(8453);
-  expect(privy.sendTransaction).toHaveBeenCalledWith(expect.objectContaining({ method: "eth_sendTransaction", params: [expect.objectContaining({ to: "0x2222222222222222222222222222222222222222", chainId: "0x2105" })] }));
+  // The batch goes to the bundler untouched, and no raw transaction is ever sent
+  // from the wallet — that path needed ETH the embedded wallet does not hold.
+  expect(gasless.sendSwapBatch).toHaveBeenCalledWith(expect.objectContaining({ batch: BATCH }));
+  expect(privy.sendTransaction).not.toHaveBeenCalledWith(expect.objectContaining({ method: "eth_sendTransaction" }));
   const actions = events.posted.filter((p): p is { action: string } => typeof (p as { action?: unknown }).action === "string").map(p => p.action);
   expect(actions).toEqual(["prepare", "submitted", "status"]);
-  expect(events.posted).toContainEqual(expect.objectContaining({ action: "submitted", tradeId: "t2", hash: `0x${"ab".repeat(32)}` }));
+  expect(events.posted).toContainEqual(expect.objectContaining({ action: "submitted", tradeId: "t2", hash: `0x${"ab".repeat(32)}`, userOpHash: `0x${"cd".repeat(32)}` }));
+});
+
+it("tells the buyer what is missing instead of letting a short balance reach the wallet", async () => {
+  privy.sendTransaction.mockImplementation(async ({ method }: { method: string }) =>
+    method === "eth_chainId" ? "0x2105" : method === "eth_call" ? "0x2faf080" : "0x0"); // 50 USDC, no ETH
+  await render(PREVIEW_STATE, <TradeView />);
+  await setValue(container.querySelector("#buy-search") as HTMLInputElement, "bnvda");
+  await act(async () => { await new Promise(r => setTimeout(r, 350)); });
+  await act(async () => (Array.from(container.querySelectorAll(".hub-buy-result")).find(b => b.textContent?.includes("BNVDA")) as HTMLElement).click());
+  await setValue(container.querySelector("#buy-amount") as HTMLInputElement, "100");
+  await act(async () => { await new Promise(r => setTimeout(r, 10)); });
+  expect(container.textContent).toContain("You have 50.00 USDC");
+  expect((container.querySelector(".hub-buy-submit") as HTMLButtonElement).disabled).toBe(true);
+  // Having no ETH is no longer a reason to stop: the fee comes out of USDC.
+  await setValue(container.querySelector("#buy-amount") as HTMLInputElement, "25");
+  await act(async () => { await new Promise(r => setTimeout(r, 10)); });
+  expect((container.querySelector(".hub-buy-submit") as HTMLButtonElement).disabled).toBe(false);
 });
 
 it("lets the user buy a tokenized stock with dollars from the Trade page", async () => {

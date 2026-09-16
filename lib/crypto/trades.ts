@@ -2,6 +2,7 @@ import "server-only";
 import { cryptoServices } from "./services";
 import { ownedWallet } from "./wallet";
 import { address, chain, CHAINS, NATIVE, parseUnits, swapRequest } from "./chains";
+import { buildSwapBatch, gaslessChain } from "./batch";
 import { tradePolicy } from "@/lib/socialtrading/policy";
 import { recordEvent } from "@/lib/socialtrading/personalization";
 import type { HubState, TradeInitiator, TradeIntent } from "@/lib/socialtrading/types";
@@ -30,7 +31,7 @@ export async function proposeSwap(state: HubState, userId: string, input: SwapRe
   ]);
   const policy = tradePolicy(state.profile, value, state.trades, false, Date.now(), initiator), at = new Date().toISOString();
   const status: TradeIntent["status"] = policy.allowed ? "reserved" : policy.needsApproval ? "approval_required" : "blocked";
-  const detail = status === "blocked" ? `Blocked: ${policy.reason}` : initiator === "user" ? "Review and sign with your wallet when you’re ready. Network fees are additional." : status === "reserved" ? "Within your agent’s limits and reserved against them. It still settles only when you sign in your wallet." : "Waiting for you to review and sign in your wallet. Network fees are additional.";
+  const detail = status === "blocked" ? `Blocked: ${policy.reason}` : initiator === "user" ? (gaslessChain(request.chainId) ? "Review and sign with your wallet when you’re ready. The network fee comes out of your USDC." : "Review and sign with your wallet when you’re ready. Network fees are additional.") : status === "reserved" ? "Within your agent’s limits and reserved against them. It still settles only when you sign in your wallet." : "Waiting for you to review and sign in your wallet. Network fees are additional.";
   const trade: TradeIntent = { id: crypto.randomUUID(), initiator, asset: { id: `${request.chainId}:${request.tokenOut}`, symbol: tokenOut.symbol.toUpperCase(), name: `${tokenOut.symbol.toUpperCase()} on ${chain(request.chainId).name}`, kind: "crypto" }, side: "buy", value, estimatedPrice: null, estimatedQuantity: null, resultingExposure: null, createdAt: at, reasoning: reasoning.slice(0, 600), policy: { ...policy, at }, status,
     crypto: { request, outputAmount: quote.outputAmount, minimumOutput: quote.minimumOutput, expiresAt: quote.expiresAt, phase: "ready", detail, display: { tokenIn, tokenOut } } };
   state.trades.push(trade);
@@ -69,14 +70,19 @@ export async function prepareSwap(state: HubState, userId: string, trade: TradeI
   if (!policy.allowed) throw new Error(policy.reason);
   const quote = await cryptoServices.execution.quote(c.request);
   if (BigInt(quote.minimumOutput) < BigInt(c.minimumOutput)) throw new Error("The quote moved below your minimum output. Ask for a new proposal.");
-  const approval = await cryptoServices.execution.approval(c.request);
-  const transaction = approval ?? await cryptoServices.execution.swap(quote);
+  const transaction = await cryptoServices.execution.swap(quote);
+  // One signature covers the whole trade: any Permit2 allowance it still needs,
+  // then the swap that spends it. The user never signs an approval on its own and
+  // never pays for one separately.
+  const batch = await buildSwapBatch(c.request, transaction);
   const at = new Date().toISOString();
   trade.approval = { decision: "approved", at }; trade.policy = { ...policy, at };
   trade.status = "unknown"; trade.createdAt = at;
-  c.phase = "issued"; c.step = approval ? "approval" : "swap"; c.transaction = transaction; c.hash = undefined;
+  c.phase = "issued"; c.step = "swap"; c.transaction = transaction; c.batch = batch; c.hash = undefined; c.userOpHash = undefined;
   c.expiresAt = quote.expiresAt;
-  c.detail = `${approval ? "Token approval" : "Swap"} sent to your wallet for signature. Until the chain confirms it, its reservation stays active.`;
-  recordEvent(state, "trade", `Uniswap ${c.step} sent to your wallet for confirmation`, undefined, trade.id);
-  return transaction;
+  c.detail = batch.paymaster
+    ? "Waiting for your signature. The network fee comes out of your USDC, so you don’t need ETH."
+    : "Swap sent to your wallet for signature. Until the chain confirms it, its reservation stays active.";
+  recordEvent(state, "trade", "Uniswap swap sent to your wallet for confirmation", undefined, trade.id);
+  return batch;
 }

@@ -56,12 +56,19 @@ describe("Uniswap execution adapter", () => {
   it.each([{ amount: "1.5" }, { amount: "1e18" }, { amount: "0" }, { slippageBps: 101 }, { chainId: 999 }, { tokenOut: input }])("rejects unsafe request %j", patch => {
     expect(() => swapRequest({ ...req, ...patch })).toThrow();
   });
-  it("uses exact-input classic routing, consistent direct-approval headers, and no quote caching", async () => {
+  it("uses exact-input classic routing, leaves Permit2 enabled, and does not cache quotes", async () => {
     vi.stubEnv("UNISWAP_API_KEY", "test-key"); const fetcher = vi.fn().mockImplementation(async () => Response.json(raw()));
     const api = createUniswap(createTransport(fetcher)); const quote = await api.quote(req); await api.quote(req);
     expect(quote.minimumOutput).toBe("1990000"); expect(fetcher).toHaveBeenCalledTimes(2);
-    const init = fetcher.mock.calls[0][1]; expect(init.headers["x-permit2-disabled"]).toBe("true");
+    // Disabling Permit2 made the gateway answer NoRouteFoundError for every pair
+    // and size we tried, so the header must never come back.
+    const init = fetcher.mock.calls[0][1]; expect(init.headers["x-permit2-disabled"]).toBeUndefined();
     expect(JSON.parse(init.body)).toMatchObject({ type: "EXACT_INPUT", protocols: ["V2", "V3"], recipient: wallet, slippageTolerance: .5 });
+  });
+  it("accepts the Permit2 data the gateway now returns on every classic quote", async () => {
+    vi.stubEnv("UNISWAP_API_KEY", "test-key");
+    const withPermit = { ...raw(), permitData: { domain: { name: "Permit2" }, types: {}, values: {} } };
+    await expect(createUniswap(createTransport(vi.fn().mockResolvedValue(Response.json(withPermit)))).quote(req)).resolves.toMatchObject({ minimumOutput: "1990000" });
   });
   it.each(["routing", "recipient", "amount", "slippage"])("rejects mismatched %s", async field => {
     vi.stubEnv("UNISWAP_API_KEY", "test-key"); const response = raw();
@@ -71,19 +78,19 @@ describe("Uniswap execution adapter", () => {
     if (field === "slippage") response.quote.slippage = 5;
     await expect(createUniswap(createTransport(vi.fn().mockResolvedValue(Response.json(response)))).quote(req)).rejects.toThrow(/unsupported|mismatched/);
   });
-  it("caps approval to the exact amount and handles a required zero reset first", async () => {
-    vi.stubEnv("UNISWAP_API_KEY", "test-key");
-    const tx = { chainId: 1, from: wallet, to: input, value: "0", data: `0x095ea7b3${output.slice(2).padStart(64, "0")}${"f".repeat(64)}` };
-    const api = (cancel: typeof tx | null) => createUniswap(createTransport(vi.fn().mockResolvedValue(Response.json({ approval: tx, cancel }))));
-    expect((await api(null).approval(req))?.data.slice(74)).toBe(BigInt(req.amount).toString(16).padStart(64, "0"));
-    expect((await api(tx).approval(req))?.data.slice(74)).toBe("0".repeat(64));
-  });
   it("rejects expired quotes and unexpected native spend", async () => {
     vi.stubEnv("UNISWAP_API_KEY", "test-key");
     const fetcher = vi.fn().mockResolvedValueOnce(Response.json(raw())).mockResolvedValueOnce(Response.json({ swap: { chainId: 1, from: wallet, to: output, data: "0xaabb", value: "1" } }));
     const api = createUniswap(createTransport(fetcher)); const q = await api.quote(req);
     await expect(api.swap({ ...q, expiresAt: 0 })).rejects.toThrow(/expired/);
     await expect(api.swap(q)).rejects.toThrow(/native/);
+  });
+  it("does not ask the gateway to simulate, because the Permit2 allowance is still in the same batch", async () => {
+    vi.stubEnv("UNISWAP_API_KEY", "test-key");
+    const fetcher = vi.fn().mockResolvedValueOnce(Response.json(raw())).mockResolvedValueOnce(Response.json({ swap: { chainId: 1, from: wallet, to: output, data: "0xaabb", value: "0" } }));
+    const api = createUniswap(createTransport(fetcher));
+    await api.swap(await api.quote(req));
+    expect(JSON.parse(fetcher.mock.calls[1][1].body).simulateTransaction).toBe(false);
   });
 });
 describe("unit conversion", () => {

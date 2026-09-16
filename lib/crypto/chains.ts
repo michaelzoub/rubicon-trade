@@ -11,6 +11,11 @@ export type ChainId = keyof typeof CHAINS;
 export const CHAIN_IDS = Object.keys(CHAINS).map(Number) as ChainId[];
 export const DEFAULT_CHAIN: ChainId = 8453;
 export const NATIVE = "0x0000000000000000000000000000000000000000";
+/** USDC kept back to cover the network fee the paymaster charges, in dollars.
+ * Mainnet gas is worth real money; the rollups are worth fractions of a cent.
+ * Unspent allowance is refunded, so this only has to be generous enough to let
+ * the operation validate. */
+export const feeReserveUsd = (chainId: number) => chainId === 1 ? 8 : chainId === 137 ? 0.1 : 0.25;
 export function chain(id: number) { const c = CHAINS[id as ChainId]; if (!c) throw new Error("Unsupported EVM chain. Choose Ethereum, Base, Arbitrum, Optimism, or Polygon."); return c; }
 export function address(value: unknown): string { if (typeof value !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(value)) throw new Error("Use an exact EVM token or wallet address."); return value.toLowerCase(); }
 export function tokenRef(value: TokenRef): TokenRef { chain(value.chainId); return { chainId: value.chainId, address: address(value.address) }; }

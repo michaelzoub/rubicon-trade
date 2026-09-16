@@ -7,6 +7,7 @@ import type { HubState } from "@/lib/socialtrading/types";
 import { PREVIEW_ACCOUNT, PREVIEW_STATE, PREVIEW_TOKENS, PREVIEW_WALLET } from "../../preview/fixture";
 
 vi.mock("@privy-io/react-auth", () => ({
+  useSign7702Authorization: () => ({ signAuthorization: vi.fn(async () => ({ r: "0x1", s: "0x2", yParity: 0, address: "0x0", chainId: 8453, nonce: 0 })) }),
   usePrivy: () => ({ getAccessToken: async () => "token", ready: true, authenticated: true, user: { id: "preview-user", linkedAccounts: [] }, connectWallet: vi.fn() }),
   useWallets: () => ({ ready: true, wallets: [{ address: PREVIEW_WALLET, walletClientType: "privy", switchChain: vi.fn(), getEthereumProvider: async () => ({ request: vi.fn() }) }] }),
 }));

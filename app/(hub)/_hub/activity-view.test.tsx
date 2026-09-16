@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { PREVIEW_ACCOUNT, PREVIEW_STATE } from "../../preview/fixture";
 
 vi.mock("@privy-io/react-auth", () => ({
+  useSign7702Authorization: () => ({ signAuthorization: vi.fn(async () => ({ r: "0x1", s: "0x2", yParity: 0, address: "0x0", chainId: 8453, nonce: 0 })) }),
   usePrivy: () => ({ getAccessToken: async () => "token", ready: true, authenticated: true, user: { id: "preview-user", linkedAccounts: [] } }),
   useWallets: () => ({ ready: true, wallets: [] }),
 }));

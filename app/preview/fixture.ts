@@ -58,7 +58,7 @@ const messages: Message[] = [
   ] },
   { id: "m9", role: "user", at: ago(1.5), parts: [{ type: "text", text: "and put $25 of USDC into ETH on Base from my wallet" }] },
   { id: "m10", role: "assistant", at: ago(1), status: "done", parts: [
-    { type: "text", text: "Here’s the swap, quoted on Uniswap. It settles from your own wallet, so review it and sign when you’re ready. Gas is extra." },
+    { type: "text", text: "Here’s the swap, quoted on Uniswap. It settles from your own wallet, so review it and sign when you’re ready. The network fee comes out of your USDC." },
     { type: "trade", tradeId: "t2" },
   ] },
 ];

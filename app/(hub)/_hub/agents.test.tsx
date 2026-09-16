@@ -8,7 +8,7 @@ import { defaultAgent } from "@/lib/socialtrading/agents/config";
 import { HubProvider, useHub, type HubContextValue } from "./hub-provider";
 import type { HubState } from "@/lib/socialtrading/types";
 import { newChat } from "@/lib/socialtrading/chats";
-vi.mock("@privy-io/react-auth", () => ({ usePrivy: () => ({ getAccessToken: async () => "token" }) }));
+vi.mock("@privy-io/react-auth", () => ({ useSign7702Authorization: () => ({ signAuthorization: vi.fn() }), usePrivy: () => ({ getAccessToken: async () => "token" }) }));
 it("clears drafts on switching and ignores a late learning response from the old agent", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   let hub!: HubContextValue;

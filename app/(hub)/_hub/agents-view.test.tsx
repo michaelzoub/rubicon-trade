@@ -10,7 +10,7 @@ import { HubProvider } from "./hub-provider";
 import { AgentsView } from "./agents-view";
 // Privy hands back one stable token getter; a fresh function per render would make every provider callback churn.
 const privy = vi.hoisted(() => ({ getAccessToken: async () => "token" }));
-vi.mock("@privy-io/react-auth", () => ({ usePrivy: () => privy }));
+vi.mock("@privy-io/react-auth", () => ({ useSign7702Authorization: () => ({ signAuthorization: vi.fn() }), usePrivy: () => privy }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => "/agents" }));
 
 let container: HTMLDivElement, root: Root;

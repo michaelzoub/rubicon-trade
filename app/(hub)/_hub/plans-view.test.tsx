@@ -10,7 +10,7 @@ import { HubProvider } from "./hub-provider";
 import { PlansView } from "./plans-view";
 
 const privy = vi.hoisted(() => ({ getAccessToken: async () => "token" }));
-vi.mock("@privy-io/react-auth", () => ({ usePrivy: () => privy }));
+vi.mock("@privy-io/react-auth", () => ({ useSign7702Authorization: () => ({ signAuthorization: vi.fn() }), usePrivy: () => privy }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => "/plans" }));
 
 let container: HTMLDivElement, root: Root;

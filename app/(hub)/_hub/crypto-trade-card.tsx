@@ -1,9 +1,10 @@
 "use client";
-import { usePrivy, useWallets } from "@privy-io/react-auth";
+import { usePrivy, useSign7702Authorization, useWallets } from "@privy-io/react-auth";
 import { ArrowUpRight, ChevronDown } from "lucide-react";
 import { useRef, useState } from "react";
 import type { TradeIntent } from "@/lib/socialtrading/types";
 import { chain, explorerAddress, explorerTx, formatUnits, shortAddress } from "@/lib/crypto/chains";
+import { sendSwapBatch, type SignAuthorization, type WalletProvider } from "@/lib/crypto/gasless";
 import { timeAgo, usd } from "./format";
 import { useHub } from "./hub-provider";
 
@@ -23,6 +24,7 @@ export function cryptoStatus(trade: TradeIntent): string {
 
 export function CryptoTradeCard({ trade, expanded = false }: { trade: TradeIntent; expanded?: boolean }) {
   const { state, crypto, busy: chatting } = useHub(), { connectWallet } = usePrivy(), { wallets } = useWallets();
+  const { signAuthorization } = useSign7702Authorization();
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [recovery, setRecovery] = useState(""), [raw, setRaw] = useState(false);
   const lock = useRef(false), c = trade.crypto!, r = c.request, net = chain(r.chainId);
   const tokenIn = c.display?.tokenIn ?? { symbol: shortAddress(r.tokenIn), decimals: null }, tokenOut = c.display?.tokenOut ?? { symbol: shortAddress(r.tokenOut), decimals: null };
@@ -36,14 +38,16 @@ export function CryptoTradeCard({ trade, expanded = false }: { trade: TradeInten
       if (action === "prepare") {
         if (!wallet) throw new Error(`Connect the wallet ${shortAddress(r.wallet)} to sign this swap.`);
         await wallet.switchChain(r.chainId);
-        const provider = await wallet.getEthereumProvider();
-        const result = await crypto({ action: "prepare", tradeId: trade.id }), tx = result.transaction!;
+        const provider = await wallet.getEthereumProvider() as WalletProvider;
+        const result = await crypto({ action: "prepare", tradeId: trade.id }), batch = result.batch!;
         if (Date.now() >= result.expiresAt!) throw new Error("The quote expired before signing. Do not resend; check your wallet, then ask for a fresh proposal.");
-        const hash = await provider.request({ method: "eth_sendTransaction", params: [{ from: tx.from, to: tx.to, data: tx.data, value: `0x${BigInt(tx.value).toString(16)}`, chainId: `0x${tx.chainId.toString(16)}` }] });
-        if (typeof hash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new Error("Your wallet returned no transaction hash. Check the wallet before retrying.");
+        // The batch goes out as one user operation: allowances and the swap
+        // together, with the network fee taken from USDC rather than ETH.
+        const { userOpHash, hash } = await sendSwapBatch({ batch, provider, signAuthorization: signAuthorization as SignAuthorization });
+        if (!/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new Error("Your wallet returned no transaction hash. Check the wallet before retrying.");
         setRecovery(hash);
         try { localStorage.setItem(`rubicon:swap:${state.profile.userId}:${trade.id}:${result.step}`, hash); } catch { /* Recovery stays visible in this card. */ }
-        await crypto({ action: "submitted", tradeId: trade.id, hash }); await crypto({ action: "status", tradeId: trade.id });
+        await crypto({ action: "submitted", tradeId: trade.id, hash, userOpHash }); await crypto({ action: "status", tradeId: trade.id });
       } else if (action === "recover") {
         let hash = recovery.trim(); try { hash ||= localStorage.getItem(storageKey) ?? ""; } catch { /* no storage */ }
         if (!/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new Error("Paste the 66-character transaction hash from your wallet.");
@@ -66,7 +70,7 @@ export function CryptoTradeCard({ trade, expanded = false }: { trade: TradeInten
       <span className="hub-trade-line-out">{formatUnits(r.amount, tokenIn.decimals)} {tokenIn.symbol.toUpperCase()}</span>
       <span className="hub-trade-line-arrow" aria-hidden="true">→</span>
       <span className="hub-trade-line-in">{formatUnits(c.outputAmount, tokenOut.decimals)} {tokenOut.symbol.toUpperCase()}</span>
-      <small>≈ {usd(trade.value, 2)} + gas</small>
+      <small>≈ {usd(trade.value, 2)} · fee from your USDC</small>
     </p>
     {trade.reasoning && <p className="hub-trade-reasoning">{trade.reasoning}</p>}
     <p className="hub-trade-policy">{trade.policy.reason}</p>
@@ -92,7 +96,7 @@ export function CryptoTradeCard({ trade, expanded = false }: { trade: TradeInten
     {error && <p className="hub-error" role="alert">{error}</p>}
     {open && <div className="hub-trade-actions">
       {wallet
-        ? <button type="button" disabled={busy || chatting} className="button button-primary" onClick={() => void act("prepare")}>{busy ? "Opening wallet…" : c.step === "approval" ? "Sign the swap" : "Review & sign in wallet"}</button>
+        ? <button type="button" disabled={busy || chatting} className="button button-primary" onClick={() => void act("prepare")}>{busy ? "Confirming…" : "Review & sign in wallet"}</button>
         : <button type="button" disabled={busy} className="button button-primary" onClick={() => connectWallet()}>Connect {shortAddress(r.wallet)}</button>}
       <button type="button" disabled={busy} className="button button-secondary" onClick={() => void act("reject")}>Decline</button>
     </div>}

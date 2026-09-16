@@ -8,7 +8,7 @@ import { profileKey } from "../../lib/socialtrading/profile";
 const session = vi.hoisted(() => ({ ready: true, authenticated: true, user: { id: "alice" } as { id: string } | null, login: vi.fn() }));
 const config = vi.hoisted(() => ({ configured: true }));
 const push = vi.hoisted(() => vi.fn());
-vi.mock("@privy-io/react-auth", () => ({ usePrivy: () => session, useLoginWithEmail: () => ({ sendCode: vi.fn(), loginWithCode: vi.fn(), state: { status: "initial" } }) }));
+vi.mock("@privy-io/react-auth", () => ({ useSign7702Authorization: () => ({ signAuthorization: vi.fn() }), usePrivy: () => session, useLoginWithEmail: () => ({ sendCode: vi.fn(), loginWithCode: vi.fn(), state: { status: "initial" } }) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }), usePathname: () => "/" }));
 vi.mock("../providers", () => ({ usePrivyConfigured: () => config.configured }));
 import { SocialTrading, ProfileFlow } from "./social-trading";

@@ -1,6 +1,6 @@
 import { authenticate, bodyOf, failure, HubError, loadState, requestedAgent, saveState } from "@/lib/socialtrading/server";
 import { prepareSwap, userSwap } from "@/lib/crypto/trades";
-import { verifyTransaction } from "@/lib/crypto/rpc";
+import { verifyTransaction, verifyUserOperation } from "@/lib/crypto/rpc";
 import { userWallets } from "@/lib/crypto/wallet";
 import { cryptoServices } from "@/lib/crypto/services";
 import { normalizeMatches } from "@/lib/crypto/search";
@@ -38,10 +38,10 @@ export async function POST(request: Request) {
     const trade = state.trades.find(t => t.id === body.tradeId), c = trade?.crypto;
     if (!trade || !c) throw new HubError(404, "Swap not found.");
     if (body.action === "prepare") {
-      const transaction = await prepareSwap(state, userId, trade);
+      const batch = await prepareSwap(state, userId, trade);
       // Optimistic revision update is the cross-process claim: only one caller receives calldata.
       await saveState(userId, state);
-      return Response.json({ state, transaction, step: c.step, expiresAt: c.expiresAt });
+      return Response.json({ state, batch, step: c.step, expiresAt: c.expiresAt });
     }
     if (body.action === "reject") {
       if (trade.status !== "rejected") {
@@ -50,15 +50,25 @@ export async function POST(request: Request) {
         recordEvent(state, "trade", `You declined the ${trade.asset.symbol} swap`, undefined, trade.id);
       }
     } else if (body.action === "submitted") {
+      const userOpHash = body.userOpHash;
       if (c.phase !== "issued" || typeof body.hash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(body.hash) || (c.hash && c.hash !== body.hash)) throw new HubError(409, "Invalid or conflicting transaction hash.");
+      // The batch settled as a user operation, so its own hash is what identifies
+      // it inside the bundler's transaction. Without it nothing can be verified.
+      // Optional: a hash recovered by hand from a wallet will not have one, and
+      // verification can still identify the operation from the batch itself.
+      if (c.batch && userOpHash !== undefined) {
+        if (typeof userOpHash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(userOpHash) || (c.userOpHash && c.userOpHash !== userOpHash)) throw new HubError(409, "Invalid or conflicting user operation hash.");
+        c.userOpHash = userOpHash;
+      }
       // A client hash is only a claim. Receipt verification is required to release or confirm funds.
       c.hash = body.hash; c.detail = "Transaction hash received; awaiting onchain verification.";
     } else if (body.action === "status") {
-      if (c.phase !== "issued" || !c.transaction || !c.hash) throw new HubError(409, "No transaction hash is recorded. Recover the hash from your wallet before retrying.");
-      const result = await verifyTransaction(c.transaction, c.hash);
+      if (c.phase !== "issued" || !(c.batch ?? c.transaction) || !c.hash) throw new HubError(409, "No transaction hash is recorded. Recover the hash from your wallet before retrying.");
+      const result = c.batch
+        ? await verifyUserOperation(c.batch, c.userOpHash, c.hash)
+        : await verifyTransaction(c.transaction!, c.hash);
       if (result === "confirmed") {
-        if (c.step === "swap") { c.phase = "complete"; trade.status = "confirmed"; c.detail = "Swap confirmed onchain."; }
-        else { c.phase = "ready"; trade.status = "reserved"; c.detail = "Token approval confirmed. Continue to review and sign the swap itself."; }
+        c.phase = "complete"; trade.status = "confirmed"; c.detail = "Swap confirmed onchain.";
         recordEvent(state, "trade", c.detail, c.hash, trade.id);
       } else if (result === "reverted") { c.phase = "complete"; trade.status = "failed"; c.detail = "Transaction reverted onchain. Network fees may have been charged."; recordEvent(state, "trade", `The ${trade.asset.symbol} swap reverted onchain`, c.hash, trade.id); }
       else c.detail = "Waiting for the transaction and two block confirmations.";
