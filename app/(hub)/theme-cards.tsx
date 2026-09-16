@@ -5,7 +5,7 @@ import { Check } from "lucide-react";
 import { THEMES, suggestedThemes, type ThemeId } from "@/lib/socialtrading/themes";
 import { gsap, useGSAP, rubiconMotion } from "../_components/motion";
 
-function ThemeMark({ theme }: { theme: ThemeId }) {
+export function ThemeMark({ theme }: { theme: ThemeId }) {
   return <svg viewBox="0 0 40 40" className="socialtrading-theme-mark" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
     {theme === "energy" && <><path d="M23 5 10 23h9l-2 12 13-19h-9Z" fill="currentColor" fillOpacity=".12" /><path d="M7 9h5m16 22h5M5 15h3m25 10h3" opacity=".5" /></>}
     {theme === "tech" && <><rect x="11" y="11" width="18" height="18" rx="3" fill="currentColor" fillOpacity=".1" /><rect x="16" y="16" width="8" height="8" rx="1" /><path d="M15 6v5m10-5v5m-10 18v5m10-5v5M6 15h5m-5 10h5m18-10h5m-5 10h5" /></>}

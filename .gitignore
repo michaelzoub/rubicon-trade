@@ -13,3 +13,4 @@ pnpm-debug.log*
 tsconfig.tsbuildinfo
 
 .next-build/
+.next-redesign/

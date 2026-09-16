@@ -24,7 +24,8 @@ describe("investing profile", () => {
     expect(limitsError({ perTrade: "10.50", daily: "100", weekly: "500" })).toBeNull();
   });
   it("returns incomplete automatic profiles to permissions instead of confirming them", () => {
-    const profile = { ...newProfile("alice"), thesis: "Energy", permission: "automatic", step: 5 };
-    expect(readProfile(JSON.stringify(profile), "alice").step).toBe(4);
+    const original = newProfile("alice");
+    const profile = { ...original, thesis: "Energy", investorAnswers: { ...original.investorAnswers, knowledge: 4 }, permission: "automatic", step: 6 };
+    expect(readProfile(JSON.stringify(profile), "alice").step).toBe(5);
   });
 });

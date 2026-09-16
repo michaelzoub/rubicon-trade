@@ -12,7 +12,7 @@ import { decideTrade, proposeTrade } from "./trades";
 import { BrokerageNotConnected } from "./providers/brokerage";
 
 function hub(permission: "notify" | "approve" | "automatic", limits = { perTrade: "", daily: "", weekly: "" }): HubState {
-  return { revision: 0, profile: { ...newProfile("alice"), thesis: "Energy", themes: ["energy"], permission, permissionConfigured: true, limits, step: 5, completedAt: "2026-09-14T00:00:00Z" }, dislikes: [], preferences: [], inferred: [], signals: [], messages: [], events: [], trades: [] };
+  return { revision: 0, profile: { ...newProfile("alice"), thesis: "Energy", themes: ["energy"], permission, permissionConfigured: true, limits, step: 6, completedAt: "2026-09-14T00:00:00Z" }, dislikes: [], preferences: [], inferred: [], signals: [], messages: [], events: [], trades: [] };
 }
 const quote: Asset = { id: "OKLO", symbol: "OKLO", name: "Oklo", kind: "stock", price: 50, change: 1, asOf: null, source: "Massive", themes: ["energy"], chart: [], news: [] };
 const input = { asset: { id: "OKLO", symbol: "OKLO", name: "Oklo", kind: "stock" as const }, side: "buy" as const, value: 50, reasoning: "Fits the power thesis." };
@@ -59,7 +59,7 @@ describe("trade intents", () => {
 it("does not let an additional agent inherit the default brokerage connection", async () => {
   placeOrder.mockReset();
   const state = hub("automatic", { perTrade: "100", daily: "200", weekly: "500" });
-  state.agent = { id: "another-agent", name: "Research", description: "", instructions: "", capabilities: ["trading"], createdAt: "" };
+  state.agent = { id: "another-agent", name: "Research", description: "", capabilities: ["trading"], createdAt: "" };
   const trade = await proposeTrade(state, "alice", input, quote);
   expect(placeOrder).not.toHaveBeenCalled();
   expect(trade.brokerage?.status).toBe("not_connected");

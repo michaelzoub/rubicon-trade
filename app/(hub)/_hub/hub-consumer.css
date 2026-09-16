@@ -1,0 +1,409 @@
+/* Consumer-first Explore, Buy, Activity and Profile. Loaded after hub.css.
+   One idea runs through all of it: a single Rubicon light that marks where you
+   are and what matters. Surfaces stay white; the light does the talking. */
+
+/* ---------- Lens: a segmented control for exploring, not filtering ---------- */
+.hub-lens { position: relative; display: inline-flex; align-items: stretch; gap: .15rem; padding: .3rem; border-radius: 999px; background: color-mix(in srgb, var(--surface-muted) 70%, #fff); box-shadow: inset 0 0 0 1px var(--line), 0 1px 0 rgba(255, 255, 255, .8); max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.hub-lens::-webkit-scrollbar { display: none; }
+.hub-lens-item { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: .45rem; padding: .5rem .9rem; border-radius: 999px; color: var(--muted); font-size: .8125rem; font-weight: 500; letter-spacing: -.005em; white-space: nowrap; cursor: pointer; transition: color 220ms ease; }
+.hub-lens-item svg { flex-shrink: 0; color: var(--quiet); transition: color 220ms ease, transform 360ms var(--dashboard-ease-out); }
+.hub-lens-item:hover { color: var(--ink); }
+.hub-lens-item:hover svg { color: var(--lens-hue); transform: translateY(-1px) rotate(-8deg) scale(1.1); }
+.hub-lens-item.is-active { color: var(--ink); }
+.hub-lens-item.is-active svg { color: var(--lens-hue); transform: scale(1.08); }
+.hub-lens-item:focus-visible { outline: 2px solid var(--lens-hue); outline-offset: 2px; }
+.hub-lens-light { position: absolute; top: .3rem; bottom: .3rem; left: 0; width: 0; border-radius: 999px; opacity: 0; pointer-events: none;
+  background: linear-gradient(180deg, #fff, color-mix(in srgb, var(--lens-hue) 9%, #fff));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--lens-hue) 28%, transparent), 0 6px 18px -8px color-mix(in srgb, var(--lens-hue) 55%, transparent), 0 0 24px -6px color-mix(in srgb, var(--lens-hue) 35%, transparent);
+  transition: background 320ms ease, box-shadow 320ms ease; }
+
+/* ---------- Explore ---------- */
+.hub-explore { display: grid; gap: clamp(1.5rem, 3vh, 2.25rem); }
+.hub-explore-hero { position: relative; display: grid; gap: .5rem; }
+.hub-explore-copy.hub-view-head { margin-bottom: 0; }
+.hub-constellation { position: relative; height: clamp(22rem, 38vh, 27rem); min-width: 0; margin-top: .75rem; }
+.hub-constellation.is-collapsed { pointer-events: none; }
+.hub-constellation-glow { position: absolute; border-radius: 50%; pointer-events: none; z-index: 0; }
+.hub-constellation-glow.is-one { top: -18%; left: 8%; width: 48%; height: 125%; background: radial-gradient(ellipse, rgba(var(--hub-blue-rgb), .17), rgba(var(--hub-blue-rgb), .05) 45%, transparent 72%); }
+.hub-constellation-glow.is-two { bottom: -20%; right: 2%; width: 44%; height: 115%; background: radial-gradient(ellipse, rgba(127, 180, 255, .16), transparent 70%); }
+@media (prefers-reduced-motion: no-preference) {
+  .hub-constellation-glow.is-one { animation: hub-atmosphere 14s ease-in-out infinite alternate; }
+  .hub-constellation-glow.is-two { animation: hub-atmosphere 18s ease-in-out -6s infinite alternate-reverse; }
+}
+
+/* The two questions the field answers, stated once and then left alone. */
+.hub-field-axes { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.hub-field-rule { position: absolute; background: linear-gradient(var(--rule-dir, 90deg), transparent, var(--line) 18%, var(--line) 82%, transparent); }
+.hub-field-rule.is-vertical { --rule-dir: 180deg; top: 4%; bottom: 4%; left: 50%; width: 1px; }
+.hub-field-rule.is-horizontal { left: 2%; right: 2%; top: 50%; height: 1px; }
+.hub-field-tick { position: absolute; color: var(--quiet); font-size: .6875rem; letter-spacing: .01em; white-space: nowrap; }
+.hub-field-tick.is-top { top: -.35rem; left: 50%; transform: translateX(-50%); }
+.hub-field-tick.is-left { bottom: -.35rem; left: 0; }
+.hub-field-tick.is-right { bottom: -.35rem; right: 0; }
+
+.hub-orbit { position: absolute; width: min(10.5rem, 19%); min-width: 9rem; will-change: transform; }
+.hub-orbit-gather, .hub-orbit-float { will-change: transform; }
+/* One card, one glance: what it is, what it costs, which way it went. */
+.hub-orbit-card { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .55rem; padding: .7rem .8rem; border-radius: 16px; background: #fff; color: var(--ink); text-decoration: none;
+  box-shadow: 0 0 0 1px rgba(18, 18, 22, .07), 0 calc(14px * var(--depth, 1)) calc(34px * var(--depth, 1)) calc(-20px * var(--depth, 1)) rgba(var(--hub-blue-rgb), .45), 0 8px 22px -18px rgba(18, 18, 22, .3);
+  transition: transform 420ms var(--dashboard-ease-out), box-shadow 420ms var(--dashboard-ease-out); }
+.hub-orbit-card:hover, .hub-orbit-card:focus-visible { transform: translateY(-5px) scale(1.03); box-shadow: 0 0 0 1px rgba(var(--hub-blue-rgb), .4), 0 26px 56px -26px rgba(var(--hub-blue-rgb), .65), 0 0 40px -10px rgba(var(--hub-blue-rgb), .32); outline: none; }
+/* The strong-match marking: the same blue ring the hub uses for what matters. */
+.hub-orbit-card.is-match { box-shadow: 0 0 0 1.5px rgba(var(--hub-blue-rgb), .5), 0 calc(16px * var(--depth, 1)) calc(38px * var(--depth, 1)) calc(-18px * var(--depth, 1)) rgba(var(--hub-blue-rgb), .6), 0 0 34px -8px rgba(var(--hub-blue-rgb), .4); }
+/* The shared priority wash, sized for a card this small. */
+.hub-orbit-card.hub-priority-card::before { height: 60%; border-radius: 16px 16px 0 0; }
+.hub-orbit-card .hub-asset-logo { width: 30px; height: 30px; border-radius: 10px; font-size: 11px; }
+.hub-orbit-card .hub-asset-logo img { width: 19px; height: 19px; }
+.hub-orbit-id { display: grid; min-width: 0; }
+.hub-orbit-id strong { font-size: .8125rem; font-weight: 600; letter-spacing: -.01em; }
+.hub-orbit-id small { overflow: hidden; color: var(--muted); font-size: .75rem; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.hub-orbit-card .hub-change { font-size: .6875rem; white-space: nowrap; }
+/* A two-axis field needs room for a card at every plotted point. A phone has
+   nowhere near it, so the ordered grid below leads instead of a field whose
+   cards would sit on top of each other. */
+@media (max-width: 760px) {
+  .hub-constellation { display: none; }
+}
+.hub-explore-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem 1rem; }
+.hub-explore-search.hub-search { flex: 1 1 16rem; max-width: 24rem; margin: 0; padding: .6rem .95rem; border-radius: 999px; background: #fff; box-shadow: inset 0 0 0 1px var(--line); transition: box-shadow 220ms ease; }
+.hub-explore-search.hub-search:hover { box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .3); }
+.hub-explore-search.hub-search:focus-within { box-shadow: inset 0 0 0 1px var(--hub-blue), 0 0 0 4px rgba(var(--hub-blue-rgb), .1), 0 8px 24px -14px rgba(var(--hub-blue-rgb), .35); }
+.hub-explore-results { min-height: 12rem; }
+.hub-explore .hub-discovery-grid { gap: 18px; }
+
+/* Theme orbs: six discs of colour; the chosen one lights up. */
+.hub-orbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr)); gap: .75rem; }
+.hub-orb { position: relative; display: grid; justify-items: center; gap: .3rem; padding: 1.1rem .75rem .95rem; border-radius: 20px; background: #fff; color: var(--ink); text-align: center; cursor: pointer; box-shadow: inset 0 0 0 1px var(--line); transition: transform 360ms var(--dashboard-ease-out), box-shadow 360ms var(--dashboard-ease-out), background-color 360ms ease; }
+.hub-orb:hover { transform: translateY(-3px); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--theme-color) 45%, transparent), 0 16px 34px -24px color-mix(in srgb, var(--theme-color) 70%, transparent); }
+.hub-orb.is-active { background: color-mix(in srgb, var(--theme-light) 45%, #fff); box-shadow: inset 0 0 0 1.5px var(--theme-color), 0 18px 40px -24px color-mix(in srgb, var(--theme-color) 85%, transparent), 0 0 34px -10px color-mix(in srgb, var(--theme-color) 45%, transparent); }
+.hub-orb:focus-visible { outline: 2px solid var(--theme-color); outline-offset: 3px; }
+.hub-orb-disc { display: grid; place-items: center; width: 3.25rem; height: 3.25rem; margin-bottom: .25rem; border-radius: 50%; color: var(--theme-dark); background: radial-gradient(circle at 35% 30%, #fff, var(--theme-light) 70%); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--theme-color) 35%, transparent), 0 8px 18px -12px color-mix(in srgb, var(--theme-color) 80%, transparent); transition: transform 420ms var(--dashboard-ease-out); }
+.hub-orb-disc svg { width: 1.9rem; height: 1.9rem; }
+.hub-orb:hover .hub-orb-disc, .hub-orb.is-active .hub-orb-disc { transform: translateY(-2px) rotate(-4deg) scale(1.06); }
+.hub-orb strong { font-size: .875rem; font-weight: 550; letter-spacing: -.01em; }
+.hub-orb small { color: var(--muted); font-size: .6875rem; line-height: 1.4; }
+.hub-orb.is-yours::after { content: "Yours"; position: absolute; top: .6rem; right: .6rem; padding: .12rem .45rem; border-radius: 999px; background: var(--ink); color: #fff; font-size: .5625rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+
+/* Discovery cards: collectible. A spotlight follows the pointer; the card tilts toward it. */
+.hub-discovery-card { position: relative; isolation: isolate; border-radius: 22px; transform-style: preserve-3d; transition: box-shadow 320ms var(--dashboard-ease-out), border-color 320ms ease; }
+.hub-discovery-card::after { content: ""; position: absolute; inset: 0; z-index: 0; border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity 320ms ease; background: radial-gradient(28rem circle at var(--mx, 50%) var(--my, 0%), rgba(var(--hub-blue-rgb), .11), transparent 55%); }
+.hub-discovery-card:hover { border-color: rgba(var(--hub-blue-rgb), .35); box-shadow: 0 2px 4px rgba(18, 18, 22, .03), 0 26px 54px -30px rgba(var(--hub-blue-rgb), .5), 0 14px 30px -22px rgba(18, 18, 22, .18); }
+.hub-discovery-card:hover::after { opacity: 1; }
+.hub-discovery-card > * { position: relative; z-index: 1; }
+.hub-discovery-main .hub-asset-logo { transition: transform 420ms var(--dashboard-ease-out), box-shadow 420ms ease; }
+.hub-discovery-card:hover .hub-discovery-main .hub-asset-logo { transform: translateY(-3px) rotate(-3deg); box-shadow: 0 10px 20px -12px rgba(18, 18, 22, .35); }
+.hub-discovery-card.hub-priority-card { overflow: visible; }
+.hub-discovery-card.hub-priority-card::before { border-radius: 22px 22px 0 0; }
+
+/* ---------- Buy ---------- */
+.hub-trade-view { position: relative; isolation: isolate; display: grid; gap: clamp(1.5rem, 3vh, 2.25rem); }
+.hub-trade-atmosphere { position: absolute; z-index: -1; top: 4rem; left: 50%; width: min(52rem, 110%); height: 30rem; transform: translateX(-50%); pointer-events: none; border-radius: 50%; background: radial-gradient(ellipse at 50% 40%, rgba(var(--hub-blue-rgb), .13), rgba(var(--hub-blue-rgb), .04) 40%, transparent 68%); }
+@media (prefers-reduced-motion: no-preference) { .hub-trade-atmosphere { animation: hub-atmosphere 16s ease-in-out infinite alternate; } }
+.hub-trade-head-copy.hub-view-head { margin: 0 auto; text-align: center; }
+.hub-trade-head-copy.hub-view-head p:not(.eyebrow) { margin-inline: auto; }
+.hub-buy-stage { display: grid; gap: 1rem; width: min(36rem, 100%); margin-inline: auto; }
+.hub-buy { position: relative; isolation: isolate; gap: 1.1rem; padding: 1.35rem 1.4rem 1.4rem; border-radius: 24px; background: #fff; box-shadow: 0 0 0 1px rgba(var(--hub-blue-rgb), .18), 0 1px 2px rgba(18, 18, 22, .04), 0 30px 70px -40px rgba(var(--hub-blue-rgb), .55), 0 14px 34px -26px rgba(18, 18, 22, .16); transition: box-shadow 420ms var(--dashboard-ease-out); }
+.hub-buy.has-target { box-shadow: 0 0 0 1px rgba(var(--hub-blue-rgb), .3), 0 1px 2px rgba(18, 18, 22, .04), 0 40px 90px -44px rgba(var(--hub-blue-rgb), .65), 0 0 50px -14px rgba(var(--hub-blue-rgb), .25); }
+.hub-buy-light { position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; background: radial-gradient(70% 60% at 100% 0%, rgba(var(--hub-blue-rgb), .13), transparent 65%), radial-gradient(55% 50% at 0% 100%, rgba(127, 180, 255, .1), transparent 70%); }
+.hub-buy-light::after { content: ""; position: absolute; inset: 1px; border-radius: 23px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .95), inset 0 0 0 1px rgba(255, 255, 255, .6); }
+.hub-buy .hub-trade-head .hub-part-title { font-size: 1rem; }
+.hub-buy-search-box input.socialtrading-input { padding: .95rem 2.5rem .95rem 2.5rem; border-radius: 999px; font-size: 1rem; }
+.hub-buy-search-box > svg { left: 1rem; }
+.hub-buy-search-box > button { right: .8rem; }
+.hub-buy .hub-buy-suggestions-title { margin: 1rem 0 .35rem; }
+.hub-buy .hub-buy-result { grid-template-columns: 44px minmax(0, 1fr) auto; padding: .85rem .9rem; border-radius: 16px; background: #fff; box-shadow: inset 0 0 0 1px var(--line); transition: transform 320ms var(--dashboard-ease-out), box-shadow 320ms var(--dashboard-ease-out), background-color 320ms ease; }
+.hub-buy .hub-buy-result:hover { transform: translateY(-2px); background: #fff; box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .4), 0 16px 32px -24px rgba(var(--hub-blue-rgb), .6); }
+.hub-buy .hub-buy-result .hub-asset-logo { width: 44px; height: 44px; border-radius: 14px; }
+.hub-buy-target { align-items: center; gap: .85rem; padding: .85rem 1rem; border-radius: 16px; background: linear-gradient(135deg, #f7faff, #eef5ff); box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .16); }
+.hub-buy-target .hub-asset-logo { width: 44px; height: 44px; border-radius: 14px; flex-shrink: 0; }
+.hub-buy-target-copy { flex: 1; min-width: 0; }
+.hub-buy-target .hub-chip-button { margin-left: auto; }
+.hub-buy-amount { text-align: center; }
+.hub-buy-amount > label { display: block; margin-top: .35rem; color: var(--muted); font-size: .8125rem; }
+.hub-buy-amount-row { justify-content: center; align-items: baseline; gap: .1rem; }
+.hub-buy .hub-buy-amount-row input.socialtrading-input { width: 4ch; min-width: 2ch; max-width: 11ch; field-sizing: content; padding: .4rem .25rem; border: 0; border-radius: 18px; background: transparent; box-shadow: none; text-align: left; font-size: 3rem; font-weight: 500; letter-spacing: -.04em; line-height: 1.1; color: var(--ink); caret-color: var(--hub-blue); }
+.hub-buy .hub-buy-amount-row input.socialtrading-input:focus { box-shadow: none !important; outline: none; }
+.hub-buy-currency { position: static; color: var(--quiet); font-size: 2rem; font-weight: 400; line-height: 1; }
+.hub-buy-presets { justify-content: center; gap: .45rem; }
+.hub-buy-presets .hub-chip-button { padding: .45rem .85rem; font-size: .8125rem; }
+.hub-buy-estimate { margin-top: .15rem; color: var(--quiet); font-size: .75rem; font-variant-numeric: tabular-nums; }
+.hub-buy-actions { flex-direction: column; align-items: stretch; gap: .6rem; text-align: center; }
+.hub-buy .button.button-primary.hub-buy-submit { width: 100%; padding: .95rem 1.25rem; border-radius: 999px; border-color: var(--hub-blue); background: var(--hub-blue); color: #fff; font-size: .9375rem; font-weight: 500; letter-spacing: -.01em; box-shadow: 0 10px 28px -12px rgba(var(--hub-blue-rgb), .75), 0 0 0 0 rgba(var(--hub-blue-rgb), .25); transition: transform 220ms var(--dashboard-ease-out), box-shadow 320ms var(--dashboard-ease-out), background-color 220ms ease, opacity 220ms ease; }
+.hub-buy .button.button-primary.hub-buy-submit:not(:disabled):hover { background: var(--hub-blue-ink); border-color: var(--hub-blue-ink); transform: translateY(-1px); box-shadow: 0 16px 36px -14px rgba(var(--hub-blue-rgb), .8), 0 0 0 6px rgba(var(--hub-blue-rgb), .08); }
+.hub-buy .button.button-primary.hub-buy-submit:not(:disabled):active { transform: translateY(0) scale(.99); }
+.hub-buy .button.button-primary.hub-buy-submit:disabled { opacity: .45; box-shadow: none; }
+.hub-buy-done { display: flex; align-items: center; gap: .85rem; padding: .9rem 1rem; border-radius: 16px; color: var(--ink); background: linear-gradient(135deg, #f3f9ff, #e8f2ff); box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .3), 0 12px 30px -20px rgba(var(--hub-blue-rgb), .6); }
+.hub-buy-done > svg { color: var(--hub-blue); flex-shrink: 0; }
+.hub-buy-done div { display: grid; gap: .1rem; flex: 1; }
+.hub-buy-done strong { font-size: 1rem; font-weight: 600; letter-spacing: -.015em; }
+.hub-buy-done span { color: var(--muted); font-size: .8125rem; }
+.hub-buy .hub-swap-result { padding-top: .75rem; }
+.hub-buy-stage .hub-wallet-profile { margin: 0; padding: 0 1rem; border: 0; border-radius: 18px; background: #fff; box-shadow: inset 0 0 0 1px var(--line); transition: box-shadow 260ms ease; }
+.hub-buy-stage .hub-wallet-profile:hover, .hub-buy-stage .hub-wallet-profile[open] { box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .3); }
+.hub-buy-stage .hub-wallet-profile > summary { display: flex; align-items: center; gap: .75rem; padding: .8rem 0; font-size: .875rem; font-weight: 500; list-style: none; cursor: pointer; }
+.hub-buy-stage .hub-wallet-profile > summary::-webkit-details-marker { display: none; }
+.hub-buy-stage .hub-wallet-profile > summary::after { content: "+"; margin-left: auto; color: var(--quiet); font-size: 1.15rem; font-weight: 300; }
+.hub-buy-stage .hub-wallet-profile[open] > summary::after { content: "−"; }
+.hub-buy-stage .hub-wallet-profile summary small { display: block; margin-top: .1rem; color: var(--muted); font-size: .6875rem; font-weight: 400; }
+.hub-buy-stage .hub-wallet-monogram { width: 36px; height: 36px; background: linear-gradient(135deg, #eaf3ff, #d8e9ff); color: var(--hub-blue-ink); font-weight: 600; box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .25); }
+.hub-buy-stage .hub-side-card { padding: .5rem 0 1rem; background: transparent; }
+.hub-buy-stage .hub-side-card + .hub-side-card { border-top: 1px solid var(--line); padding-top: 1rem; }
+.hub-buy-stage .hub-advanced { justify-items: center; }
+.hub-buy-stage .hub-advanced > .hub-trade-raw-toggle { justify-self: center; padding: .4rem .8rem; border-radius: 999px; color: var(--muted); font-size: .75rem; transition: background-color 180ms ease, color 180ms ease; }
+.hub-buy-stage .hub-advanced > .hub-trade-raw-toggle:hover { background: var(--surface-muted); color: var(--ink); }
+.hub-buy-stage .hub-advanced .hub-swap { width: 100%; text-align: left; }
+.hub-trade-shelf { width: min(36rem, 100%); margin-inline: auto; }
+.rubicon-celebration { position: fixed; z-index: 400; width: 1px; height: 1px; pointer-events: none; overflow: visible; }
+.rubicon-celebration span { position: absolute; left: -3px; bottom: 0; width: 6px; height: 10px; border-radius: 2px; opacity: 0; }
+
+/* ---------- Activity ---------- */
+.hub-activity { display: grid; gap: 1.25rem; }
+.hub-activity .hub-view-head { margin-bottom: 0; }
+.hub-pulse { display: flex; flex-wrap: wrap; gap: .5rem; }
+.hub-pulse-bead { --bead: var(--hub-blue-rgb); display: inline-flex; align-items: center; gap: .45rem; padding: .5rem .85rem .5rem .7rem; border-radius: 999px; background: #fff; color: var(--ink); font-size: .8125rem; font-weight: 500; letter-spacing: -.005em; box-shadow: inset 0 0 0 1px var(--line), 0 1px 2px rgba(18, 18, 22, .03); }
+.hub-pulse-bead > svg { color: rgb(var(--bead)); }
+.hub-pulse-bead small { color: var(--quiet); font-size: .6875rem; font-weight: 400; }
+.hub-pulse-bead.is-learning { --bead: 124, 107, 214; }
+.hub-pulse-bead.is-profile { --bead: 47, 163, 138; }
+.hub-pulse-bead.is-trade { --bead: 217, 138, 58; }
+.hub-pulse-bead.is-live { --bead: var(--hub-blue-rgb); background: linear-gradient(135deg, #f5f9ff, #e9f2ff); box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .35), 0 10px 26px -18px rgba(var(--hub-blue-rgb), .7); }
+.hub-pulse-link { margin-left: .25rem; padding: .15rem .55rem; border-radius: 999px; background: var(--hub-blue); color: #fff; font-size: .6875rem; font-weight: 600; text-decoration: none; transition: background-color 160ms ease; }
+.hub-pulse-link:hover { background: var(--hub-blue-ink); }
+.hub-activity-lens { justify-self: start; }
+.hub-activity .hub-day { margin-top: .5rem; }
+.hub-activity .hub-day-label { position: sticky; top: 7.1rem; z-index: 2; margin: 0 0 .75rem; padding: .25rem 0; pointer-events: none; }
+.hub-activity .hub-day-label span { display: inline-block; padding: .3rem .75rem; border-radius: 999px; background: color-mix(in srgb, var(--card) 88%, transparent); color: var(--muted); font-size: .75rem; font-weight: 500; box-shadow: inset 0 0 0 1px var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.hub-activity .hub-timeline { gap: .6rem; padding-left: 2.4rem; }
+.hub-activity .hub-timeline::before { left: .95rem; top: 1.2rem; bottom: 1.2rem; width: 2px; background: linear-gradient(180deg, rgba(var(--hub-blue-rgb), .45), rgba(var(--hub-blue-rgb), .1) 60%, transparent); }
+.hub-activity .hub-event { padding: .9rem 1.05rem; border-radius: 18px; background: #fff; box-shadow: inset 0 0 0 1px var(--line); transition: transform 320ms var(--dashboard-ease-out), box-shadow 320ms var(--dashboard-ease-out); }
+.hub-activity .hub-event:hover { transform: translateY(-2px); box-shadow: inset 0 0 0 1px rgba(18, 18, 22, .12), 0 16px 34px -26px rgba(18, 18, 22, .3); }
+.hub-activity .hub-event.is-urgent { box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .35), 0 18px 40px -28px rgba(var(--hub-blue-rgb), .6); }
+.hub-activity .hub-event.is-urgent:hover { box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .5), 0 24px 48px -28px rgba(var(--hub-blue-rgb), .7); }
+.hub-activity .hub-event.hub-priority-card { overflow: visible; }
+.hub-activity .hub-event.hub-priority-card::before { border-radius: 18px 18px 0 0; opacity: .8; }
+.hub-event-medallion { position: absolute; left: -2.4rem; top: .95rem; display: grid; place-items: center; width: 1.9rem; height: 1.9rem; border-radius: 50%; background: #fff; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line), 0 4px 10px -6px rgba(18, 18, 22, .3); z-index: 1; }
+.hub-event.is-learning .hub-event-medallion { color: #7c6bd6; background: #f3f0fc; box-shadow: inset 0 0 0 1px rgba(124, 107, 214, .3); }
+.hub-event.is-profile .hub-event-medallion { color: #2fa38a; background: #eaf7f3; box-shadow: inset 0 0 0 1px rgba(47, 163, 138, .3); }
+.hub-event.is-agent .hub-event-medallion { color: var(--ink); background: #f3f3f4; }
+.hub-event.is-trade .hub-event-medallion { color: #b8722a; background: #fbf3e8; box-shadow: inset 0 0 0 1px rgba(217, 138, 58, .3); }
+.hub-event.is-urgent .hub-event-medallion { color: #fff; background: var(--hub-blue); box-shadow: 0 0 0 4px rgba(var(--hub-blue-rgb), .15), 0 8px 18px -8px rgba(var(--hub-blue-rgb), .7); }
+@media (prefers-reduced-motion: no-preference) { .hub-event.is-urgent .hub-event-medallion { animation: hub-agent-pulse 2.6s ease-out infinite; --agent-rgb: var(--hub-blue-rgb); } }
+.hub-activity .hub-event-meta { align-items: center; gap: .5rem; }
+.hub-activity .hub-event-meta time { margin-left: auto; }
+.hub-event-flag { padding: .12rem .5rem; border-radius: 999px; background: var(--hub-blue); color: #fff; font-size: .625rem; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; }
+.hub-activity .hub-event-text { margin-top: .3rem; font-size: .9375rem; line-height: 1.5; letter-spacing: -.005em; }
+.hub-activity .hub-event.is-learning .hub-event-text { color: var(--ink); }
+.hub-activity .hub-event-detail { margin-top: .25rem; color: var(--muted); font-size: .8125rem; line-height: 1.55; }
+.hub-activity .hub-event-trade { margin: 0; padding: 0; background: transparent; box-shadow: none; }
+.hub-activity .hub-event-trade .hub-event-text strong { font-weight: 600; }
+.hub-event-review { margin-top: .75rem; text-decoration: none; }
+.hub-activity .hub-activity-details > summary { margin-top: .6rem; }
+.hub-activity .hub-event-trade dl { margin-top: .6rem; padding: .65rem .8rem; border-radius: 12px; background: var(--surface-muted); }
+
+/* ---------- Profile ---------- */
+.hub-profile { display: grid; gap: clamp(1.5rem, 3vh, 2rem); }
+.hub-profile-hero { position: relative; isolation: isolate; display: grid; grid-template-columns: 7rem minmax(0, 1fr); align-items: center; gap: 1.75rem; padding: 1.75rem 2rem 1.75rem 1.75rem; border-radius: 28px; background: #fff; box-shadow: 0 0 0 1px rgba(var(--hub-blue-rgb), .14), 0 1px 2px rgba(18, 18, 22, .03), 0 30px 70px -44px rgba(var(--hub-blue-rgb), .5); overflow: hidden; }
+.hub-profile-hero-light { position: absolute; inset: 0; z-index: -1; pointer-events: none; background: radial-gradient(60% 90% at 0% 50%, rgba(var(--hub-blue-rgb), .16), transparent 70%), radial-gradient(50% 80% at 100% 0%, rgba(127, 180, 255, .13), transparent 70%), linear-gradient(160deg, #fff 40%, #f7faff); }
+@media (prefers-reduced-motion: no-preference) { .hub-profile-hero-light { background-size: 130% 130%, 130% 130%, 100% 100%; background-repeat: no-repeat; animation: hub-agent-drift 14s ease-in-out infinite alternate; } }
+.hub-profile-badge.socialtrading-avatar { width: 7rem; height: 7.3rem; margin: 0; filter: drop-shadow(0 14px 22px rgba(var(--hub-blue-rgb), .25)); }
+.hub-profile-who { display: grid; gap: .45rem; min-width: 0; }
+.hub-profile-who .eyebrow { margin: 0; }
+.hub-profile-who .landing-section-title { font-size: clamp(2rem, 3.4vw, 2.75rem); line-height: 1.05; }
+.hub-profile-line { color: var(--muted); font-size: .9375rem; line-height: 1.55; }
+.hub-profile-line strong { color: var(--ink); font-weight: 500; }
+.hub-profile-marks { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .35rem; }
+.hub-profile-mark { display: inline-flex; align-items: center; gap: .35rem; padding: .28rem .65rem; border-radius: 999px; background: rgba(255, 255, 255, .8); color: var(--ink); font-size: .6875rem; font-weight: 500; box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .22); backdrop-filter: blur(6px); }
+.hub-profile-mark svg { color: var(--hub-blue); }
+.hub-profile-mark.is-quiet { color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+.hub-profile .hub-tell { max-width: none; border-radius: 20px; padding: 1.1rem 1.25rem; }
+.hub-facets { display: grid; gap: .9rem; }
+.hub-facet { position: relative; border-radius: 22px; background: #fff; box-shadow: inset 0 0 0 1px var(--line), 0 1px 2px rgba(18, 18, 22, .02); transition: box-shadow 360ms var(--dashboard-ease-out), transform 360ms var(--dashboard-ease-out); }
+.hub-facet:hover { box-shadow: inset 0 0 0 1px rgba(18, 18, 22, .13), 0 18px 40px -32px rgba(18, 18, 22, .3); }
+.hub-facet.is-open { box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .35), 0 26px 60px -40px rgba(var(--hub-blue-rgb), .6), 0 0 40px -14px rgba(var(--hub-blue-rgb), .18); }
+.hub-facet.is-quiet { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+.hub-facet-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 1rem; padding: 1.15rem 1.25rem; }
+.hub-facet-medallion { display: grid; place-items: center; width: 2.4rem; height: 2.4rem; border-radius: 14px; color: var(--hub-blue-ink); background: linear-gradient(135deg, #f3f8ff, #e6f0ff); box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .2); transition: transform 420ms var(--dashboard-ease-out); }
+.hub-facet:hover .hub-facet-medallion, .hub-facet.is-open .hub-facet-medallion { transform: translateY(-2px) rotate(-6deg); }
+.hub-facet-copy { display: grid; gap: .3rem; min-width: 0; padding-top: .1rem; }
+.hub-facet-copy h2 { font-size: 1rem; font-weight: 550; letter-spacing: -.015em; }
+.hub-facet-summary { color: var(--muted); font-size: .875rem; line-height: 1.55; }
+.hub-facet-summary strong { color: var(--ink); font-weight: 500; }
+.hub-facet-quote { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; color: var(--ink); font-size: .9375rem; line-height: 1.6; }
+.hub-facet.is-open .hub-facet-quote { -webkit-line-clamp: unset; }
+.hub-facet-toggle { align-self: center; padding: .45rem .9rem; border-radius: 999px; background: var(--surface-muted); color: var(--ink); font-size: .75rem; font-weight: 500; white-space: nowrap; cursor: pointer; box-shadow: inset 0 0 0 1px transparent; transition: background-color 200ms ease, box-shadow 200ms ease, color 200ms ease, transform 200ms var(--dashboard-ease-out); }
+.hub-facet-toggle:hover { background: #eaf3ff; color: var(--hub-blue-ink); box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .35); }
+.hub-facet.is-open .hub-facet-toggle { background: var(--ink); color: #fff; }
+.hub-facet-toggle:focus-visible { outline: 2px solid var(--hub-blue); outline-offset: 3px; }
+.hub-facet-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 480ms var(--dashboard-ease-out); }
+.hub-facet.is-open .hub-facet-body { grid-template-rows: 1fr; }
+.hub-facet-inner { display: grid; gap: 1.5rem; min-height: 0; overflow: hidden; padding: 0 1.25rem; visibility: hidden; opacity: 0; transition: visibility 0s 480ms, opacity 320ms ease, padding 480ms var(--dashboard-ease-out); }
+.hub-facet.is-open .hub-facet-inner { visibility: visible; opacity: 1; padding: .25rem 1.25rem 1.4rem; transition: visibility 0s, opacity 420ms ease 120ms, padding 480ms var(--dashboard-ease-out); }
+.hub-facet .hub-field > p:first-child, .hub-facet .hub-field-head > p, .hub-facet .hub-field-head > label { color: var(--muted); font-size: .75rem; font-weight: 500; letter-spacing: .01em; text-transform: uppercase; }
+.hub-facet .socialtrading-theme-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
+.hub-facet .socialtrading-theme-card { min-height: 3.4rem; padding: .6rem .75rem; border-radius: 14px; }
+.hub-facet .socialtrading-theme-card::after { border-radius: 14px; }
+.hub-facet .socialtrading-theme-copy small { display: none; }
+.hub-facet .socialtrading-theme-mark { width: 1.6rem; height: 1.6rem; }
+.hub-modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .6rem; }
+.hub-mode { position: relative; display: grid; gap: .6rem; padding: .95rem 1rem 1rem; border-radius: 16px; background: #fff; color: var(--ink); cursor: pointer; box-shadow: inset 0 0 0 1px var(--line); transition: box-shadow 320ms var(--dashboard-ease-out), transform 320ms var(--dashboard-ease-out), background-color 320ms ease; }
+.hub-mode:hover { transform: translateY(-2px); box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .35), 0 14px 30px -24px rgba(var(--hub-blue-rgb), .6); }
+.hub-mode.is-selected { background: linear-gradient(160deg, #fff, #f1f7ff); box-shadow: inset 0 0 0 1.5px var(--hub-blue), 0 18px 40px -26px rgba(var(--hub-blue-rgb), .7), 0 0 30px -10px rgba(var(--hub-blue-rgb), .25); }
+.hub-mode:has(input:focus-visible) { outline: 2px solid var(--hub-blue); outline-offset: 3px; }
+.hub-mode input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.hub-mode-icon { display: grid; place-items: center; width: 2.2rem; height: 2.2rem; border-radius: 12px; color: var(--muted); background: var(--surface-muted); transition: background-color 320ms ease, color 320ms ease, transform 420ms var(--dashboard-ease-out); }
+.hub-mode.is-selected .hub-mode-icon { color: #fff; background: var(--hub-blue); transform: rotate(-6deg) scale(1.05); box-shadow: 0 8px 18px -8px rgba(var(--hub-blue-rgb), .8); }
+.hub-mode-copy { display: grid; gap: .25rem; }
+.hub-mode-copy strong { font-size: .875rem; font-weight: 550; letter-spacing: -.01em; }
+.hub-mode-copy small { color: var(--muted); font-size: .75rem; line-height: 1.5; }
+.hub-mode-check { position: absolute; top: .8rem; right: .8rem; display: grid; place-items: center; width: 1.1rem; height: 1.1rem; border-radius: 50%; color: #fff; background: transparent; box-shadow: inset 0 0 0 1px var(--line); transition: background-color 240ms ease, box-shadow 240ms ease; }
+.hub-mode.is-selected .hub-mode-check { background: var(--hub-blue); box-shadow: none; }
+.hub-zone { padding: 1rem 1.1rem 1.1rem; border-radius: 16px; background: var(--surface-muted); }
+.hub-zone-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .6rem; }
+.hub-zone-field { display: grid; gap: .35rem; color: var(--muted); font-size: .75rem; }
+.hub-zone-input { position: relative; display: flex; align-items: center; }
+.hub-zone-input i { position: absolute; left: .8rem; color: var(--quiet); font-style: normal; font-size: .9375rem; pointer-events: none; }
+.hub-zone-input input.socialtrading-input { padding: .7rem .75rem .7rem 1.7rem; border-radius: 12px; font-size: 1rem; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink); background: #fff; }
+.hub-zone-input input::-webkit-outer-spin-button, .hub-zone-input input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.hub-zone-input input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+.hub-facet .hub-inferred { gap: 1rem; }
+.hub-facet .hub-meter { height: 5px; background: #eef1f6; }
+.hub-facet .hub-meter span { box-shadow: 0 0 10px rgba(var(--hub-blue-rgb), .4); }
+.hub-save { position: sticky; bottom: 1.25rem; z-index: 20; display: grid; gap: .5rem; width: min(30rem, 100%); margin-inline: auto; padding: .6rem .6rem .6rem 1.1rem; border-radius: 999px; background: #111; color: #fff; box-shadow: 0 24px 60px -24px rgba(0, 0, 0, .6), 0 0 0 1px rgba(255, 255, 255, .06); }
+.hub-save .hub-error { margin: .25rem .5rem 0; }
+.hub-save-row { display: flex; align-items: center; gap: .5rem; }
+.hub-save-text { flex: 1; font-size: .8125rem; color: #ffffffc7; }
+.hub-save-discard { padding: .5rem .8rem; border-radius: 999px; color: #ffffffb0; font-size: .75rem; font-weight: 500; cursor: pointer; transition: background-color 160ms ease, color 160ms ease; }
+.hub-save-discard:hover { background: #ffffff14; color: #fff; }
+.hub-save-button { padding: .55rem 1rem; border-radius: 999px; background: #fff; color: #111; font-size: .8125rem; font-weight: 600; cursor: pointer; transition: background-color 160ms ease, transform 160ms var(--dashboard-ease-out); }
+.hub-save-button:not(:disabled):hover { background: #e8f1ff; transform: translateY(-1px); }
+.hub-save-button:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 760px) {
+  .hub-lens { gap: 0; }
+  .hub-lens-item { padding: .45rem .65rem; font-size: .75rem; }
+  .hub-constellation { height: 15rem; }
+  .hub-orbit { width: 46%; min-width: 0; }
+  /* Four cards fit a phone. The third slides in from the right edge so nothing overflows the screen. */
+  .hub-orbit:nth-of-type(n + 5) { display: none; }
+  .hub-orbit:nth-of-type(1) { left: 1% !important; top: 4% !important; }
+  .hub-orbit:nth-of-type(2) { left: 53% !important; top: 0 !important; }
+  .hub-orbit:nth-of-type(3) { left: 6% !important; top: 54% !important; }
+  .hub-orbit:nth-of-type(4) { left: 51% !important; top: 58% !important; }
+  .hub-orbit-card { padding: .7rem .75rem; gap: .3rem .5rem; }
+  .hub-orbit-card .hub-asset-logo { width: 32px; height: 32px; border-radius: 10px; }
+  .hub-buy { padding: 1.1rem 1rem 1.15rem; }
+  .hub-buy .hub-buy-amount-row input.socialtrading-input { font-size: 2.4rem; }
+  .hub-profile-hero { grid-template-columns: 4.75rem minmax(0, 1fr); gap: 1rem; padding: 1.25rem; }
+  .hub-profile-badge.socialtrading-avatar { width: 4.75rem; height: 4.95rem; }
+  .hub-facet-head { grid-template-columns: auto minmax(0, 1fr); }
+  .hub-facet-toggle { grid-column: 2; justify-self: start; }
+  .hub-modes, .hub-zone-fields { grid-template-columns: minmax(0, 1fr); }
+  .hub-facet .socialtrading-theme-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hub-activity .hub-day-label { top: 6.6rem; }
+  .hub-save { position: fixed; left: 1rem; right: 1rem; bottom: 1rem; width: auto; margin: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-orbit-card:hover, .hub-orb:hover, .hub-facet:hover .hub-facet-medallion, .hub-mode:hover, .hub-activity .hub-event:hover, .hub-buy .hub-buy-result:hover { transform: none; }
+  .hub-facet-body { transition: none; }
+  .hub-facet-inner { transition: none; }
+}
+
+
+/* ---------- Agent presence: the rail, said in one line ---------- */
+/* The profile rail used to ride beside Home, Explore, Activity and asset
+   detail, repeating the whole Profile page. This is what replaced it: who is
+   working, what it is watching, and whether it is awake. Everything else is
+   one click away. */
+/* Above the Explore field, whose cards carry their own depth z-indexes. */
+.hub-presence-anchor { position: relative; display: block; width: max-content; max-width: 100%; margin-bottom: 1.75rem; z-index: 30; }
+.hub-presence-anchor.is-open { z-index: 60; }
+.hub-presence { position: relative; z-index: 2; display: inline-flex; align-items: center; gap: .7rem; max-width: 100%; padding: .4rem .9rem .4rem .45rem; border-radius: 999px;
+  background: linear-gradient(180deg, #fff, var(--hub-blue-wash));
+  box-shadow: inset 0 0 0 1px var(--line), 0 1px 2px rgba(16, 24, 40, .04);
+  color: var(--ink); transition: box-shadow 260ms var(--dashboard-ease-out), transform 260ms var(--dashboard-ease-out); }
+.hub-presence:hover { transform: translateY(-1px); box-shadow: inset 0 0 0 1px var(--hub-blue-line), 0 6px 18px -12px rgba(var(--hub-blue-rgb), .7); }
+.hub-presence:focus-visible { outline: 2px solid var(--hub-blue); outline-offset: 2px; }
+.hub-presence-badge.socialtrading-avatar { width: 1.85rem; height: 1.9rem; margin: 0; flex-shrink: 0; }
+.hub-presence-copy { display: flex; align-items: baseline; gap: .45rem; min-width: 0; font-size: .8125rem; line-height: 1.4; }
+.hub-presence-copy strong { font-weight: 600; letter-spacing: -.005em; white-space: nowrap; }
+.hub-presence-status { min-width: 0; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-presence-status::before { content: "·"; margin-right: .45rem; color: var(--quiet); }
+.hub-presence-dot { flex-shrink: 0; width: .4rem; height: .4rem; border-radius: 50%; background: var(--quiet); }
+.hub-presence.is-awake .hub-presence-dot { background: var(--hub-blue); box-shadow: 0 0 0 0 rgba(var(--hub-blue-rgb), .5); animation: hub-presence-breathe 2.8s var(--dashboard-ease-out) infinite; }
+@keyframes hub-presence-breathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--hub-blue-rgb), .45); }
+  50% { box-shadow: 0 0 0 4px rgba(var(--hub-blue-rgb), 0); }
+}
+
+/* ---------- Empty states: a held breath, not a shrug ---------- */
+/* Every `hub-empty` in the app inherits this, so the markup stays as it is. */
+.hub-empty { display: flex; flex-direction: column; align-items: center; gap: .75rem; padding: clamp(2rem, 5vw, 3.25rem) 1.5rem; border-radius: 16px; text-align: center;
+  background: radial-gradient(120% 90% at 50% 0%, var(--hub-blue-wash) 0%, transparent 70%);
+  box-shadow: inset 0 0 0 1px var(--line); color: var(--muted); font-size: .875rem; line-height: 1.6; }
+.hub-empty::before { content: ""; width: 2.5rem; height: 2.5rem; border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, #fff 0%, var(--hub-blue-wash) 60%, transparent 72%);
+  box-shadow: inset 0 0 0 1px var(--hub-blue-line), 0 0 28px -6px rgba(var(--hub-blue-rgb), .45); }
+.hub-empty p { max-width: 28rem; margin: 0; }
+.hub-empty .hub-chip-button { margin-top: 0; }
+
+/* With the card open, the page behind it steps back so the agent is the only
+   thing in focus. The scrim covers the viewport but never swallows the pointer,
+   so leaving the pill still closes the card. */
+/* The dim has to carry the effect on its own wherever the blur is stripped. */
+.hub-presence-scrim { position: fixed; inset: 0; z-index: 0; background: rgba(16, 24, 40, .28); pointer-events: none; }
+.hub-presence-scrim[hidden] { display: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .hub-presence-anchor.is-open .hub-presence-scrim { animation: hub-scrim-in 220ms ease-out both; }
+}
+@keyframes hub-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* The rail, on demand. Same card that used to stand beside every page. */
+.hub-presence-card { position: absolute; top: calc(100% + .5rem); left: 0; z-index: 2; width: min(20rem, calc(100vw - 2.5rem)); max-height: min(34rem, calc(100vh - 11rem)); overflow-y: auto; overscroll-behavior: contain; border-radius: 16px; }
+.hub-presence-card[hidden] { display: none; }
+.hub-presence-card .socialtrading-profile { position: static; margin: 0; }
+/* Opaque here: the card floats over a dimmed page, not on the page. */
+.hub-presence-card .socialtrading-profile-card { background: #fff; box-shadow: 0 0 0 1px var(--line), 0 24px 60px -24px rgba(16, 24, 40, .45), 0 0 48px -20px rgba(var(--hub-blue-rgb), .4); }
+@media (prefers-reduced-motion: no-preference) {
+  .hub-presence-anchor.is-open .hub-presence-card { animation: hub-presence-reveal 260ms var(--dashboard-ease-out) both; }
+}
+@keyframes hub-presence-reveal { from { opacity: 0; transform: translateY(-6px) scale(.985); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-presence.is-awake .hub-presence-dot { animation: none; }
+}
+
+/* ---------- Progressive disclosure ---------- */
+/* One shared look for "there is more, when you want it". Closed, it reads as a
+   quiet line; open, the detail arrives inside the card rather than beside it. */
+.hub-disclosure { margin-top: 1.25rem; border-radius: 12px; }
+.hub-disclosure > summary { display: inline-flex; align-items: center; gap: .4rem; padding: .45rem .8rem; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--muted); font-size: .8125rem; font-weight: 500; cursor: pointer; list-style: none; transition: color 180ms ease, box-shadow 180ms ease, background-color 180ms ease; }
+.hub-disclosure > summary::-webkit-details-marker { display: none; }
+.hub-disclosure > summary::after { content: ""; width: .4rem; height: .4rem; margin-left: .1rem; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-1.5px) rotate(45deg); transition: transform 240ms var(--dashboard-ease-out); }
+.hub-disclosure > summary:hover { color: var(--ink); background: var(--surface-muted); }
+.hub-disclosure > summary:focus-visible { outline: 2px solid var(--hub-blue); outline-offset: 2px; }
+.hub-disclosure[open] > summary { color: var(--ink); box-shadow: inset 0 0 0 1px var(--hub-blue-line); }
+.hub-disclosure[open] > summary::after { transform: translateY(1px) rotate(225deg); }
+.hub-disclosure-body { display: grid; gap: 1rem; padding-top: 1.1rem; }
+@media (prefers-reduced-motion: no-preference) {
+  .hub-disclosure[open] > .hub-disclosure-body { animation: hub-disclose 320ms var(--dashboard-ease-out) both; }
+}
+@keyframes hub-disclose { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* ---------- The swap, in one line ---------- */
+.hub-trade-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem .6rem; margin: .9rem 0 .25rem; font-size: 1.25rem; font-weight: 600; letter-spacing: -.02em; }
+.hub-trade-line-arrow { color: var(--hub-blue); font-weight: 400; }
+.hub-trade-line small { flex-basis: 100%; color: var(--muted); font-size: .8125rem; font-weight: 400; letter-spacing: 0; }
+.hub-trade-disclosure { margin-top: 1rem; }
+
+
+/* ---------- Price history ---------- */
+/* The range control is the same segmented light as every other choice in the
+   hub, so switching range feels like the same gesture as switching lens. */
+.hub-range-lens { margin-bottom: 1.1rem; }
+.hub-range-lens .hub-lens-item { padding: .45rem .95rem; font-variant-numeric: tabular-nums; }
+.hub-plot { position: relative; }
+.hub-plot::before { content: ""; position: absolute; inset: 8% -4% -12% -4%; z-index: 0; pointer-events: none;
+  background: radial-gradient(ellipse 60% 70% at 50% 100%, rgba(var(--hub-blue-rgb), .1), transparent 70%); }
+.hub-plot .dashboard-data-viz { position: relative; z-index: 1; }

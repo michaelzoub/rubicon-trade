@@ -38,6 +38,15 @@ export function profileSummary(state: HubState) {
   const p = state.profile;
   return {
     thesis: p.thesis, themes: p.themes.map(themeName), watching: p.interests.map(i => i.symbol || i.name),
+    onboarding: {
+      investmentKnowledge: p.investorAnswers.knowledge === null ? "not answered" : ["just starting", "knows the basics", "comfortable", "experienced", "very experienced"][p.investorAnswers.knowledge],
+      opportunityDrivers: p.investorAnswers.opportunityDrivers,
+      ethicsAndImpact: p.investorAnswers.esgPriority === null ? "not answered" : ["returns first", "mostly returns", "balanced", "mostly impact", "impact first"][p.investorAnswers.esgPriority],
+      aiPriority: p.investorAnswers.aiPriority === null ? "not answered" : ["not important", "a little", "somewhat", "a lot", "essential"][p.investorAnswers.aiPriority],
+      technologies: p.investorAnswers.technologies,
+      geopoliticalOutlook: { countries: p.investorAnswers.conflictCountries, thesis: p.investorAnswers.geopoliticalThesis },
+      fiveToTenYearView: p.investorAnswers.futureVision,
+    },
     preferences: state.preferences, showLess: state.dislikes, mode: PERMISSIONS[p.permission], permissions: describeLimits(p),
     inferred: state.inferred.filter(i => i.confidence >= .25).sort((a, b) => Math.abs(b.weight * b.confidence) - Math.abs(a.weight * a.confidence)).slice(0, 12)
       .map(i => ({ id: isThemeId(i.id) ? themeName(i.id) : i.id, interest: `${Math.round(i.weight * 100)}%`, confidence: `${Math.round(i.confidence * 100)}%`, signals: i.count })),

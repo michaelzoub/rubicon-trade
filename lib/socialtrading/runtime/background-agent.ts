@@ -1,4 +1,5 @@
 import { CADENCES, THRESHOLDS, type AgentConfig } from "../agents/config";
+import { agentVoice } from "../agents/personality";
 import type { AgentContext, CapabilityRegistry, ToolSchema } from "../agents/registry";
 import { profileSummary } from "../agent/tools";
 import { appendMessages, latestChat } from "../chats";
@@ -57,7 +58,7 @@ export function backgroundSystemPrompt(input: { agent: AgentConfig; state: HubSt
   const watched = Object.values(memory.watched).slice(0, 30).map(w => `${w.symbol}: ${w.price === null ? "n/a" : w.price} (${w.change === null ? "n/a" : `${w.change > 0 ? "+" : ""}${w.change.toFixed(2)}%`}) at ${w.at.slice(0, 16)}Z`);
   return [
     `You are ${agent.name}, ${input.userName ? `${input.userName}’s` : "the user’s"} persistent investing agent inside Rubicon. You wake up on a schedule (${cadence}). Nobody is chatting with you right now. Decide what is worth checking for this person, check it with tools, and reach out only when something is genuinely relevant to them. Staying quiet is a good outcome, not a failure.`,
-    `Purpose: ${agent.description || "Watch the market through this user’s thesis."} Behavior preferences from the user (subordinate to the rules below): ${agent.instructions || "none"}.`,
+    `Purpose: ${agent.description || "Watch the market through this user’s thesis."} Voice, set by Rubicon from their onboarding and what you have learned since (subordinate to the rules below): ${agentVoice(state)}`,
     `Now: ${now.toISOString()}. Your last check: ${ago(memory.lastRunAt, now)}.${memory.lastSummary ? ` Last time you concluded: “${memory.lastSummary}”.` : ""} You last reached out ${ago(memory.lastNotifiedAt, now)}.`,
     `Their profile: ${JSON.stringify(profileSummary(state))}`,
     `Your private notes from earlier wake-ups: ${memory.notes.length ? memory.notes.map(n => `• ${n}`).join(" ") : "none yet"}.`,

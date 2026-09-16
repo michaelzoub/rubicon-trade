@@ -8,7 +8,8 @@ const series = (start: number, drift: number, n = 40) => Array.from({ length: n 
 
 export const PREVIEW_USER = "preview-user";
 const profile: InvestingProfile = {
-  version: 2, userId: PREVIEW_USER,
+  version: 3, userId: PREVIEW_USER,
+  investorAnswers: { knowledge: 4, guidedTest: false, opportunityDrivers: ["Breakthrough innovation"], esgPriority: null, aiPriority: null, technologies: [], conflictCountries: [], geopoliticalThesis: "", futureVision: "AI infrastructure and energy" },
   thesis: "AI inference will create massive demand for data centers, power infrastructure, networking and semiconductors over the next 3–5 years. Power availability is the bottleneck.",
   themes: ["ai", "energy"],
   interests: [
@@ -20,7 +21,7 @@ const profile: InvestingProfile = {
   permission: "approve", permissionConfigured: true,
   limits: { perTrade: "100", daily: "250", weekly: "1000" },
   learning: { signals: [], inferredInterests: [] },
-  step: 5, completedAt: ago(60 * 24 * 9), updatedAt: ago(5),
+  step: 6, completedAt: ago(60 * 24 * 9), updatedAt: ago(5),
 };
 
 const VRT = { id: "VRT", symbol: "VRT", name: "Vertiv Holdings", kind: "stock" as const, price: 128.42, change: 3.18, asOf: ago(4), source: "Massive" as const, marketCap: 4.9e10, volume: 4.1e6, themes: ["ai", "energy"], chart: series(112, .14), news: [

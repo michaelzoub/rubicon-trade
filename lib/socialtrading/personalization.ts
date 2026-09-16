@@ -1,3 +1,4 @@
+import { topicRecommendations } from "./suggestions";
 import type { ActivityKind, Asset, HubState, SignalAction } from "./types";
 import { isThemeId, THEMES, type ThemeId } from "./themes";
 import { DEFAULT_PLAN, learnedAssets, type PlanLimits } from "./plans";
@@ -71,15 +72,17 @@ export function relevance(asset: Asset, state: HubState): Relevance {
   const themes = assetThemes(asset);
   const matching = themes.filter(t => state.profile.themes.includes(t));
   const watched = state.profile.interests.some(i => i.symbol?.toUpperCase() === asset.symbol.toUpperCase() || i.id === asset.id);
+  const relatedInterests = state.profile.interests.filter(i => i.kind === "custom" && topicRecommendations(i).some(a => a.symbol?.toUpperCase() === asset.symbol.toUpperCase() || a.id === asset.id));
   const dislikes = state.dislikes.filter(d => corpus.includes(d.toLowerCase()) || (d.toLowerCase().includes("meme") && /meme|doge|shiba|pepe|inu/.test(corpus)));
   const preferences = state.preferences.filter(p => corpus.includes(p.toLowerCase()) || themes.some(t => p.toLowerCase().includes(t)));
   const inferred = state.inferred.filter(i => (i.id.toUpperCase() === asset.symbol.toUpperCase() || i.id === asset.id || themes.includes(i.id as ThemeId)) && i.confidence >= .25);
   const inferredScore = inferred.reduce((sum, i) => sum + i.weight * i.confidence, 0);
   const ignored = inferred.filter(i => i.weight < -.15 && i.confidence >= .4);
   const thesisHits = state.profile.thesis.toLowerCase().split(/[^a-z]+/).filter(w => w.length > 5 && corpus.includes(w)).slice(0, 3);
-  const score = (watched ? 3 : 0) + matching.length * 2 + preferences.length * 1.5 + thesisHits.length * .5 + inferredScore * 2 - dislikes.length * 10;
+  const score = (watched ? 3 : 0) + relatedInterests.length * 2 + matching.length * 2 + preferences.length * 1.5 + thesisHits.length * .5 + inferredScore * 2 - dislikes.length * 10;
   const reasons = [
     watched ? `You follow ${asset.symbol}` : "",
+    ...relatedInterests.map(i => `Connected to your interest in ${i.name}`),
     ...matching.map(t => `Related to your ${themeName(t)} thesis`),
     ...preferences.map(p => `You told me you care about ${p}`),
     thesisHits.length ? `Your thesis mentions ${thesisHits.join(", ")}` : "",
@@ -87,6 +90,7 @@ export function relevance(asset: Asset, state: HubState): Relevance {
   ].filter(Boolean);
   let label: string, tone: Relevance["tone"];
   if (dislikes.length) { label = `You asked to see less ${dislikes[0]}`; tone = "muted"; }
+  else if (relatedInterests.length) { label = `Related to ${relatedInterests[0].name}`; tone = "related"; }
   else if (ignored.length && !watched && !matching.length) { label = "You usually ignore assets like this"; tone = "ignored"; }
   else if (matching.length >= 1 && (watched || preferences.length || matching.length > 1 || thesisHits.length)) { label = `Strong match for your ${themeName(matching[0])} thesis`; tone = "match"; }
   else if (matching.length) { label = `Related to ${themeName(matching[0])}`; tone = "related"; }

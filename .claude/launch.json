@@ -24,6 +24,30 @@
         "3011"
       ],
       "port": 3011
+    },
+    {
+      "name": "web-alt",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "-p",
+        "3021"
+      ],
+      "port": 3021
+    },
+    {
+      "name": "web-redesign",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "autoPort": true,
+      "env": {
+        "RUBICON_BUILD_DIR": ".next-redesign"
+      }
     }
   ]
 }

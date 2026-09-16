@@ -1,9 +1,10 @@
 import { loadAccount } from "@/lib/socialtrading/account";
 import { assertWithin, authenticate, bodyOf, deleteAgent, failure, HubError, insertAgent, listAgents, requestedAgent, setAgentEnabled } from "@/lib/socialtrading/server";
-import { agentConfig, defaultAgent } from "@/lib/socialtrading/agents/config";
+import { defaultAgent } from "@/lib/socialtrading/agents/config";
+import { generatedAgentDescription, generatedAgentName } from "@/lib/socialtrading/agents/naming";
 import { newChat } from "@/lib/socialtrading/chats";
 import { exceeds, profileViolation } from "@/lib/socialtrading/limits";
-import { newProfile } from "@/lib/socialtrading/profile";
+import { newProfile, readProfile } from "@/lib/socialtrading/profile";
 import type { HubState } from "@/lib/socialtrading/types";
 export const runtime = "nodejs";
 export async function GET(request: Request) {
@@ -17,13 +18,17 @@ export async function POST(request: Request) {
   try {
     const userId = await authenticate(request), body = await bodyOf(request);
     const account = await loadAccount(userId), limits = account.limits;
-    let agent;
-    try { agent = agentConfig(body, defaultAgent(crypto.randomUUID())); } catch (e) { throw new HubError(400, (e as Error).message); }
     if (typeof body.thesis !== "string" || !body.thesis.trim() || body.thesis.length > 4000) throw new HubError(400, "Give this agent an investing thesis.");
     // Plan caps first, in words; Postgres re-checks the same caps under a per-user lock on insert.
     assertWithin(exceeds("agents", limits, account.usage.agents, account.usage.agents + 1, "Your plan") ?? exceeds("chats", limits, account.usage.chats, account.usage.chats + 1, "Your plan"));
-    const profile = { ...newProfile(userId), thesis: body.thesis.trim(), permissionConfigured: true, step: 5 as const, completedAt: new Date().toISOString() };
+    const supplied = body.profile === undefined
+      ? { ...newProfile(userId), investorAnswers: { ...newProfile(userId).investorAnswers, knowledge: 4, futureVision: body.thesis.trim() } }
+      : readProfile(JSON.stringify({ ...(body.profile as object), userId }), userId);
+    if (body.profile !== undefined && (supplied.step !== 6 || !supplied.completedAt)) throw new HubError(400, "Complete your agent profile before creating it.");
+    const profile = { ...supplied, thesis: body.thesis.trim(), permissionConfigured: true, step: 6 as const, completedAt: new Date().toISOString() };
     assertWithin(profileViolation(null, { profile, dislikes: [], preferences: [] }, limits));
+    const id = crypto.randomUUID();
+    const agent = { ...defaultAgent(id), name: generatedAgentName(profile, typeof body.userName === "string" ? body.userName : undefined, id), description: generatedAgentDescription(profile) };
     // New agents never start enabled; the user turns scheduled runs on deliberately.
     agent.enabled = false;
     const state: HubState = { agent, revision: 0, profile, dislikes: [], preferences: [], inferred: [], signals: [], chats: [newChat()], trades: [], events: [{ id: crypto.randomUUID(), at: agent.createdAt, kind: "agent", text: `Created ${agent.name}` }] };

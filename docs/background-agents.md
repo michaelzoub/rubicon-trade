@@ -55,10 +55,10 @@ Entry points: `app/api/cron/agents` (cron), `app/api/trade/agents/run` (manual �
 curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3001/api/cron/agents
 ```
 
-The response is the dispatch report. From the UI, “Run now” on the agents page triggers a `manual` run and shows the outcome; `/preview?view=agents` renders the page against fixtures without a database.
+The response is the dispatch report. From the UI, “Take a look now” in an agent’s reveal dialog on the agents page triggers a `manual` run and shows the outcome; `/preview?view=agents` renders the page against fixtures without a database.
 
 ## Verifying scheduling
 
-A successful cron response with `considered: 0` confirms that authorization and the database RPC work, but means there are no enabled agents. Turn on an agent in Manage agents before expecting scheduled checks. A real check should appear in its recent runs with trigger `cron`.
+A successful cron response with `considered: 0` confirms that authorization and the database RPC work, but means there are no enabled agents. Wake an agent in Manage agents before expecting scheduled checks. A real check should appear under “Recently noticed” in its reveal dialog, and in the runs table with trigger `cron`.
 
 `npm run dev` serves the cron endpoint but does not schedule it. Automatic half-hourly invocation comes from the deployed Vercel project and `vercel.json`; configure `CRON_SECRET` in that project's environment as well as locally. A local secret is not synchronized to Vercel. Verify the deployed cron invocation logs and a recorded scheduled run before treating production scheduling as operational.

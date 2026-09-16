@@ -11,7 +11,7 @@ const push = vi.hoisted(() => vi.fn());
 vi.mock("@privy-io/react-auth", () => ({ usePrivy: () => session, useLoginWithEmail: () => ({ sendCode: vi.fn(), loginWithCode: vi.fn(), state: { status: "initial" } }) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }), usePathname: () => "/" }));
 vi.mock("../providers", () => ({ usePrivyConfigured: () => config.configured }));
-import { SocialTrading } from "./social-trading";
+import { SocialTrading, ProfileFlow } from "./social-trading";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -32,9 +32,9 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
 async function render() { await act(async () => root.render(<SocialTrading />)); }
 async function click(label: string) {
-  const button = Array.from(container.querySelectorAll("button")).find(b => b.textContent?.includes(label));
+  const button = Array.from(container.querySelectorAll("button, [role='button']")).find(b => b.textContent?.includes(label) || b.getAttribute("aria-label")?.includes(label));
   expect(button, label).toBeTruthy();
-  await act(async () => button!.click());
+  await act(async () => button!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 }
 async function type(selector: string, value: string) {
   const input = container.querySelector(selector) as HTMLInputElement;
@@ -42,6 +42,15 @@ async function type(selector: string, value: string) {
   await act(async () => {
     Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+async function setRange(label: string, value: string) {
+  const input = container.querySelector(`input[type="range"][aria-label="${label}"]`) as HTMLInputElement;
+  expect(input, label).toBeTruthy();
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
   });
 }
 
@@ -58,65 +67,51 @@ it("keeps profile fields hidden until an authenticated session is ready", async 
   expect(container.textContent).toContain("Sign-in is unavailable");
 });
 
-it("completes the flow with custom interests and explicit automatic limits, then saves before exploring", async () => {
+it("completes the compact flow with explicit automatic limits, then saves before exploring", async () => {
   await render();
   expect(container.querySelector("#interest-search")).toBeNull();
   expect(container.querySelector('input[type="radio"]')).toBeNull();
-  expect(container.querySelector("[aria-label='Step 1 of 5']")).not.toBeNull();
+  expect(container.querySelector("[aria-label='Step 1 of 3']")).not.toBeNull();
   expect(container.textContent).toContain("Your agent is learning you");
   const avatar = container.querySelector("svg[aria-label='Your personalized agent badge']")!.innerHTML;
   await click("Continue");
-  expect(container.textContent).toContain("Add a few words");
+  expect(container.textContent).toContain("Choose how much you know");
+  await setRange("Investment knowledge", "4");
+  await click("Continue");
   await type("textarea", "AI infrastructure will grow.");
   await click("Continue");
+  expect(container.querySelector("[aria-label='Step 3 of 3']")).not.toBeNull();
   expect(container.querySelector("#interest-search")).toBeNull();
   expect(container.querySelector("svg[aria-label='Your personalized agent badge']")!.innerHTML).toBe(avatar);
-  await click("AI");
-  await click("Energy");
-  expect(container.textContent).toContain("2 themes shaping your profile");
-  expect(container.querySelector("svg[aria-label='Your personalized agent badge']")!.innerHTML).not.toBe(avatar);
-  await click("Continue");
-  expect(container.textContent).toContain("Power infrastructure");
-  await click("NVDA");
-  await type("#interest-search", "Clean energy");
-  await click("Add");
-  expect(container.textContent).toContain("Watching · 2");
-  await click("Continue");
   await act(async () => (container.querySelector('input[value="automatic"]') as HTMLInputElement).click());
-  await click("Create my profile");
+  await click("Meet my agent");
   expect(container.textContent).toContain("Enter a positive USD amount");
   const inputs = container.querySelectorAll('input[type="number"]');
   for (const [index, value] of ["25", "100", "500"].entries()) {
     inputs[index].id = `limit-${index}`;
     await type(`#limit-${index}`, value);
   }
-  await click("Create my profile");
-  expect(container.textContent).toContain("$25.00 per trade");
-  expect(container.querySelector("form")).toBeNull();
-  expect(container.textContent).toContain("Energy × AI");
-  await click("Edit profile");
-  expect((container.querySelector("textarea") as HTMLTextAreaElement).value).toBe("AI infrastructure will grow.");
-  await click("Continue"); await click("Continue"); await click("Continue"); await click("Create my profile");
-  await click("Meet your agent");
+  await click("Meet my agent");
   expect(push).toHaveBeenCalledWith("/");
-  expect(JSON.parse(localStorage.getItem(profileKey("alice"))!).completedAt).toBeTruthy();
+  const saved = JSON.parse(localStorage.getItem(profileKey("alice"))!);
+  expect(saved.completedAt).toBeTruthy();
+  expect(saved.step).toBe(6);
+  expect(saved.themes).toContain("ai");
   session.user = { id: "bob" };
   await render();
-  expect((container.querySelector("textarea") as HTMLTextAreaElement).value).toBe("");
+  expect(container.textContent).toContain("How much do you know about investing?");
 });
 
 
-it("lets users skip interests and restores their notification-only summary on return", async () => {
+it("lets experienced users write a thesis and restores their notification-only summary", async () => {
   await render();
+  await setRange("Investment knowledge", "4");
+  await click("Continue");
   await type("textarea", "Long-term energy demand.");
-  await click("Continue");
-  await click("Continue");
   await click("Continue");
   expect(container.querySelector('input[type="number"]')).toBeNull();
   await act(async () => (container.querySelector('input[value="notify"]') as HTMLInputElement).click());
-  await click("Create my profile");
-  expect(container.textContent).toContain("Notify me");
-  expect(container.textContent).toContain("0 assets");
+  await click("Meet my agent");
   await act(async () => root.unmount());
   root = createRoot(container);
   await render();
@@ -126,14 +121,80 @@ it("lets users skip interests and restores their notification-only summary on re
 
 it("keeps users on their profile when browser storage fails", async () => {
   await render();
+  await setRange("Investment knowledge", "4");
+  await click("Continue");
   await type("textarea", "Infrastructure.");
-  await click("Continue"); await click("Continue"); await click("Continue");
+  await click("Continue");
   await act(async () => (container.querySelector('input[value="notify"]') as HTMLInputElement).click());
-  await click("Create my profile");
   const save = vi.spyOn(localStorage, "setItem").mockImplementation(() => { throw new Error("Quota exceeded"); });
-  await click("Meet your agent");
+  await click("Meet my agent");
   expect(push).not.toHaveBeenCalled();
   expect(container.textContent).toContain("Your profile could not be saved");
   expect(container.textContent).not.toContain("Saved in this browser");
   save.mockRestore();
+});
+
+it("creates a fresh agent from onboarding alone, without a name field, and without overwriting the existing profile", async () => {
+  localStorage.setItem(profileKey("alice"), "existing-profile");
+  const complete = vi.fn();
+  await act(async () => root.render(<ProfileFlow userId="alice" persist={false} agentCreation onComplete={complete} />));
+  expect(container.textContent).toContain("How much do you know about investing?");
+  await setRange("Investment knowledge", "4");
+  await click("Continue");
+  await type("textarea", "AI and healthcare will change the world");
+  await click("Continue");
+  await act(async () => (container.querySelector('input[value="notify"]') as HTMLInputElement).click());
+  await click("Create agent");
+  expect(complete).toHaveBeenCalledWith(expect.objectContaining({ thesis: "AI and healthcare will change the world", themes: ["ai", "healthcare"], permission: "notify", step: 6 }));
+  expect(localStorage.getItem(profileKey("alice"))).toBe("existing-profile");
+});
+
+it("guides newer investors through the short test and saves the answers for the agent", async () => {
+  await render();
+  await setRange("Investment knowledge", "1");
+  await click("Continue");
+  expect(container.textContent).toContain("What kind of change creates opportunity?");
+  await click("Human progress");
+  await click("Continue");
+  expect(container.textContent).toContain("How much should ethics and impact shape your investments?");
+  expect(container.textContent).not.toContain("responsible AI");
+  await setRange("How much should ethics and impact shape your investments?", "4");
+  expect(container.textContent).not.toContain("responsible AI");
+  await click("Continue");
+  expect(container.textContent).toContain("How important is responsible AI");
+  expect(container.textContent).toContain("Your 2031 prediction");
+  await setRange("How important is responsible AI to your outlook?", "3");
+  expect(container.textContent).not.toContain("AI safety");
+  await click("Continue");
+  expect(container.textContent).toContain("AI safety");
+  await click("AI safety");
+  await click("Continue");
+  await click("Precision medicine and AI");
+  await click("Continue");
+  const stored = JSON.parse(localStorage.getItem(profileKey("alice"))!);
+  expect(stored.investorAnswers).toMatchObject({ knowledge: 1, opportunityDrivers: ["Human progress"], esgPriority: 4, aiPriority: 3, technologies: ["AI safety"] });
+  expect(stored.thesis).toContain("Precision medicine and AI");
+  expect(container.textContent).toContain("How should your agent act?");
+});
+
+it("changes the novice path toward defense when impact is a low priority", async () => {
+  await render();
+  await setRange("Investment knowledge", "0");
+  await click("Continue");
+  await click("Resilience & security");
+  await click("Continue");
+  await setRange("How much should ethics and impact shape your investments?", "0");
+  expect(container.textContent).not.toContain("AI as a competitive advantage");
+  await click("Continue");
+  expect(container.textContent).toContain("AI as a strategic advantage");
+  await setRange("How important is AI as a strategic advantage?", "4");
+  await click("Continue");
+  expect(container.textContent).toContain("Defense technology");
+  await click("Defense technology");
+  await click("Continue");
+  expect(container.textContent).toContain("Where could conflict reshape markets?");
+  await click("Ukraine");
+  expect(JSON.parse(localStorage.getItem(profileKey("alice"))!).investorAnswers.conflictCountries).toContain("Ukraine");
+  await click("Continue");
+  expect(container.textContent).toContain("AI-enabled defense and cybersecurity");
 });

@@ -15,7 +15,15 @@ Two kinds of trade share one server path (quote → USD valuation → `tradePoli
 - **The user** trades from `/trade` or a crypto asset page. Their swaps carry `initiator: "user"`, skip the agent mode gate, and never consume the agent's allowance. Amounts are entered in human units and converted exactly with provider decimals on the server.
 
 Every onchain swap settles from a wallet the user controls: the server issues calldata once per step, the user signs in their wallet, and the trade is `confirmed` only after a verified receipt. No delegated signer exists.
-- `/preview` — fixture-driven hub for design review, no sign-in.
+## Preview onboarding and the hub
+
+Run `npm run dev -- -p 3001`, then visit:
+
+- [Onboarding preview](http://localhost:3001/preview?view=onboarding) — complete the real onboarding flow and enter the hub with your selections.
+- [Hub preview](http://localhost:3001/preview) — explore a populated workspace immediately.
+- [Empty conversation](http://localhost:3001/preview?view=fresh) — see the new-chat experience.
+
+No sign-in is needed. Use **Restart onboarding** or **View hub** to switch experiences. Preview edits last for the current visit; reloading restores sample data. Hub links stay in preview, including asset details. Market data and agent runs are simulated; chat replies are unavailable and no live chat request is sent.
 
 ```bash
 cp .env.example .env   # fill in Privy, Supabase, OpenRouter

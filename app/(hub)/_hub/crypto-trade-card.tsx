@@ -53,28 +53,42 @@ export function CryptoTradeCard({ trade }: { trade: TradeIntent }) {
     finally { lock.current = false; setBusy(false); }
   }
 
-  return <div className={`hub-trade hub-trade--crypto is-${trade.status}`} role="group" aria-label="Onchain swap">
+  return <div className={`hub-trade hub-trade--crypto is-${trade.status}${open ? " hub-priority-card" : ""}`} role="group" aria-label="Onchain swap">
     <div className="hub-trade-head">
       <p className="hub-part-title">Swap · Uniswap on {net.name}</p>
       <span className="hub-trade-status">{cryptoStatus(trade)}</span>
     </div>
     <p className="hub-trade-byline">{trade.initiator === "user" ? "Placed by you" : `Proposed by ${state.agent?.name ?? "your agent"}`} · {timeAgo(trade.createdAt)}</p>
-    <dl className="hub-trade-facts">
-      <div><dt>You pay</dt><dd>{formatUnits(r.amount, tokenIn.decimals)} {tokenIn.symbol.toUpperCase()}<small>≈ {usd(trade.value, 2)} + gas</small></dd></div>
-      <div><dt>You receive at least</dt><dd>{formatUnits(c.minimumOutput, tokenOut.decimals)} {tokenOut.symbol.toUpperCase()}<small>expected {formatUnits(c.outputAmount, tokenOut.decimals)}</small></dd></div>
-      <div><dt>From wallet</dt><dd><a className="mono" href={explorerAddress(r.chainId, r.wallet)} target="_blank" rel="noopener noreferrer">{shortAddress(r.wallet)}</a><small>{wallet ? "connected" : "not connected"}</small></dd></div>
-      <div><dt>Slippage</dt><dd>{r.slippageBps / 100}%</dd></div>
-    </dl>
+    {/* The trade in one line. Wallet, slippage and the exact minimum are real
+      * but secondary, so they wait behind Details rather than competing with
+      * the only question the card actually asks: do you want this? */}
+    <p className="hub-trade-line">
+      <span className="hub-trade-line-out">{formatUnits(r.amount, tokenIn.decimals)} {tokenIn.symbol.toUpperCase()}</span>
+      <span className="hub-trade-line-arrow" aria-hidden="true">→</span>
+      <span className="hub-trade-line-in">{formatUnits(c.outputAmount, tokenOut.decimals)} {tokenOut.symbol.toUpperCase()}</span>
+      <small>≈ {usd(trade.value, 2)} + gas</small>
+    </p>
     {trade.reasoning && <p className="hub-trade-reasoning">{trade.reasoning}</p>}
     <p className="hub-trade-policy">{trade.policy.reason}</p>
     <p className="hub-trade-brokerage">{c.detail}</p>
     {c.hash && <p className="hub-trade-brokerage">Transaction <a className="mono hub-inline-link" href={explorerTx(r.chainId, c.hash)} target="_blank" rel="noopener noreferrer">{shortAddress(c.hash)}<ArrowUpRight size={12} aria-hidden="true" /></a></p>}
-    <button type="button" className="hub-trade-raw-toggle" aria-expanded={raw} onClick={() => setRaw(v => !v)}><ChevronDown size={12} aria-hidden="true" />{raw ? "Hide" : "Show"} contract addresses</button>
-    {raw && <dl className="hub-trade-raw mono">
-      <div><dt>Pay token</dt><dd><a href={explorerAddress(r.chainId, r.tokenIn)} target="_blank" rel="noopener noreferrer">{r.tokenIn}</a></dd></div>
-      <div><dt>Receive token</dt><dd><a href={explorerAddress(r.chainId, r.tokenOut)} target="_blank" rel="noopener noreferrer">{r.tokenOut}</a></dd></div>
-      <div><dt>Base units</dt><dd>{r.amount} → ≥ {c.minimumOutput}</dd></div>
-    </dl>}
+    <details className="hub-disclosure hub-trade-disclosure">
+      <summary>Details</summary>
+      <div className="hub-disclosure-body">
+        <dl className="hub-trade-facts">
+          <div><dt>You receive at least</dt><dd>{formatUnits(c.minimumOutput, tokenOut.decimals)} {tokenOut.symbol.toUpperCase()}<small>expected {formatUnits(c.outputAmount, tokenOut.decimals)}</small></dd></div>
+          <div><dt>From wallet</dt><dd><a className="mono" href={explorerAddress(r.chainId, r.wallet)} target="_blank" rel="noopener noreferrer">{shortAddress(r.wallet)}</a><small>{wallet ? "connected" : "not connected"}</small></dd></div>
+          <div><dt>Slippage</dt><dd>{r.slippageBps / 100}%</dd></div>
+          <div><dt>Network</dt><dd>{net.name} · Uniswap</dd></div>
+        </dl>
+        <button type="button" className="hub-trade-raw-toggle" aria-expanded={raw} onClick={() => setRaw(v => !v)}><ChevronDown size={12} aria-hidden="true" />{raw ? "Hide" : "Show"} contract addresses</button>
+        {raw && <dl className="hub-trade-raw mono">
+          <div><dt>Pay token</dt><dd><a href={explorerAddress(r.chainId, r.tokenIn)} target="_blank" rel="noopener noreferrer">{r.tokenIn}</a></dd></div>
+          <div><dt>Receive token</dt><dd><a href={explorerAddress(r.chainId, r.tokenOut)} target="_blank" rel="noopener noreferrer">{r.tokenOut}</a></dd></div>
+          <div><dt>Base units</dt><dd>{r.amount} → ≥ {c.minimumOutput}</dd></div>
+        </dl>}
+      </div>
+    </details>
     {error && <p className="hub-error" role="alert">{error}</p>}
     {open && <div className="hub-trade-actions">
       {wallet

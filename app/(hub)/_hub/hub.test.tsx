@@ -40,6 +40,7 @@ import { HomeView } from "./home-view";
 import { TradeView } from "./trade-view";
 import { AssetGrid } from "./parts";
 import { ProfileView } from "./profile-view";
+import { ActivityView } from "./activity-view";
 import type { AccountSummary } from "@/lib/socialtrading/plans";
 
 let container: HTMLDivElement, root: Root;
@@ -63,13 +64,41 @@ async function type(value: string) {
   await act(async () => { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); });
 }
 
-it("renders the agent management navigation, the conversation and the living profile card", async () => {
+it("carries navigation inside the one header band, with the conversation and the agent presence line", async () => {
   await render(PREVIEW_STATE);
   expect(Array.from(container.querySelectorAll(".hub-nav-link")).map(a => a.textContent)).toEqual(["Home", "Explore", "Buy", "Activity", "Manage agents", "Profile"]);
+  // The tab bar rides in the header rather than forming a second sticky band.
+  expect(container.querySelector(".site-header .hub-nav")).not.toBeNull();
   expect(container.querySelectorAll(".hub-row").length).toBe(PREVIEW_STATE.chats[0].messages.length);
   expect(container.textContent).toContain("Michael’s agent");
   expect(container.querySelector(".hub-trade")?.textContent).toContain("Approve");
-  expect(container.querySelector(".socialtrading-profile-card")?.textContent).toContain("Ask before acting");
+  // The profile rail is gone. Its card now waits, hidden, behind the presence
+  // pill and only appears on hover or focus.
+  expect(container.querySelector(".hub-layout > .socialtrading-profile")).toBeNull();
+  expect((container.querySelector(".hub-presence-card") as HTMLElement).hidden).toBe(true);
+  expect(container.querySelector(".hub-presence-card .socialtrading-profile-card")?.textContent).toContain("Ask before acting");
+  const presence = container.querySelector(".hub-presence")!;
+  expect(presence.getAttribute("href")).toBe("/agents");
+  // Hovering the pill reveals the card; leaving it puts the card away again.
+  await act(async () => container.querySelector(".hub-presence-anchor")!.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
+  expect((container.querySelector(".hub-presence-card") as HTMLElement).hidden).toBe(false);
+  await act(async () => { container.querySelector(".hub-presence-anchor")!.dispatchEvent(new MouseEvent("mouseout", { bubbles: true })); await new Promise(r => setTimeout(r, 200)); });
+  expect((container.querySelector(".hub-presence-card") as HTMLElement).hidden).toBe(true);
+  expect(presence.textContent).toContain("Michael’s agent");
+  expect(presence.textContent).toContain("Watching");
+});
+
+it("keeps Home to the conversation and shows every stock and crypto order on Activity", async () => {
+  await render(PREVIEW_STATE);
+  expect(container.querySelector(".hub-trade-chart")).toBeNull();
+  await render(PREVIEW_STATE, <ActivityView />);
+  const chart = container.querySelector(".hub-trade-chart")!;
+  expect(chart.textContent).toContain("$75 buys");
+  expect(chart.textContent).toContain("$0 sells");
+  expect(Array.from(chart.querySelectorAll(".hub-trade-chart-list strong")).map(node => node.textContent)).toEqual(["OKLO", "WETH"]);
+  expect(chart.textContent).toContain("stock");
+  expect(chart.textContent).toContain("crypto");
+  expect(chart.querySelectorAll(".hub-trade-chart-point")).toHaveLength(2);
 });
 
 it("streams a reply with rich parts and animates the profile card from the persisted state", async () => {
@@ -103,6 +132,12 @@ it("records learning signals when the user acts on an asset card", async () => {
   const approve = Array.from(container.querySelectorAll(".hub-trade button")).find(b => b.textContent === "Approve")!;
   await act(async () => approve.click());
   expect(events.posted).toContainEqual(expect.objectContaining({ action: "trade", tradeId: "t1", decision: "approved" }));
+});
+
+it("adds the Rubicon-blue priority treatment only to high-importance cards", async () => {
+  await render(PREVIEW_STATE, <AssetGrid assets={[PREVIEW_ASSETS.VRT, PREVIEW_ASSETS.OKLO]} />);
+  expect(container.querySelector('[data-asset="VRT"]')?.classList.contains("hub-priority-card")).toBe(true);
+  expect(container.querySelector('[data-asset="OKLO"]')?.classList.contains("hub-priority-card")).toBe(false);
 });
 
 it("shows an onchain swap in human units and walks prepare → sign → submitted → status", async () => {
@@ -201,7 +236,9 @@ it("counts follows and learned assets on the profile and explains the cap with w
   const hints = Array.from(container.querySelectorAll(".hub-limit-hint.is-full")).map(n => n.textContent ?? "");
   expect(hints.some(h => /follow 5 assets.*Unfollow one/.test(h))).toBe(true);
   expect(hints.some(h => /remember 25 assets.*paused learning/.test(h))).toBe(true);
-  expect(container.querySelectorAll("details[name=profile-settings]").length).toBeGreaterThan(3);
+  expect(container.querySelectorAll(".hub-facet").length).toBeGreaterThan(3);
+  expect(container.querySelector(".hub-profile-hero h1")?.textContent).toBe("Michael");
+  expect(container.querySelector("details[name=profile-settings]")).toBeNull();
   const inputs = Array.from(container.querySelectorAll<HTMLInputElement>(".hub-chiplist input"));
   expect(inputs[0].disabled).toBe(true);
   expect(inputs[1].disabled).toBe(false);
@@ -212,14 +249,17 @@ it("counts follows and learned assets on the profile and explains the cap with w
 it("dismisses a discovery card after saving the preference and links directly to its details", async () => {
   await render(PREVIEW_STATE, <AssetGrid assets={[PREVIEW_ASSETS.OKLO]} discovery />);
   expect(container.querySelector(".hub-discovery-main")?.getAttribute("href")).toBe("/explore/stock/OKLO");
-  expect(container.querySelector(".hub-discovery-price")?.textContent).toContain("market cap");
+  expect(container.querySelector(".hub-discovery-price")?.textContent).toContain("Stock");
+  expect(container.querySelector(".hub-discovery-price")?.textContent).not.toContain("market cap");
   await act(async () => (container.querySelector(".hub-discovery-dismiss") as HTMLButtonElement).click());
   expect(events.posted).toContainEqual(expect.objectContaining({ action: "signal", signal: "dismissed", target: "OKLO" }));
   expect(container.querySelector(".hub-discovery-card")).toBeNull();
 });
 
-it("opens one account menu on hover with credits, wallet balances, then sign out last", async () => {
+it("opens one account menu on hover: identity, credits, a wallet row that reveals details, then sign out last", async () => {
   privy.sendTransaction.mockImplementation(async ({ method }: { method: string }) => method === "eth_chainId" ? "0x2105" : method === "eth_call" ? "0x17d7840" : "0xde0b6b3a7640000");
+  const writeText = vi.fn(async () => {});
+  Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
   await render(PREVIEW_STATE, <HomeView />, PREVIEW_ACCOUNT);
   expect(container.querySelectorAll(".site-header-actions > *").length).toBe(1);
   expect(container.querySelector(".site-nav-cta")).toBeNull();
@@ -232,12 +272,37 @@ it("opens one account menu on hover with credits, wallet balances, then sign out
   await act(async () => { await new Promise(r => setTimeout(r, 10)); });
   expect(menu.hidden).toBe(false);
   expect(trigger.getAttribute("aria-expanded")).toBe("true");
-  const sections = Array.from(menu.children).map(n => n.className.split(" ")[0]);
-  expect(sections).toEqual(["hub-account-head", "hub-account-section", "hub-account-section", "hub-account-foot"]);
+  expect(Array.from(menu.children).map(n => n.className.split(" ")[0])).toEqual(["hub-account-pane", "hub-account-foot"]);
+  expect(menu.querySelector(".hub-account-who")?.textContent).toBe("MichaelFree plan");
   expect(menu.querySelector(".hub-account-credits")?.textContent).toBe("$4.61");
-  expect(menu.textContent).toContain("Free plan");
-  expect(menu.textContent).toContain("25 USDC · 1 ETH");
-  expect(menu.textContent).toContain("Base");
+  // The card stays quiet: no separators, no raw address, no explanatory copy.
+  expect(menu.textContent).not.toContain("·");
+  expect(menu.textContent).not.toContain("0x1111");
+  expect(menu.textContent).not.toMatch(/provider|network\b/i);
+  const walletRow = menu.querySelector(".hub-account-wallet") as HTMLButtonElement;
+  expect(walletRow.textContent).toBe("Wallet25 USDC");
+  const balanceRequests = privy.sendTransaction.mock.calls.length;
+  expect(balanceRequests).toBeGreaterThan(0);
+  await act(async () => walletRow.click());
+  const detail = menu.querySelector(".hub-account-pane.is-detail") as HTMLElement;
+  expect(menu.querySelector(".hub-account-head")).toBeNull();
+  expect(detail.querySelector(".hub-account-qr svg")?.getAttribute("aria-label")).toBe(`QR code for ${PREVIEW_WALLET}`);
+  expect(detail.querySelector(".hub-account-address")?.textContent).toBe(PREVIEW_WALLET);
+  expect(Array.from(detail.querySelectorAll(".hub-account-facts div")).map(d => d.textContent)).toEqual(["NetworkBase", "USDC25", "ETH1"]);
+  expect(document.activeElement).toBe(detail.querySelector(".hub-account-back"));
+  const copy = detail.querySelector(".hub-account-copy") as HTMLButtonElement;
+  await act(async () => copy.click());
+  expect(writeText).toHaveBeenCalledWith(PREVIEW_WALLET);
+  expect(copy.textContent).toBe("Copied");
+  expect(menu.querySelector(".hub-account-foot .hub-account-signout")).not.toBeNull();
+  await act(async () => (detail.querySelector(".hub-account-back") as HTMLButtonElement).click());
+  expect(menu.querySelector(".hub-account-head")).not.toBeNull();
+  await act(async () => trigger.click());
+  await act(async () => trigger.click());
+  await act(async () => { await new Promise(r => setTimeout(r, 10)); });
+  expect(privy.sendTransaction).toHaveBeenCalledTimes(balanceRequests);
+  // Reopening after a close always lands on the identity card, not the last wallet.
+  expect(menu.querySelector(".hub-account-pane.is-summary")).not.toBeNull();
   const signOut = menu.querySelector(".hub-account-foot .hub-account-signout") as HTMLButtonElement;
   expect(signOut.textContent).toBe("Sign out");
   await act(async () => signOut.click());

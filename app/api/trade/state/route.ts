@@ -1,5 +1,4 @@
 import { loadAccount } from "@/lib/socialtrading/account";
-import { agentConfig, defaultAgent } from "@/lib/socialtrading/agents/config";
 import { newChat } from "@/lib/socialtrading/chats";
 import { assertWithin, requestedAgent, requestedChat, authenticate, bodyOf, failure, HubError, initialize, loadState, saveState } from "@/lib/socialtrading/server";
 import { exceeds, profileViolation } from "@/lib/socialtrading/limits";
@@ -25,13 +24,13 @@ export async function POST(request: Request) {
     const account = await loadAccount(userId), limits = account.limits;
     let state = await loadState(userId, requestedAgent(body.agentId));
     if (!state && (body.action !== "initialize" || requestedAgent(body.agentId) !== "default")) throw new HubError(404, "Agent not found.");
-    if (!state) { const created = await initialize(userId, body.profile, limits); return Response.json({ state: created, account: await loadAccount(userId) }); }
+    if (!state) { const created = await initialize(userId, body.profile, limits, typeof body.userName === "string" ? body.userName : undefined); return Response.json({ state: created, account: await loadAccount(userId) }); }
     if (body.action === "initialize") return Response.json({ state, account });
     if (body.revision !== state.revision) throw new HubError(409, "Your workspace changed. Refresh before editing.");
     let chatId: string | undefined;
     if (body.action === "agent") {
-      try { state.agent = agentConfig(body.config, state.agent ?? defaultAgent()); } catch (e) { throw new HubError(400, (e as Error).message); }
-      // The agents page saves thesis, watchlist, mode, and limits in the same request as the configuration.
+      // Identity, voice, tools, and outreach behavior are system-owned. This
+      // surface only changes what the agent follows and what it may do.
       const changed: string[] = [];
       const before = { profile: { thesis: state.profile.thesis, interests: state.profile.interests }, dislikes: state.dislikes, preferences: state.preferences };
       let thesis = state.profile.thesis, interests = state.profile.interests;
@@ -54,7 +53,7 @@ export async function POST(request: Request) {
         if (JSON.stringify(tradeLimits) !== JSON.stringify(state.profile.limits)) changed.push("limits");
         state.profile.permission = permission; state.profile.limits = { perTrade: tradeLimits.perTrade, daily: tradeLimits.daily, weekly: tradeLimits.weekly }; state.profile.permissionConfigured = true;
       }
-      recordEvent(state, "agent", `Updated ${state.agent.name} settings`, changed.length ? `Changed ${changed.join(", ")}.` : undefined);
+      recordEvent(state, "agent", `Updated ${state.agent?.name ?? "your agent"}`, changed.length ? `Changed ${changed.join(", ")}.` : undefined);
     } else if (body.action === "profile") {
       const profile = readProfile(JSON.stringify({ ...body.profile, userId }), userId);
       if (!profile.completedAt || (profile.permission === "automatic" && limitsError(profile.limits))) throw new HubError(400, "Check your thesis, mode, and spending limits.");

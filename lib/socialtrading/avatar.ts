@@ -12,7 +12,7 @@ export function avatarTraits(userId: string) {
     return ((value ^ (value >>> 14)) >>> 0) % count;
   };
   return {
-    color: pick(6), pattern: pick(4), face: pick(3),
-    eyes: pick(3), mouth: pick(2), accessory: pick(2),
+    color: pick(6), pattern: pick(4), face: pick(5),
+    eyes: pick(4), mouth: pick(3), accessory: pick(2),
   };
 }

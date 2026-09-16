@@ -11,10 +11,8 @@
 /* One measure for header and hub, so the logo, the tabs and the thread share a left edge. */
 .socialtrading-page .container, .socialtrading-page .site-header-inner { width: min(1320px, 100% - 2 * clamp(20px, 4vw, 56px)); max-width: none; margin-inline: auto; }
 .socialtrading-main.is-hub { padding-block: clamp(1.25rem, 3vh, 2rem) clamp(2rem, 6vh, 4rem); }
-.hub-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(17rem, 20rem); grid-template-areas: "nav nav" "stage card"; column-gap: clamp(2rem, 4vw, 4.5rem); row-gap: 2rem; align-items: start; }
-.hub-layout.is-solo { grid-template-columns: minmax(0, 1fr); grid-template-areas: "nav" "stage"; }
-.hub-stage { grid-area: stage; min-width: 0; }
-.hub-layout .socialtrading-profile { grid-area: card; margin-top: 0; top: 8.75rem; }
+.hub-layout { display: block; }
+.hub-stage { min-width: 0; }
 .socialtrading-profile.is-compact .socialtrading-profile-card { padding: 1.5rem; }
 .socialtrading-profile.is-compact .socialtrading-avatar { width: 7.5rem; height: 7.75rem; margin-bottom: .5rem; }
 .socialtrading-profile.is-compact .socialtrading-profile-identity { padding-bottom: 1.25rem; }
@@ -22,17 +20,31 @@
 .socialtrading-profile-more { margin-left: auto; color: var(--ink); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; white-space: nowrap; }
 .socialtrading-profile-interests .is-learned { background: transparent; box-shadow: inset 0 0 0 1px var(--line); font-style: italic; }
 
-/* Navigation: a tab row under the header. One hairline, one moving mark. */
-.hub-nav { grid-area: nav; position: sticky; top: 3.75rem; z-index: 6; display: flex; align-items: stretch; gap: 0; margin-inline: -.25rem; padding-inline: .25rem; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--card) 86%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); overflow-x: auto; scrollbar-width: none; }
+/* One band of chrome. The header carries the logo, the tabs and the account,
+   on a solid surface so nothing scrolls through it. The header sits outside
+   .dashboard-theme, so it carries the same light tokens itself rather than
+   inheriting the dark defaults from :root. */
+.socialtrading-page .site-header, .site-header--hub, .site-header--hub.site-header--scrolled {
+  --surface-muted: #f4f4f5; --card: #fff; --ink: #18181b; --muted: #68686f; --quiet: #9a9aa2; --line: rgba(18, 18, 22, .09);
+  --hub-blue: #2f80ed; --hub-blue-rgb: 47, 128, 237; --hub-blue-line: rgba(47, 128, 237, .22);
+  background: #fff; border-bottom: 1px solid var(--line); backdrop-filter: none; -webkit-backdrop-filter: none;
+  box-shadow: none; transition: box-shadow 320ms var(--ease-soft);
+}
+.socialtrading-page .site-header--scrolled, .site-header--hub.site-header--scrolled { box-shadow: 0 10px 24px -20px rgba(16, 24, 40, .5); }
+.site-header--hub .site-header-inner { gap: clamp(1rem, 3vw, 2.25rem); height: 3.75rem; }
+.site-header--hub .site-header-links { display: flex; align-self: stretch; flex: 1 1 auto; min-width: 0; padding-left: 0; }
+.site-header--hub .site-header-actions { flex: 0 0 auto; }
+
+/* Navigation: tabs in the header band. One moving mark, no second hairline. */
+.hub-nav { position: relative; display: flex; align-items: stretch; align-self: stretch; gap: 0; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .hub-nav::-webkit-scrollbar { display: none; }
-.hub-nav-link { position: relative; display: inline-flex; align-items: center; gap: .5rem; padding: .85rem .75rem .95rem; color: var(--muted); font-size: .875rem; font-weight: 500; letter-spacing: -.005em; white-space: nowrap; transition: color 180ms ease; }
-.hub-nav-link:first-child { padding-left: .25rem; }
+.hub-nav-link { position: relative; display: inline-flex; align-items: center; gap: .5rem; padding: 0 .7rem; color: var(--muted); font-size: .875rem; font-weight: 500; letter-spacing: -.005em; white-space: nowrap; transition: color 180ms ease; }
 .hub-nav-link:hover { color: var(--ink); }
 .hub-nav-link.is-active { color: var(--ink); }
 .hub-nav-link svg { flex-shrink: 0; opacity: .7; transition: opacity 180ms ease, transform 320ms var(--dashboard-ease-out); }
 .hub-nav-link.is-active svg, .hub-nav-link:hover svg { opacity: 1; }
 .hub-nav-link.is-active svg { transform: translateY(-.5px) scale(1.06); }
-.hub-nav-mark { position: absolute; left: 0; bottom: -1px; width: 0; height: 2px; border-radius: 2px 2px 0 0; background: var(--hub-blue); opacity: 0; pointer-events: none; }
+.hub-nav-mark { position: absolute; left: 0; bottom: 0; width: 0; height: 2px; border-radius: 2px 2px 0 0; background: var(--hub-blue); box-shadow: 0 0 12px -1px rgba(var(--hub-blue-rgb), .55); opacity: 0; pointer-events: none; }
 .hub-error { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; margin-bottom: 1rem; padding: .75rem 1rem; border-radius: 8px; background: #fbf1ef; color: #8d2f2d; font-size: .8125rem; }
 .hub-error button { text-decoration: underline; text-underline-offset: 3px; }
 
@@ -41,7 +53,6 @@
 .hub-view-head .eyebrow { margin-bottom: .5rem; }
 .hub-view-head p:not(.eyebrow) { margin-top: .75rem; max-width: 34rem; color: var(--muted); font-size: .9375rem; line-height: 1.6; }
 .hub-part-title { display: inline-flex; align-items: center; gap: .35rem; margin-bottom: .6rem; color: var(--muted); font-size: .6875rem; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
-.hub-tabs { display: flex; flex-wrap: wrap; gap: .25rem; margin-bottom: 1rem; padding-bottom: .75rem; border-bottom: 1px solid var(--line); }
 .hub-tab { padding: .4rem .7rem; border-radius: 6px; color: var(--muted); font-size: .8125rem; font-weight: 500; transition: background-color 160ms ease, color 160ms ease; }
 .hub-tab:hover { color: var(--ink); background: var(--surface-muted); }
 .hub-tab.is-active { color: var(--ink); background: var(--surface-muted); }
@@ -76,8 +87,71 @@
 .hub-sparkline.is-down { color: #a3524b; }
 .hub-sparkline.is-empty { display: inline-block; border-radius: 4px; background: var(--surface-muted); }
 
+/* Important cards carry a quiet Rubicon-blue light at the top. The component
+   decides importance from product state (strong match or action required), so
+   the treatment remains meaningful when cards are reordered. */
+.hub-priority-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+.hub-priority-card::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 0 0 auto;
+  height: clamp(4.75rem, 48%, 8rem);
+  background:
+    radial-gradient(ellipse 58% 100% at 22% -12%, rgba(47, 128, 237, .22), transparent 70%),
+    radial-gradient(ellipse 62% 110% at 76% -28%, rgba(127, 180, 255, .2), transparent 72%),
+    linear-gradient(180deg, rgba(var(--hub-blue-rgb), .08), transparent 90%);
+  pointer-events: none;
+}
+/* The marking itself: a lit rail along the top edge. It reads as a deliberate
+   state on any card size, which a single glowing dot never did. */
+.hub-priority-card::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  inset: 0 0 auto;
+  height: 2.5px;
+  background: linear-gradient(90deg, transparent, var(--hub-blue) 22%, #8fc4ff 50%, var(--hub-blue) 78%, transparent);
+  box-shadow: 0 0 10px rgba(var(--hub-blue-rgb), .65);
+  pointer-events: none;
+}
+.hub-priority-card > * {
+  position: relative;
+  z-index: 1;
+}
+
 /* Conversation. */
 .hub-home { display: grid; gap: 1.5rem; }
+.hub-trade-chart { overflow: hidden; border-radius: 14px; background: var(--card); box-shadow: inset 0 0 0 1px var(--line); }
+.hub-trade-chart-head { display: flex; flex-direction: row; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 1rem 1.1rem .25rem; }
+.hub-trade-chart-head > div:first-child { display: grid; grid-template-columns: auto auto; align-items: baseline; gap: .15rem .45rem; }
+.hub-trade-chart-head .hub-part-title { grid-column: 1 / -1; margin-bottom: .15rem; }
+.hub-trade-chart-head strong { font-size: 1.35rem; font-weight: 500; letter-spacing: -.025em; font-variant-numeric: tabular-nums; }
+.hub-trade-chart-head > div:first-child > span { color: var(--quiet); font-size: .6875rem; }
+.hub-trade-chart-stats { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .35rem; }
+.hub-trade-chart-stats span { display: inline-flex; align-items: center; gap: .25rem; padding: .32rem .55rem; border-radius: 999px; font-size: .6875rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.hub-trade-chart-stats .is-buy { background: #e8f5ed; color: #2f704d; }
+.hub-trade-chart-stats .is-sell { background: #faecea; color: #9a4842; }
+.hub-trade-chart-scroll { overflow-x: auto; scrollbar-width: thin; }
+.hub-trade-chart-plot { display: block; width: max(100%, 680px); height: 230px; font-family: var(--font-sans), sans-serif; }
+.hub-trade-chart-grid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 5; }
+.hub-trade-chart-line { fill: none; stroke: var(--hub-blue); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.hub-trade-chart-axis, .hub-trade-chart-date { fill: var(--quiet); font-size: 9px; font-variant-numeric: tabular-nums; }
+.hub-trade-chart-point line { stroke: color-mix(in srgb, var(--quiet) 55%, transparent); stroke-width: 1; }
+.hub-trade-chart-point rect { fill: var(--card); stroke: var(--line); }
+.hub-trade-chart-point text { fill: var(--ink); font-size: 10px; font-weight: 600; text-anchor: middle; }
+.hub-trade-chart-point circle { fill: var(--card); stroke-width: 2.5; }
+.hub-trade-chart-point.is-buy circle { stroke: #438261; }
+.hub-trade-chart-point.is-sell circle { stroke: #b75d55; }
+.hub-trade-chart-point.is-complete circle { fill: var(--hub-blue); stroke: var(--card); }
+.hub-trade-chart-list { display: flex; flex-wrap: wrap; gap: .45rem 1rem; margin: 0 1.1rem; padding: .75rem 0 1rem; border-top: 1px solid var(--line); }
+.hub-trade-chart-list li { display: flex; align-items: baseline; gap: .35rem; color: var(--muted); font-size: .6875rem; }
+.hub-trade-chart-list strong { color: var(--ink); font-size: .75rem; }
+.hub-trade-chart-list span:last-child { color: var(--quiet); }
 .hub-conversation { position: relative; isolation: isolate; display: flex; flex-direction: column; min-height: min(68vh, 44rem); max-height: calc(100svh - 12.5rem); }
 .hub-messages { flex: 1; min-height: 0; overflow-y: auto; padding: .25rem .25rem 1.5rem; scroll-behavior: smooth; scrollbar-width: thin; }
 .hub-welcome { display: grid; justify-items: start; gap: .75rem; padding: 1rem 0 2.5rem; }
@@ -168,14 +242,6 @@
 .hub-trade-actions { display: flex; gap: .5rem; }
 
 /* Explore. */
-.hub-theme-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: .6rem; margin-bottom: 1.5rem; }
-.hub-theme { display: flex; align-items: center; gap: .75rem; padding: .8rem .9rem; border-radius: 10px; background: var(--card); box-shadow: 0 0 0 1px var(--line); text-align: left; transition: box-shadow 160ms ease, background-color 160ms ease; }
-.hub-theme:hover { background: var(--surface-muted); }
-.hub-theme.is-active { box-shadow: 0 0 0 1px var(--theme-color); background: color-mix(in srgb, var(--theme-light) 30%, var(--card)); }
-.hub-theme-mark { width: .6rem; height: .6rem; border-radius: 50%; background: var(--theme-color); flex-shrink: 0; }
-.hub-theme-copy { display: grid; flex: 1; min-width: 0; }
-.hub-theme-copy strong { font-size: .875rem; font-weight: 500; }
-.hub-theme-copy small { color: var(--muted); font-size: .6875rem; }
 .hub-explore-note { margin-top: 1.5rem; color: var(--muted); font-size: .8125rem; }
 .hub-explore-note .hub-inline-link { font-size: inherit; }
 
@@ -191,7 +257,6 @@
 .hub-detail-price strong { font-size: 2rem; font-weight: 500; letter-spacing: -.03em; line-height: 1; }
 .hub-detail-price .hub-change { margin-top: .35rem; font-size: .875rem; }
 .hub-detail-price small { margin-top: .25rem; color: var(--quiet); font-size: .6875rem; }
-.hub-ranges { display: flex; gap: .25rem; margin-bottom: .5rem; }
 .hub-detail-chart .dashboard-data-viz { font-family: var(--font-mono), ui-monospace, monospace; }
 .hub-detail-why { padding: 1rem 1.1rem; border-radius: 12px; background: var(--surface-muted); }
 .hub-detail-why > p:not(.hub-part-title) { margin-bottom: .85rem; font-size: .9375rem; line-height: 1.6; }
@@ -203,10 +268,6 @@
 .hub-timeline { position: relative; display: grid; gap: .25rem; padding-left: 1.25rem; }
 .hub-timeline::before { content: ""; position: absolute; left: .3rem; top: .6rem; bottom: .6rem; width: 1px; background: var(--line); }
 .hub-event { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); padding: .5rem 0 .6rem; }
-.hub-event-dot { position: absolute; left: -1.25rem; top: .95rem; width: .6rem; height: .6rem; border-radius: 50%; background: var(--card); box-shadow: inset 0 0 0 1.5px var(--quiet); }
-.hub-event.is-profile .hub-event-dot { background: var(--ink); box-shadow: none; }
-.hub-event.is-agent .hub-event-dot { background: var(--card); box-shadow: inset 0 0 0 1.5px var(--ink); }
-.hub-event.is-trade .hub-event-dot { border-radius: 2px; background: var(--ink); box-shadow: none; }
 .hub-event-meta { display: flex; gap: .6rem; color: var(--quiet); font-size: .6875rem; }
 .hub-event-meta span { font-weight: 500; }
 .hub-event.is-learning .hub-event-text { color: var(--muted); }
@@ -219,17 +280,13 @@
 
 /* Profile. */
 .hub-profile { display: grid; gap: 2rem; }
-.hub-profile-head { display: grid; grid-template-columns: 6rem minmax(0, 1fr); align-items: center; gap: 1.5rem; }
 .hub-profile-badge.socialtrading-avatar { width: 6rem; height: 6.25rem; margin: 0; }
-.hub-profile-head p:not(.eyebrow) { margin-top: .5rem; color: var(--muted); font-size: .9375rem; }
 .hub-tell { padding: 1rem 1.1rem; border-radius: 12px; background: radial-gradient(ellipse at 100% 0%, rgba(var(--hub-blue-rgb), .09), transparent 65%), linear-gradient(120deg, #f8fbff, #edf5ff); box-shadow: inset 0 0 0 1px var(--hub-blue-line), 0 6px 24px -16px rgba(var(--hub-blue-rgb), .18); }
 .hub-tell .hub-part-title { color: var(--hub-blue-ink); }
 .hub-tell .hub-part-title svg { width: 13px; height: 13px; }
 .hub-tell:focus-within { box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .4), 0 6px 24px -16px rgba(var(--hub-blue-rgb), .22); }
 .hub-tell .hub-starters { margin-top: 0; }
 .hub-tell .hub-chip-button:not(:hover):not(:active) { background: rgba(255, 255, 255, .86); }
-.hub-profile-columns { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: clamp(1.5rem, 4vw, 3.5rem); align-items: start; }
-.hub-profile-section { display: grid; gap: 1.5rem; }
 .hub-section-title { font-size: 1.0625rem; font-weight: 500; letter-spacing: -.02em; }
 .hub-section-lead { margin-top: -1rem; color: var(--muted); font-size: .8125rem; line-height: 1.55; }
 .hub-field { display: grid; gap: .6rem; }
@@ -245,24 +302,18 @@
 .hub-meter span { display: block; height: 100%; border-radius: inherit; background: var(--ink); transition: width 400ms var(--dashboard-ease-out); }
 .hub-inferred-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .25rem .75rem; color: var(--quiet); font-size: .6875rem; }
 
-@media (max-width: 1100px) {
-  .hub-layout { grid-template-columns: minmax(0, 1fr) minmax(15rem, 17rem); column-gap: 2rem; }
-}
-@media (max-width: 960px) {
-  .hub-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "nav" "stage" "card"; }
-  .hub-layout .socialtrading-profile { position: static; }
+@media (max-width: 860px) {
+  /* Below the width where logo, six tabs and the account fit on one line, the
+     tabs drop to their own row inside the same band rather than a new band. */
+  .site-header--hub .site-header-inner { flex-wrap: wrap; height: auto; padding-block: .5rem 0; }
+  .site-header--hub .site-header-links { order: 3; flex-basis: 100%; margin-inline: calc(-1 * clamp(20px, 4vw, 56px)); padding-inline: clamp(20px, 4vw, 56px); }
 }
 @media (max-width: 760px) {
   /* One measure for header and hub, so the logo, the tabs and the thread share a left edge. */
 .socialtrading-page .container, .socialtrading-page .site-header-inner { width: min(1320px, 100% - 2 * clamp(20px, 4vw, 56px)); max-width: none; margin-inline: auto; }
 .socialtrading-main.is-hub { padding-block: 1.5rem 2rem; }
-  .hub-layout, .hub-layout.is-solo { row-gap: 1.25rem; }
-  .hub-nav { top: 3.75rem; margin-inline: -24px; padding-inline: 24px; }
-  .hub-nav-link { flex: 1; justify-content: center; padding: .7rem .5rem .8rem; font-size: .8125rem; }
-  .hub-nav-link:first-child { padding-left: .5rem; }
+  .hub-nav-link { flex: 1 0 auto; justify-content: center; padding: .55rem .6rem .7rem; font-size: .8125rem; }
   .hub-conversation { min-height: 60vh; max-height: none; }
-  .hub-profile-columns { grid-template-columns: minmax(0, 1fr); }
-  .hub-profile-head { grid-template-columns: 4.5rem minmax(0, 1fr); gap: 1rem; }
   .hub-profile-badge.socialtrading-avatar { width: 4.5rem; height: 4.7rem; }
   .hub-trade-facts, .hub-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hub-detail-price { justify-items: start; }
@@ -307,149 +358,129 @@
   .hub-layout *, .hub-layout *::before, .hub-layout *::after { transition: none !important; animation: none !important; scroll-behavior: auto; }
 }
 
-/* Agent management: a sticky rail of agents, a sectioned form, and a save bar that follows the scroll. */
-.hub-agents { display: grid; gap: 1.75rem; }
-.hub-agents-head { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); align-items: end; gap: 1rem 3rem; margin-bottom: 0; }
-.hub-agents-head p:not(.eyebrow) { margin: 0; max-width: 36rem; }
-.hub-agents-layout { display: grid; grid-template-columns: minmax(16rem, 19rem) minmax(0, 1fr); gap: clamp(1.5rem, 3.5vw, 3.5rem); align-items: start; }
-.hub-agents-rail { position: sticky; top: 8.75rem; display: grid; gap: 1rem; }
-.hub-agents-rail-head { display: flex; align-items: baseline; justify-content: space-between; gap: .75rem; }
-.hub-agents-count { padding: .2rem .55rem; border-radius: 999px; background: var(--hub-blue-wash); color: var(--hub-blue-ink); font-size: .6875rem; font-weight: 500; box-shadow: inset 0 0 0 1px var(--hub-blue-line); white-space: nowrap; }
-.hub-agents-count.is-full { background: var(--surface-muted); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
-.hub-agent-list { display: grid; gap: .5rem; }
-.hub-agent-item { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .5rem; padding: .6rem .7rem .6rem .8rem; border-radius: 12px; background: var(--card); box-shadow: inset 0 0 0 1px var(--line); transition: box-shadow 180ms ease, background-color 180ms ease, transform 180ms var(--dashboard-ease-out); }
-.hub-agent-item::before { content: ""; position: absolute; left: 0; top: 22%; bottom: 22%; width: 2px; border-radius: 2px; background: var(--hub-blue); opacity: 0; transform: scaleY(.4); transition: opacity 180ms ease, transform 260ms var(--dashboard-ease-out); }
-.hub-agent-item:hover { box-shadow: inset 0 0 0 1px var(--hub-blue-line), 0 8px 24px -18px rgba(var(--hub-blue-rgb), .3); }
-.hub-agent-item.is-selected { background: linear-gradient(135deg, #f7fbff, var(--hub-blue-wash)); box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .45), 0 10px 28px -20px rgba(var(--hub-blue-rgb), .35); }
-.hub-agent-item.is-selected::before { opacity: 1; transform: scaleY(1); }
-.hub-agent-select { display: flex; align-items: center; gap: .7rem; min-width: 0; text-align: left; }
-.hub-agent-select:disabled { cursor: default; }
-.hub-agent-select:focus-visible { outline: 2px solid var(--hub-blue); outline-offset: 4px; border-radius: 8px; }
-.hub-agent-avatar.socialtrading-avatar { width: 2.4rem; height: 2.5rem; margin: 0; flex-shrink: 0; }
-.hub-agent-copy { display: grid; min-width: 0; }
-.hub-agent-copy strong { font-size: .875rem; font-weight: 500; letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hub-agent-copy small { color: var(--muted); font-size: .6875rem; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hub-agent-item.is-paused .hub-agent-copy strong { color: var(--muted); }
-.hub-agent-item.is-selected .hub-agent-copy strong { color: var(--ink); }
-.hub-agent-state { display: grid; justify-items: end; gap: .35rem; }
-.hub-agent-pill { padding: .15rem .5rem; border-radius: 999px; background: var(--surface-muted); color: var(--quiet); font-size: .625rem; font-weight: 500; letter-spacing: .01em; text-transform: uppercase; }
-.hub-agent-item.is-running .hub-agent-pill { background: #deecff; color: var(--hub-blue-ink); }
-.hub-switch { position: relative; width: 2.1rem; height: 1.2rem; border-radius: 999px; background: color-mix(in srgb, var(--quiet) 45%, transparent); transition: background-color 200ms ease, box-shadow 200ms ease; }
-.hub-switch[aria-checked="true"] { background: var(--hub-blue); box-shadow: 0 2px 8px rgba(var(--hub-blue-rgb), .28); }
-.hub-switch:disabled { opacity: .45; cursor: not-allowed; }
-.hub-switch:focus-visible { outline: 2px solid var(--hub-blue); outline-offset: 3px; }
-.hub-switch-knob { position: absolute; top: 2px; left: 2px; width: calc(1.2rem - 4px); height: calc(1.2rem - 4px); border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(18, 18, 22, .25); transition: transform 220ms var(--dashboard-ease-out); }
-.hub-switch[aria-checked="true"] .hub-switch-knob { transform: translateX(.9rem); }
-.hub-agent-new { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; width: 100%; padding: .7rem; border-radius: 12px; color: var(--ink); font-size: .8125rem; font-weight: 500; background: var(--card); box-shadow: inset 0 0 0 1px var(--hub-blue-line); transition: background-color 160ms ease, box-shadow 160ms ease, color 160ms ease; }
-.hub-agent-new:hover:not(:disabled) { background: var(--hub-blue-wash); color: var(--hub-blue-ink); box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .4); }
-.hub-agent-new.is-active { background: linear-gradient(135deg, #f7fbff, var(--hub-blue-wash)); color: var(--hub-blue-ink); box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .45); }
-.hub-agent-new:disabled { opacity: .5; cursor: not-allowed; }
-.hub-agents-hint { color: var(--quiet); font-size: .6875rem; line-height: 1.5; }
-.hub-agents-toc { display: grid; gap: .1rem; padding-top: .75rem; border-top: 1px solid var(--line); }
-.hub-agents-toc a { position: relative; padding: .4rem .75rem; border-radius: 6px; color: var(--muted); font-size: .75rem; transition: color 160ms ease, background-color 160ms ease; }
-.hub-agents-toc a::before { content: ""; position: absolute; left: 0; top: 30%; bottom: 30%; width: 2px; border-radius: 2px; background: var(--hub-blue); opacity: 0; transition: opacity 160ms ease; }
-.hub-agents-toc a:hover { color: var(--ink); background: var(--surface-muted); }
-.hub-agents-toc a.is-active { color: var(--hub-blue-ink); }
-.hub-agents-toc a.is-active::before { opacity: 1; }
+/* Agents: a team of living cards. Each carries its own theme colour; nothing on the page is a setting. */
+.hub-agents { display: grid; gap: clamp(1.5rem, 3vh, 2.25rem); }
+.hub-agents-head { margin-bottom: 0; }
+.hub-agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 18.5rem), 1fr)); gap: clamp(1.25rem, 2.5vw, 2rem); list-style: none; margin: 0; padding: .25rem 0 .75rem; }
+.hub-agent-card {
+  --agent-rgb: var(--hub-blue-rgb);
+  position: relative; isolation: isolate; display: grid; grid-template-rows: auto 1fr auto; gap: 1.25rem; min-height: 19.5rem; padding: 1.5rem 1.5rem 1.4rem;
+  border-radius: 24px; background: #fff; color: var(--ink);
+  box-shadow: 0 0 0 1px rgba(var(--agent-rgb), .16), 0 1px 2px rgba(18, 18, 22, .04), 0 22px 48px -30px rgba(var(--agent-rgb), .55), 0 10px 24px -20px rgba(18, 18, 22, .12);
+  transition: transform 340ms var(--dashboard-ease-out), box-shadow 340ms var(--dashboard-ease-out), filter 340ms ease, opacity 340ms ease;
+}
+/* Two washes of the agent’s colour: one bright corner, one quiet corner. A ring of light sits just inside the edge. */
+.hub-agent-card::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none; opacity: .85; transition: opacity 340ms ease;
+  background: radial-gradient(80% 70% at 100% 0%, rgba(var(--agent-rgb), .46), rgba(var(--agent-rgb), .12) 45%, transparent 72%), radial-gradient(65% 60% at 0% 100%, rgba(var(--agent-rgb), .22), transparent 70%), linear-gradient(160deg, #fff 30%, var(--agent-light)); }
+.hub-agent-card::after { content: ""; position: absolute; inset: 1px; z-index: -1; border-radius: 23px; pointer-events: none; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .9), inset 0 0 0 1px rgba(255, 255, 255, .5); }
+.hub-agent-card:hover, .hub-agent-card:has(.hub-agent-card-open:focus-visible) { transform: translateY(-4px); box-shadow: 0 0 0 1px rgba(var(--agent-rgb), .28), 0 2px 4px rgba(18, 18, 22, .04), 0 34px 64px -34px rgba(var(--agent-rgb), .7), 0 18px 36px -24px rgba(18, 18, 22, .16); }
+.hub-agent-card:hover::before, .hub-agent-card:has(.hub-agent-card-open:focus-visible)::before { opacity: 1; }
+.hub-agent-card:active { transform: translateY(-2px); transition-duration: 120ms; }
+/* The whole card is the door. Real controls sit above it. */
+.hub-agent-card-open { position: absolute; inset: 0; z-index: 1; border-radius: inherit; cursor: pointer; }
+.hub-agent-card-open:focus-visible { outline: 2px solid rgba(var(--agent-rgb), .9); outline-offset: 4px; }
+.hub-agent-card > :not(.hub-agent-card-open) { position: relative; z-index: 2; pointer-events: none; }
+.hub-agent-card-foot button, .hub-agent-card-foot a { pointer-events: auto; }
+.hub-agent-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.hub-agent-card-badge.socialtrading-avatar { width: 4.25rem; height: 4.4rem; margin: 0; filter: drop-shadow(0 10px 16px rgba(var(--agent-rgb), .28)); transition: transform 420ms var(--dashboard-ease-out); }
+.hub-agent-card:hover .hub-agent-card-badge { transform: translateY(-2px) rotate(-2deg); }
+.hub-agent-card-copy { display: grid; align-content: end; gap: .4rem; min-width: 0; }
+.hub-agent-card-copy h2 { font-size: clamp(1.25rem, 1.6vw, 1.5rem); font-weight: 500; letter-spacing: -.025em; line-height: 1.2; text-wrap: balance; }
+.hub-agent-card-copy p { color: var(--muted); font-size: .875rem; line-height: 1.5; }
+.hub-agent-card-foot { display: grid; gap: .75rem; }
+.hub-agent-watching { display: flex; flex-wrap: wrap; gap: .35rem; }
+.hub-agent-watching span { padding: .22rem .6rem; border-radius: 999px; background: rgba(255, 255, 255, .7); color: var(--agent-dark); font-size: .6875rem; font-weight: 500; letter-spacing: .01em; box-shadow: inset 0 0 0 1px rgba(var(--agent-rgb), .22); backdrop-filter: blur(6px); }
+.hub-agent-card-note { color: var(--muted); font-size: .75rem; line-height: 1.5; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.hub-agent-card-note small { color: var(--quiet); font-size: inherit; white-space: nowrap; }
 
-.hub-agents-form { position: relative; display: grid; gap: 1.25rem; min-width: 0; }
-.hub-agent-summary { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 1rem 1.1rem; padding: 1.1rem 1.25rem; border-radius: 14px; background: radial-gradient(ellipse at 100% 0%, rgba(var(--hub-blue-rgb), .09), transparent 60%), linear-gradient(120deg, #f8fbff, #eef5ff); box-shadow: inset 0 0 0 1px var(--hub-blue-line), 0 8px 28px -20px rgba(var(--hub-blue-rgb), .3); }
-.hub-agent-summary-avatar.socialtrading-avatar { width: 3.4rem; height: 3.55rem; margin: 0; }
-.hub-agent-summary-badge { display: grid; place-items: center; width: 3.4rem; height: 3.4rem; border-radius: 50%; background: rgba(255, 255, 255, .8); color: var(--hub-blue-ink); box-shadow: inset 0 0 0 1px var(--hub-blue-line); }
-.hub-agent-summary-copy { display: grid; gap: .25rem; min-width: 0; }
-.hub-agent-summary-copy h2 { font-size: 1.25rem; font-weight: 500; letter-spacing: -.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hub-agent-summary-status { color: var(--muted); font-size: .8125rem; line-height: 1.5; }
-.hub-agent-summary-status.is-running { color: var(--hub-blue-ink); }
-.hub-agent-summary-status.is-running::before { content: ""; display: inline-block; width: .45rem; height: .45rem; margin-right: .45rem; border-radius: 50%; background: var(--hub-blue); box-shadow: 0 0 0 3px rgba(var(--hub-blue-rgb), .16); vertical-align: 1px; }
-.hub-agent-summary-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; }
-.hub-agent-summary-actions .button-secondary:not(:disabled) { background: rgba(255, 255, 255, .8); }
-.hub-agent-run:not(:disabled) { background: var(--hub-blue); border-color: var(--hub-blue); color: #fff; box-shadow: 0 3px 10px rgba(var(--hub-blue-rgb), .22); }
-.hub-agent-run:not(:disabled):hover { background: var(--hub-blue-ink); border-color: var(--hub-blue-ink); }
-.hub-agent-run svg { margin-right: .35rem; }
+/* Status: a living word, not a state machine. */
+.hub-agent-status { display: inline-flex; align-items: center; gap: .45rem; padding: .3rem .7rem .3rem .6rem; border-radius: 999px; background: rgba(255, 255, 255, .72); color: var(--muted); font-size: .6875rem; font-weight: 500; letter-spacing: .01em; box-shadow: inset 0 0 0 1px rgba(18, 18, 22, .06); backdrop-filter: blur(6px); white-space: nowrap; }
+.hub-agent-status i { width: .45rem; height: .45rem; border-radius: 50%; background: var(--quiet); flex-shrink: 0; }
+.hub-agent-status.is-live { color: var(--agent-dark); box-shadow: inset 0 0 0 1px rgba(var(--agent-rgb), .3); }
+.hub-agent-status.is-live i { background: var(--agent-color); box-shadow: 0 0 0 0 rgba(var(--agent-rgb), .45); }
+@media (prefers-reduced-motion: no-preference) {
+  .hub-agent-status.is-live i { animation: hub-agent-pulse 2.4s ease-out infinite; }
+  .hub-agent-card.is-analyzing::before { animation: hub-agent-drift 11s ease-in-out infinite alternate; }
+}
+@keyframes hub-agent-pulse { 0% { box-shadow: 0 0 0 0 rgba(var(--agent-rgb), .45); } 70%, 100% { box-shadow: 0 0 0 7px rgba(var(--agent-rgb), 0); } }
+@keyframes hub-agent-drift { to { background-position: 6% 4%, -4% -6%, 0 0; filter: saturate(1.15); } }
+.hub-agent-card.is-analyzing::before { background-size: 130% 130%, 130% 130%, 100% 100%; background-repeat: no-repeat; }
 
-.hub-agent-runs { display: grid; gap: .6rem; padding: .9rem 1.1rem; border-radius: 12px; background: var(--surface-muted); }
-.hub-agent-runs .hub-part-title { margin-bottom: 0; }
-.hub-agent-outcome { padding: .6rem .8rem; border-radius: 8px; background: var(--card); color: var(--ink); font-size: .8125rem; line-height: 1.5; box-shadow: inset 0 0 0 1px var(--hub-blue-line); }
-.hub-agent-outcome.is-failed { background: #fbf1ef; color: #8d2f2d; box-shadow: none; }
-.hub-run-list { display: grid; gap: .15rem; }
-.hub-run { display: grid; grid-template-columns: .6rem minmax(0, 1fr); align-items: start; gap: .6rem; padding: .35rem 0; }
-.hub-run-dot { margin-top: .45rem; width: .5rem; height: .5rem; border-radius: 50%; background: var(--card); box-shadow: inset 0 0 0 1.5px var(--quiet); }
-.hub-run.is-notified .hub-run-dot { background: var(--hub-blue); box-shadow: 0 0 0 3px rgba(var(--hub-blue-rgb), .16); }
-.hub-run.is-failed .hub-run-dot { background: #c9736c; box-shadow: none; }
-.hub-run.is-running .hub-run-dot { background: var(--hub-blue); animation: hub-think 1.2s ease-in-out infinite; }
-.hub-run-copy { display: grid; gap: .1rem; min-width: 0; }
-.hub-run-copy p { color: var(--ink); font-size: .8125rem; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.hub-run.is-failed .hub-run-copy p, .hub-run:not(.is-notified):not(.is-failed) .hub-run-copy p { color: var(--muted); }
-.hub-run-copy small { color: var(--quiet); font-size: .6875rem; }
+/* Resting: colour drains and the card sits back, with one way to bring it round. */
+.hub-agent-card.is-resting { filter: saturate(.25); opacity: .82; }
+.hub-agent-card.is-resting::before { opacity: .55; }
+.hub-agent-card.is-resting:hover { filter: saturate(.7); opacity: 1; }
+.hub-agent-wake { justify-self: start; padding: .55rem 1rem; border-radius: 999px; background: var(--ink); color: #fff; font-size: .8125rem; font-weight: 500; letter-spacing: -.005em; box-shadow: 0 6px 16px -8px rgba(18, 18, 22, .5); cursor: pointer; transition: transform 160ms var(--dashboard-ease-out), background-color 160ms ease, box-shadow 160ms ease; }
+.hub-agent-wake:not(:disabled):hover { background: #2a2a2e; transform: translateY(-1px); box-shadow: 0 10px 20px -10px rgba(18, 18, 22, .55); }
+.hub-agent-wake:disabled { opacity: .45; cursor: not-allowed; }
+.hub-agent-wake:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
 
-.hub-agent-sections { display: grid; gap: 1rem; border: 0; padding: 0; margin: 0; min-width: 0; }
-.hub-agent-section { display: grid; gap: 1.1rem; padding: 1.35rem 1.5rem 1.5rem; border-radius: 14px; background: var(--card); box-shadow: inset 0 0 0 1px var(--line); scroll-margin-top: 9.5rem; transition: box-shadow 200ms ease; }
-.hub-agent-section:focus-within { box-shadow: inset 0 0 0 1px var(--hub-blue-line), 0 10px 32px -24px rgba(var(--hub-blue-rgb), .35); }
-.hub-agent-section-head { display: grid; gap: .3rem; }
-.hub-agent-section-head p { color: var(--muted); font-size: .8125rem; line-height: 1.55; max-width: 40rem; }
-.hub-agent-section-body { display: grid; gap: 1.1rem; }
-.hub-agent-section.is-danger { box-shadow: inset 0 0 0 1px rgba(141, 47, 45, .22); }
-.hub-agent-section.is-danger:focus-within { box-shadow: inset 0 0 0 1px rgba(141, 47, 45, .4); }
-.hub-agent-section .hub-field { gap: .5rem; }
-.hub-agent-section .hub-field > p:first-child, .hub-agent-section label.hub-field { color: var(--muted); font-size: .75rem; }
-.hub-agent-section label.hub-field .socialtrading-input { color: var(--ink); font-size: .875rem; }
-.hub-agent-instructions { min-height: 6.5rem; }
-.hub-agent-caption { margin: 0; }
-.hub-agent-caption .hub-inline-link { font-size: inherit; }
-.hub-agent-capabilities { display: grid; gap: .6rem; }
-.hub-agent-capability { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: .8rem; padding: .85rem 1rem; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line); cursor: pointer; transition: background-color 160ms ease, box-shadow 160ms ease; }
-.hub-agent-capability:hover { background: #f8fbff; box-shadow: inset 0 0 0 1px var(--hub-blue-line); }
-.hub-agent-capability.is-on { background: var(--hub-blue-wash); box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .45); }
-.hub-agent-capability input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-.hub-agent-capability:has(input:focus-visible) { outline: 2px solid var(--hub-blue); outline-offset: 3px; }
-.hub-agent-capability-check { display: grid; place-items: center; margin-top: .15rem; width: 1rem; height: 1rem; border-radius: 4px; box-shadow: inset 0 0 0 1px var(--line); background: var(--card); color: #fff; transition: background-color 160ms ease, box-shadow 160ms ease; }
-.hub-agent-capability.is-on .hub-agent-capability-check { background: var(--hub-blue); box-shadow: none; }
-.hub-agent-capability strong { display: block; font-size: .875rem; font-weight: 500; }
-.hub-agent-capability small { display: block; margin-top: .2rem; color: var(--muted); font-size: .75rem; line-height: 1.5; }
-.hub-agent-modes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.hub-agent-modes .socialtrading-option { min-height: 3.5rem; padding: .8rem .95rem; font-size: .8125rem; }
-.hub-agents .socialtrading-option:hover { border-color: var(--hub-blue-line); background: #f8fbff; }
-.hub-agents .socialtrading-option:has(input:checked) { border-color: rgba(var(--hub-blue-rgb), .5); background: var(--hub-blue-wash); }
-.hub-agents .socialtrading-option:has(input:checked) .socialtrading-option-check { background: var(--hub-blue); border-color: var(--hub-blue); }
-.hub-agent-cadence { margin-top: 0; }
-.hub-agent-thresholds { gap: .5rem; }
-.hub-agent-threshold { min-height: 0; padding: .8rem 1rem; }
-.hub-agent-threshold-copy { display: grid; gap: .15rem; }
-.hub-agent-threshold-copy strong { font-weight: 500; }
-.hub-agent-threshold-copy small { color: var(--muted); font-size: .75rem; line-height: 1.45; }
-.hub-agent-stepper { display: inline-flex; align-items: center; gap: .25rem; padding: .25rem; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--line); }
-.hub-agent-stepper button { display: grid; place-items: center; width: 1.9rem; height: 1.9rem; border-radius: 50%; color: var(--ink); transition: background-color 160ms ease, color 160ms ease; }
-.hub-agent-stepper button:hover:not(:disabled) { background: var(--hub-blue-wash); color: var(--hub-blue-ink); }
-.hub-agent-stepper button:disabled { opacity: .35; cursor: not-allowed; }
-.hub-agent-stepper output { padding: 0 .5rem; color: var(--muted); font-size: .8125rem; font-variant-numeric: tabular-nums; }
-.hub-agent-stepper output strong { color: var(--ink); font-weight: 600; }
-.hub-agents .button.hub-agent-danger { color: #8d2f2d; }
-.hub-agent-danger svg { margin-right: .35rem; }
-.hub-agents .button.hub-agent-danger:hover:not(:disabled) { background: #fbf1ef; border-color: rgba(141, 47, 45, .3); }
-.hub-agents .button.hub-agent-danger-confirm:not(:disabled) { background: #8d2f2d; border-color: #8d2f2d; color: #fff; }
-.hub-agent-confirm { display: grid; gap: .25rem; padding: 1rem 1.1rem; border-radius: 10px; background: #fbf1ef; color: #5a2523; font-size: .875rem; }
-.hub-agent-confirm .socialtrading-actions { margin-top: .75rem; }
+/* Beginning another agent: an outline of a card, waiting. */
+.hub-agent-card.is-new { display: block; min-height: 19.5rem; padding: 0; background: transparent; box-shadow: none; }
+.hub-agent-card.is-new::before, .hub-agent-card.is-new::after { display: none; }
+.hub-agent-card.is-new:hover { transform: none; box-shadow: none; }
+.hub-agent-card.is-new .hub-agent-card-open { position: static; display: grid; place-content: center; justify-items: center; gap: 1rem; width: 100%; height: 100%; min-height: inherit; padding: 1.5rem; border-radius: 24px; color: var(--muted); text-align: center; background: repeating-linear-gradient(0deg, transparent, transparent) padding-box, transparent; box-shadow: inset 0 0 0 1.5px var(--line); transition: box-shadow 240ms ease, background-color 240ms ease, transform 340ms var(--dashboard-ease-out), color 240ms ease; }
+.hub-agent-card.is-new .hub-agent-card-open:not(:disabled):hover { color: var(--ink); background: var(--surface-muted); box-shadow: inset 0 0 0 1.5px rgba(18, 18, 22, .18), 0 18px 40px -30px rgba(18, 18, 22, .25); transform: translateY(-4px); }
+.hub-agent-card.is-new .hub-agent-card-open:disabled { cursor: not-allowed; opacity: .6; }
+.hub-agent-card.is-new .hub-agent-card-open:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
+.hub-agent-new-mark { display: grid; place-items: center; width: 3rem; height: 3rem; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px var(--line), 0 8px 20px -14px rgba(18, 18, 22, .4); }
+.hub-agent-new-copy { display: grid; gap: .2rem; }
+.hub-agent-new-copy strong { font-size: .9375rem; font-weight: 500; letter-spacing: -.015em; color: var(--ink); }
+.hub-agent-new-copy small { font-size: .75rem; color: var(--quiet); }
 
-.hub-agent-actions { position: sticky; bottom: 1rem; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .7rem .7rem .7rem 1.1rem; border-radius: 14px; background: color-mix(in srgb, var(--card) 92%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: inset 0 0 0 1px var(--hub-blue-line), 0 12px 36px -18px rgba(var(--hub-blue-rgb), .35); opacity: 0; transform: translateY(8px); pointer-events: none; transition: opacity 220ms ease, transform 260ms var(--dashboard-ease-out); }
-.hub-agent-actions.is-visible { opacity: 1; transform: none; pointer-events: auto; }
-.hub-agent-actions-status { color: var(--muted); font-size: .8125rem; }
-.hub-agent-actions-status.is-problem { color: #8d2f2d; }
-.hub-agent-actions-buttons { display: flex; gap: .5rem; }
-.hub-agent-actions .socialtrading-actions { margin: 0; }
+/* Reveal: a small black room, the same surface as the account popup. */
+.hub-reveal-backdrop { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 1rem; background: rgba(18, 18, 22, .32); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); animation: hub-reveal-fade 200ms ease; }
+.hub-reveal { --agent-rgb: var(--hub-blue-rgb); position: relative; width: min(23.5rem, 100%); max-height: calc(100svh - 2rem); overflow-y: auto; padding: 6px; border-radius: 16px; box-shadow: 0 0 0 1px rgba(var(--agent-rgb), .25), 0 30px 80px -30px rgba(0, 0, 0, .6), 0 0 60px -20px rgba(var(--agent-rgb), .35); outline: none; animation: hub-reveal-in 260ms var(--dashboard-ease-out); transform-origin: 50% 40%; }
+@keyframes hub-reveal-in { from { opacity: 0; transform: translateY(10px) scale(.97); } }
+@keyframes hub-reveal-fade { from { opacity: 0; } }
+.hub-reveal-close { position: absolute; top: 10px; right: 10px; display: grid; place-items: center; width: 1.75rem; height: 1.75rem; border-radius: 50%; color: #ffffff8c; cursor: pointer; transition: background-color 140ms ease, color 140ms ease; }
+.hub-reveal-close:hover, .hub-reveal-close:focus-visible { background: #ffffff14; color: #fff; outline: none; }
+.hub-reveal-head { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 14px; padding: 16px 14px 14px; border-radius: 12px; overflow: hidden; }
+.hub-reveal-head::before { content: ""; position: absolute; inset: 0; z-index: -1; background: radial-gradient(70% 90% at 0% 0%, rgba(var(--agent-rgb), .35), transparent 70%); }
+.hub-reveal-badge.socialtrading-avatar { width: 3.75rem; height: 3.9rem; margin: 0; filter: drop-shadow(0 8px 18px rgba(var(--agent-rgb), .45)); }
+.hub-reveal-who { display: grid; gap: 4px; min-width: 0; }
+.hub-reveal-who h2 { font-size: 1.0625rem; font-weight: 600; letter-spacing: -.02em; line-height: 1.25; color: #fff; }
+.hub-reveal-who p { color: #ffffffa6; font-size: 12px; line-height: 1.45; }
+.hub-reveal-who .hub-agent-status { justify-self: start; margin-top: 4px; background: #ffffff12; color: #ffffffb8; box-shadow: inset 0 0 0 1px #ffffff1f; backdrop-filter: none; }
+.hub-reveal-who .hub-agent-status.is-live { color: #fff; box-shadow: inset 0 0 0 1px rgba(var(--agent-rgb), .6); }
+.hub-reveal-who .hub-agent-status.is-live i { background: var(--agent-light); }
+.hub-reveal-section { display: grid; gap: 8px; padding: 12px 14px 14px; border-top: 1px solid #ffffff14; }
+.hub-reveal-label { color: #ffffff8c; font-size: 11px; letter-spacing: .02em; text-transform: uppercase; }
+.hub-reveal-quiet { color: #ffffff8c; font-size: 12px; }
+.hub-reveal-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.hub-reveal-chips span { padding: 4px 10px; border-radius: 999px; background: rgba(var(--agent-rgb), .18); color: #fff; font-size: 12px; font-weight: 500; box-shadow: inset 0 0 0 1px rgba(var(--agent-rgb), .45); }
+.hub-reveal-noticed { display: grid; gap: 8px; }
+.hub-reveal-noticed li { display: grid; gap: 2px; }
+.hub-reveal-noticed p { color: #fff; font-size: 12.5px; line-height: 1.5; }
+.hub-reveal-noticed small { color: #ffffff73; font-size: 11px; }
+.hub-reveal-fresh { padding: 8px 10px; border-radius: 8px; background: rgba(var(--agent-rgb), .22); color: #fff; font-size: 12.5px; line-height: 1.5; box-shadow: inset 0 0 0 1px rgba(var(--agent-rgb), .5); }
+.hub-reveal-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 14px 14px; border-top: 1px solid #ffffff14; }
+.hub-reveal-action { padding: 8px 12px; border-radius: 999px; background: #ffffff14; color: #fff; font-size: 12px; font-weight: 500; cursor: pointer; transition: background-color 140ms ease, transform 140ms var(--dashboard-ease-out); }
+.hub-reveal-action:not(:disabled):hover { background: #ffffff24; transform: translateY(-1px); }
+.hub-reveal-action.is-primary { background: #fff; color: #111; }
+.hub-reveal-action.is-primary:not(:disabled):hover { background: var(--agent-light); }
+.hub-reveal-action:disabled { opacity: .45; cursor: not-allowed; }
+.hub-reveal-action:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.hub-reveal-foot { padding: 8px 14px 10px; border-top: 1px solid #ffffff14; }
+.hub-reveal-bye { color: #ffffff66; font-size: 11px; cursor: pointer; transition: color 140ms ease; }
+.hub-reveal-bye:hover, .hub-reveal-bye:focus-visible { color: #ff9a93; outline: none; }
+.hub-reveal-goodbye { display: grid; gap: 8px; color: #ffffffd9; font-size: 12px; line-height: 1.5; }
+.hub-reveal-goodbye strong { color: #fff; }
+.hub-reveal-goodbye div { display: flex; gap: 6px; }
+.hub-reveal-goodbye button { padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; cursor: pointer; background: #ffffff14; color: #fff; }
+.hub-reveal-goodbye button:first-child { background: #fff; color: #111; }
+.hub-reveal-goodbye button:hover { background: #ffffff24; }
+.hub-reveal-goodbye button:first-child:hover { background: #ffd9d6; }
 .hub-row-via { margin-left: .1rem; padding: .1rem .45rem; border-radius: 999px; background: #deecff; color: var(--hub-blue-ink); font-size: .625rem; font-style: normal; font-weight: 500; }
 
-@media (max-width: 960px) {
-  .hub-agents-head { grid-template-columns: minmax(0, 1fr); align-items: start; }
-  .hub-agents-layout { grid-template-columns: minmax(0, 1fr); gap: 1.25rem; }
-  .hub-agents-rail { position: static; }
-  .hub-agents-toc { display: flex; flex-wrap: wrap; gap: .25rem; }
-  .hub-agents-toc a::before { display: none; }
-  .hub-agents-toc a.is-active { background: var(--hub-blue-wash); }
-  .hub-agent-summary { grid-template-columns: auto minmax(0, 1fr); }
-  .hub-agent-summary-actions { grid-column: 1 / -1; justify-content: flex-start; }
-  .hub-agent-modes { grid-template-columns: minmax(0, 1fr); }
-  .hub-agent-section { padding: 1.1rem 1.1rem 1.25rem; scroll-margin-top: 5rem; }
-  .hub-agent-actions { flex-wrap: wrap; bottom: .5rem; }
+@media (prefers-reduced-motion: reduce) {
+  .hub-reveal-backdrop, .hub-reveal { animation: none; }
+  .hub-agent-card:hover, .hub-agent-card:active, .hub-agent-card.is-new .hub-agent-card-open:hover, .hub-agent-card:hover .hub-agent-card-badge { transform: none; }
+}
+@media (max-width: 640px) {
+  .hub-agent-card, .hub-agent-card.is-new { min-height: 16rem; }
+  .hub-agent-card { padding: 1.25rem; }
+  .hub-reveal-actions { display: grid; }
 }
 
 /* Buy. */
@@ -524,9 +555,6 @@
 .hub-swap-result { padding-top: .5rem; border-top: 1px solid var(--line); }
 
 .hub-trade-view { display: grid; gap: 1.75rem; }
-.hub-trade-columns { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(16rem, 1fr); gap: clamp(1.5rem, 3vw, 2.5rem); align-items: start; }
-.hub-trade-main { display: grid; gap: 1.75rem; }
-.hub-trade-side { display: grid; gap: 1rem; position: sticky; top: 8.75rem; }
 .hub-side-card { display: grid; gap: .75rem; padding: 1rem 1.1rem; border-radius: 12px; background: var(--surface-muted); }
 .hub-side-card .hub-section-title { font-size: .9375rem; }
 .hub-side-card .hub-section-lead { margin-top: 0; }
@@ -544,8 +572,6 @@
 .hub-wallet-id span { color: var(--quiet); font-size: .6875rem; }
 
 @media (max-width: 960px) {
-  .hub-trade-columns { grid-template-columns: minmax(0, 1fr); }
-  .hub-trade-side { position: static; }
 }
 @media (max-width: 600px) {
   .hub-swap-form { grid-template-columns: minmax(0, 1fr); }
@@ -595,8 +621,6 @@
 .hub-chat-list-foot { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .5rem .6rem .25rem; }
 .hub-composer-meta { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .35rem .25rem 0; min-height: 1.25rem; }
 .hub-composer-meta .hub-limit-hint { flex: 1; }
-.hub-agent-new .hub-agent-new-count { margin-left: auto; }
-.hub-agents-rail .hub-limit-hint { margin-top: -.25rem; }
 
 /* Consumer discovery: airy cards, familiar identities, quiet secondary facts. */
 .hub-discovery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 16px; }
@@ -615,27 +639,9 @@
 .hub-discovery-actions { padding: 0 18px 18px; display: flex; gap: 6px; align-items: center; }
 .hub-discovery-dismiss { margin-left: auto; display: grid; place-items: center; width: 32px; height: 32px; color: var(--muted); border-radius: 50%; }
 .hub-discovery-dismiss:hover { background: #f5e9e7; color: #a94c46; }
-.hub-settings-card { border: 1px solid var(--line); border-radius: 16px; background: var(--card); padding: 0 20px; margin-bottom: 12px; min-width: 0; }
-.hub-settings-card > summary { cursor: pointer; padding: 20px 0; font-size: 14px; font-weight: 550; list-style: none; display: flex; align-items: center; gap: 12px; }
-.hub-settings-card > summary::after, details.hub-agent-section > summary::after { content: '+'; margin-left: auto; color: var(--muted); font-size: 20px; font-weight: 400; }
-.hub-settings-card[open] > summary::after, details.hub-agent-section[open] > summary::after { content: '−'; }
-.hub-settings-card > summary > span:not(.hub-wallet-monogram) { font-size: 12px; font-weight: 400; color: var(--muted); }
-.hub-settings-card > summary::-webkit-details-marker, details.hub-agent-section > summary::-webkit-details-marker { display: none; }
-.hub-settings-body { padding: 0 0 22px; display: grid; gap: 20px; }
-.hub-profile-columns { grid-template-columns: 1fr; gap: 0; max-width: 820px; }
-.hub-profile-section > .hub-section-title { display: none; }
 .hub-profile .hub-tell { max-width: 820px; }
 .hub-profile .hub-starters { gap: 8px; }
 .hub-profile .socialtrading-actions { margin: 12px 0 24px; }
-.hub-profile-section > .hub-field { margin-top: 16px; }
-.hub-settings-preview { color: var(--muted); font-size: 12px; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
- details.hub-agent-section { display: block; padding: 0 24px; }
- details.hub-agent-section > summary { padding: 22px 0; cursor: pointer; list-style: none; grid-template-columns: minmax(0, 1fr) auto; }
- details.hub-agent-section > summary .hub-settings-preview { grid-row: 2; }
- details.hub-agent-section > summary::after { grid-column: 2; grid-row: 1 / 3; }
- details.hub-agent-section .hub-agent-section-body { padding: 2px 0 24px; }
-.hub-agents-toc, .hub-agents-hint { display: none; }
-.hub-agent-runs { margin-bottom: 20px; }
 .hub-wallet-profile { padding: 0 18px; }
 .hub-wallet-profile summary small { display: block; margin-top: 4px; font-size: 11px; }
 .hub-wallet-profile summary strong { color: var(--ink); font-size: 14px; }
@@ -647,11 +653,8 @@
 .hub-activity-details > summary { cursor: pointer; font-size: 12px; color: var(--muted); margin-top: 10px; }
 .hub-discovery-card :focus-visible, .hub-settings-card > summary:focus-visible, .hub-agent-section > summary:focus-visible { outline: 2px solid #7897d7; outline-offset: 4px; }
 @media (max-width: 700px) {
-  .hub-settings-card > summary { flex-wrap: wrap; gap: 6px 12px; }
-  .hub-trade-side { grid-row: 1; }
   .hub-buy-result { flex-wrap: wrap; }
 }
-.hub-profile-section { gap: 0; }
 .hub-profile .socialtrading-actions[hidden] { display: none; }
 .hub-buy-result { grid-template-columns: 40px minmax(0, 1fr) auto; gap: 8px 12px; }
 .hub-buy-result .hub-asset-logo { width: 40px; height: 40px; border-radius: 12px; grid-row: 1 / 3; }
@@ -663,8 +666,8 @@
 .hub-chat-item:hover, .hub-chat-item.is-active { background: #ffffff18; }
 .hub-chat-item > button:first-child, .hub-chat-item > button:first-child small, .hub-chat-item .hub-chat-delete, .hub-chat-list-foot :is(p, small) { color: #fff; }
 
-/* Header account: one profile card that opens the account on hover, tap, or focus. */
-.hub-account { position: relative; }
+/* Header account: one profile card that opens a small identity card on hover, tap, or focus. */
+.hub-account { position: relative; --account-line: #ffffff12; --account-quiet: #ffffff73; --account-mid: #ffffffb3; }
 .hub-account-trigger { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px 0 6px; border-radius: 10px; background: #111; color: #fff; font-size: 12px; font-weight: 500; white-space: nowrap; cursor: pointer; transition: background-color 160ms var(--ease-out); }
 .hub-account-trigger:hover, .hub-account.is-open .hub-account-trigger { background: #232323; }
 .hub-account-trigger:focus-visible { outline: 2px solid #7897d7; outline-offset: 2px; }
@@ -672,31 +675,78 @@
 .hub-account-name { max-width: 10rem; overflow: hidden; text-overflow: ellipsis; }
 .hub-account-caret { color: #ffffff99; transition: transform 200ms var(--ease-out); }
 .hub-account.is-open .hub-account-caret { transform: rotate(180deg); }
-.hub-account-menu { position: absolute; right: 0; top: calc(100% + 8px); z-index: 120; width: min(292px, calc(100vw - 24px)); padding: 6px; transform-origin: top right; }
+
+.hub-account-menu { position: absolute; right: 0; top: calc(100% + 8px); z-index: 120; width: min(280px, calc(100vw - 24px)); padding: 8px; border-radius: 14px; border-color: #2a2a2a; box-shadow: 0 1px 0 #ffffff0a inset, 0 18px 40px -18px #000c; transform-origin: top right; overflow: hidden; }
 .hub-account-menu::before { content: ""; position: absolute; bottom: 100%; left: 0; right: 0; height: 10px; }
-.hub-account.is-open .hub-account-menu { animation: hub-account-in 160ms var(--ease-out); }
+.hub-account.is-open .hub-account-menu { animation: hub-account-in 180ms var(--ease-out); }
 @keyframes hub-account-in { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
-.hub-account-head { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; color: #fff; }
-.hub-account-head:hover { background: #ffffff12; }
-.hub-account-head .hub-account-avatar { width: 32px; height: 33px; }
-.hub-account-who { display: grid; min-width: 0; }
-.hub-account-who strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hub-account-who small { color: #ffffffa6; font-size: 11px; }
-.hub-account-section { padding: 10px 10px 12px; border-top: 1px solid #ffffff14; }
-.hub-account-section small { display: block; margin-top: 4px; color: #ffffff8c; font-size: 11px; line-height: 1.45; }
-.hub-account-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.hub-account-label { color: #ffffffa6; font-size: 11px; letter-spacing: .02em; text-transform: uppercase; }
-.hub-account-credits { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.hub-account-pane.is-summary { animation: hub-account-pane-back 220ms var(--ease-out); }
+.hub-account-pane.is-detail { animation: hub-account-pane-forward 220ms var(--ease-out); }
+@keyframes hub-account-pane-forward { from { opacity: 0; transform: translateX(10px); } }
+@keyframes hub-account-pane-back { from { opacity: 0; transform: translateX(-10px); } }
+
+/* Identity: avatar, name, plan. The whole head opens the profile; the arrow only appears on hover. */
+.hub-account-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 10px 14px; border-radius: 10px; color: #fff; transition: background-color 160ms ease; }
+.hub-account-head:hover, .hub-account-head:focus-visible { background: #ffffff0a; outline: none; }
+.hub-account-head .hub-account-avatar { width: 36px; height: 37px; }
+.hub-account-who { display: grid; gap: 2px; min-width: 0; }
+.hub-account-who strong { font-size: 14px; font-weight: 600; letter-spacing: -.012em; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-account-who small { color: var(--account-quiet); font-size: 12px; line-height: 1.2; }
+.hub-account-head-arrow { color: var(--account-mid); opacity: 0; transform: translate(-3px, 3px); transition: opacity 180ms ease, transform 220ms var(--ease-out); }
+.hub-account-head:hover .hub-account-head-arrow, .hub-account-head:focus-visible .hub-account-head-arrow { opacity: 1; transform: none; }
+
+/* Facts: one line each, label left, value right. Rows that open something get a chevron. */
+.hub-account-body { display: grid; gap: 2px; padding: 8px 0; border-top: 1px solid var(--account-line); }
+.hub-account-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 10px; width: 100%; min-height: 36px; padding: 0 10px; border-radius: 9px; color: #fff; font-size: 13px; text-align: left; }
+.hub-account-row.is-link { grid-template-columns: minmax(0, 1fr) auto auto; cursor: pointer; transition: background-color 160ms ease; }
+.hub-account-row.is-link:hover, .hub-account-row.is-link:focus-visible { background: #ffffff0a; outline: none; }
+.hub-account-label { color: var(--account-mid); font-size: 13px; letter-spacing: -.005em; }
+.hub-account-value { font-variant-numeric: tabular-nums; letter-spacing: -.005em; }
+.hub-account-value.is-quiet { color: var(--account-quiet); }
+.hub-account-credits { font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
 .hub-account-credits.is-low { color: #ffd166; }
 .hub-account-credits.is-empty { color: #ff7b72; }
-.hub-account-manage { color: #a9c2ff; font-size: 11px; }
-.hub-account-manage:hover { color: #fff; text-decoration: underline; }
-.hub-account-wallet { margin: 8px 0 0; white-space: pre-line; font-variant-numeric: tabular-nums; }
-.hub-account-foot { padding: 6px 0 0; border-top: 1px solid #ffffff14; margin-top: 2px; }
-.hub-account-signout { display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 10px; border-radius: 8px; color: #ff7b72; font-size: 12px; font-weight: 500; text-align: left; cursor: pointer; transition: background-color 140ms var(--ease-out), color 140ms var(--ease-out); }
-.hub-account-signout:hover, .hub-account-signout:focus-visible { background: #ff5f5720; color: #ff9a93; outline: none; }
-@media (prefers-reduced-motion: reduce) { .hub-account.is-open .hub-account-menu { animation: none; } .hub-account-caret { transition: none; } }
+.hub-account-chevron { color: var(--account-quiet); opacity: .6; transition: opacity 160ms ease, transform 220ms var(--ease-out), color 160ms ease; }
+.hub-account-row.is-link:hover .hub-account-chevron, .hub-account-row.is-link:focus-visible .hub-account-chevron { opacity: 1; color: #fff; transform: translateX(2px); }
+
+/* Wallet detail: back, QR on a white tile, the address, copy, then network and holdings. */
+.hub-account-pane.is-detail { display: grid; gap: 14px; padding-bottom: 10px; }
+.hub-account-back { display: inline-flex; align-items: center; gap: 4px; justify-self: start; height: 30px; padding: 0 10px 0 6px; border-radius: 8px; color: var(--account-mid); font-size: 13px; font-weight: 500; cursor: pointer; transition: background-color 160ms ease, color 160ms ease; }
+.hub-account-back:hover, .hub-account-back:focus-visible { background: #ffffff0a; color: #fff; outline: none; }
+.hub-account-back svg { transition: transform 220ms var(--ease-out); }
+.hub-account-back:hover svg { transform: translateX(-2px); }
+.hub-account-qr { justify-self: center; width: 152px; padding: 12px; border-radius: 14px; background: #fff; color: #111; box-shadow: 0 10px 30px -18px #000; }
+.hub-account-qr svg { display: block; width: 100%; height: auto; }
+.hub-account-address { margin: 0; padding: 0 10px; font-family: var(--font-mono), ui-monospace, monospace; font-size: 11.5px; line-height: 1.55; letter-spacing: .02em; color: var(--account-mid); word-break: break-all; text-align: center; }
+.hub-account-copy { display: inline-flex; align-items: center; gap: 6px; justify-self: center; height: 32px; padding: 0 14px; border-radius: 999px; background: #ffffff14; color: #fff; font-size: 12px; font-weight: 500; cursor: pointer; transition: background-color 160ms ease, transform 160ms var(--ease-out); }
+.hub-account-copy:hover, .hub-account-copy:focus-visible { background: #ffffff22; outline: none; }
+.hub-account-copy:active { transform: scale(.97); }
+.hub-account-copy.is-copied { background: #4bd07a29; color: #9ee7b6; }
+.hub-account-copy.is-copied svg { animation: hub-account-pop 260ms var(--ease-out); }
+@keyframes hub-account-pop { from { transform: scale(.4); opacity: 0; } }
+.hub-account-facts { display: grid; gap: 2px; margin: 0; padding-top: 8px; border-top: 1px solid var(--account-line); }
+.hub-account-facts div { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 32px; padding: 0 10px; font-size: 13px; }
+.hub-account-facts dt { color: var(--account-mid); }
+.hub-account-facts dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+.hub-account-foot { padding-top: 8px; border-top: 1px solid var(--account-line); }
+.hub-account-signout { display: flex; align-items: center; gap: 8px; width: 100%; height: 36px; padding: 0 10px; border-radius: 9px; color: var(--account-mid); font-size: 13px; font-weight: 500; text-align: left; cursor: pointer; transition: background-color 160ms ease, color 160ms ease; }
+.hub-account-signout svg { color: var(--account-quiet); transition: color 160ms ease; }
+.hub-account-signout:hover, .hub-account-signout:focus-visible { background: #ff5f571a; color: #ff9a93; outline: none; }
+.hub-account-signout:hover svg, .hub-account-signout:focus-visible svg { color: inherit; }
+@media (prefers-reduced-motion: reduce) {
+  .hub-account.is-open .hub-account-menu, .hub-account-pane.is-summary, .hub-account-pane.is-detail, .hub-account-copy.is-copied svg { animation: none; }
+  .hub-account-caret, .hub-account-head-arrow, .hub-account-chevron, .hub-account-back svg { transition: none; }
+}
 @media (max-width: 480px) {
   .hub-account-trigger { padding: 0 8px 0 5px; }
   .hub-account-name { display: none; }
 }
+
+/* The same guided creation canvas used in onboarding, inside agent settings. */
+.hub-agent-onboarding { min-width: 0; }
+.hub-agent-onboarding > .button { justify-self: start; margin-bottom: 1.5rem; }
+.hub-agent-onboarding .socialtrading-layout { grid-template-columns: minmax(0, 1fr) minmax(210px, .65fr); gap: 1.5rem; }
+.hub-agent-onboarding .landing-hero-title { font-size: clamp(1.8rem, 3vw, 3rem); }
+.hub-layout .hub-agent-onboarding .socialtrading-profile { grid-area: auto; top: 6rem; margin-top: 3rem; }
+@media (max-width: 1100px) { .hub-agent-onboarding .socialtrading-layout { grid-template-columns: 1fr; } .hub-agent-onboarding .socialtrading-profile { position: static; } }

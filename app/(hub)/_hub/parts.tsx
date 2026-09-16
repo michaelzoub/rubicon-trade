@@ -1,8 +1,8 @@
 "use client";
 
 import { ArrowUpRight, Check, Eye, EyeOff, HelpCircle, X } from "lucide-react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { HubLink as Link } from "./navigation";
+import { useHubRouter as useRouter } from "./navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Asset, MessagePart, ProfileChange, TradeIntent } from "@/lib/socialtrading/types";
 import { PERMISSIONS } from "@/lib/socialtrading/profile";
@@ -59,9 +59,10 @@ export function AssetCard({ asset, dense = false }: { asset: Asset; dense?: bool
   const router = useRouter();
   const follow = useFollowRoom();
   const watched = state.profile.interests.some(i => i.id === asset.id || i.symbol?.toUpperCase() === asset.symbol.toUpperCase());
+  const important = asset.labelTone === "match";
   function open() { signal("opened", asset); router.push(assetHref(asset)); }
   return (
-    <article className={`hub-asset${dense ? " is-dense" : ""}`} data-asset={asset.symbol}>
+    <article className={`hub-asset${dense ? " is-dense" : ""}${important ? " hub-priority-card" : ""}`} data-asset={asset.symbol}>
       <button type="button" className="hub-asset-main" onClick={open} aria-label={`Open ${asset.name}`}>
         <span className="hub-asset-id"><strong>{asset.symbol}</strong><span>{asset.name}</span></span>
         <Sparkline points={asset.chart.slice(-40)} />
@@ -90,10 +91,27 @@ export function AssetLogo({ asset }: { asset: Pick<Asset, "symbol" | "logo"> }) 
   </span>;
 }
 
+/** Depth on hover: the card tilts a few degrees toward the pointer and settles back when it leaves. */
+function useTilt<T extends HTMLElement>(max = 4) {
+  const root = useRef<T>(null);
+  const { contextSafe } = useGSAP({ scope: root });
+  const move = contextSafe((event: React.PointerEvent<T>) => {
+    const node = root.current;
+    if (!node || event.pointerType === "touch" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const r = node.getBoundingClientRect();
+    const nx = (event.clientX - r.left) / r.width - .5, ny = (event.clientY - r.top) / r.height - .5;
+    gsap.to(node, { rotateY: nx * max * 2, rotateX: -ny * max * 2, transformPerspective: 900, duration: .5, ease: "power3.out", overwrite: "auto" });
+    node.style.setProperty("--mx", `${(nx + .5) * 100}%`); node.style.setProperty("--my", `${(ny + .5) * 100}%`);
+  });
+  const leave = contextSafe(() => { if (root.current) gsap.to(root.current, { rotateY: 0, rotateX: 0, duration: .7, ease: rubiconMotion.ease.enter, overwrite: "auto" }); });
+  return { root, onPointerMove: move, onPointerLeave: leave };
+}
+
 function DiscoveryCard({ asset }: { asset: Asset }) {
   const { state, signal, send, busy } = useHub();
   const router = useRouter();
   const follow = useFollowRoom();
+  const tilt = useTilt<HTMLElement>();
   const [pending, setPending] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const watched = state.profile.interests.some(i => i.id === asset.id || i.symbol?.toUpperCase() === asset.symbol.toUpperCase());
@@ -101,10 +119,10 @@ function DiscoveryCard({ asset }: { asset: Asset }) {
     setPending(true); const saved = await signal(action, asset); if (saved && action === "dismissed") setDismissed(true); setPending(false);
   }
   if (dismissed) return null;
-  return <article className="hub-discovery-card" data-asset={asset.symbol}>
+  return <article ref={tilt.root} onPointerMove={tilt.onPointerMove} onPointerLeave={tilt.onPointerLeave} className={`hub-discovery-card${asset.labelTone === "match" ? " hub-priority-card" : ""}`} data-asset={asset.symbol}>
     <Link className="hub-discovery-main" href={assetHref(asset)} onClick={() => { void signal("opened", asset); }} aria-label={`Open ${asset.name}`}>
       <AssetLogo asset={asset} />
-      <span className="hub-discovery-price"><strong>{asset.price == null ? "Price unavailable" : usd(asset.price)}</strong><small>{asset.marketCap ? `$${compact(asset.marketCap)} market cap` : asset.kind === "crypto" ? "Crypto" : "Stock"}</small></span>
+      <span className="hub-discovery-price"><strong>{asset.price == null ? "Price unavailable" : usd(asset.price)}</strong><small>{asset.kind === "crypto" ? "Crypto" : "Stock"}</small></span>
       <span className="hub-discovery-name"><strong>{asset.name}</strong><small>{asset.symbol} <ChangeText value={asset.change} /></small></span>
       {asset.description && <p className="hub-discovery-description">{asset.description}</p>}
     </Link>
@@ -185,7 +203,7 @@ export function TradeCard({ tradeId }: { tradeId: string }) {
   if (trade.crypto) return <CryptoTradeCard trade={trade} />;
   const pending = trade.status === "approval_required";
   const connected = state.brokerage?.connected ?? false;
-  return <div ref={root} className={`hub-trade is-${trade.status}`} role="group" aria-label="Trade confirmation">
+  return <div ref={root} className={`hub-trade is-${trade.status}${pending ? " hub-priority-card" : ""}`} role="group" aria-label="Trade confirmation">
     <div className="hub-trade-head">
       <p className="hub-part-title">{trade.side === "buy" ? "Buy" : "Sell"} {trade.asset.symbol}</p>
       <span ref={status} className="hub-trade-status">{TRADE_STATUS[trade.status]}</span>

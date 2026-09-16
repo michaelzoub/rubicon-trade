@@ -1,6 +1,7 @@
 "use client";
 
 import { PrivyProvider } from "@privy-io/react-auth";
+import { Provider as JotaiProvider } from "jotai";
 import { createContext, useContext, type ReactNode } from "react";
 
 const PrivyConfiguredContext = createContext(false);
@@ -9,21 +10,23 @@ export function AppProviders({ children }: { children: ReactNode }) {
   const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
   const clientId = process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID;
 
-  if (!appId) return <PrivyConfiguredContext.Provider value={false}>{children}</PrivyConfiguredContext.Provider>;
+  if (!appId) return <JotaiProvider><PrivyConfiguredContext.Provider value={false}>{children}</PrivyConfiguredContext.Provider></JotaiProvider>;
 
   return (
-    <PrivyConfiguredContext.Provider value>
-      <PrivyProvider
-        appId={appId}
-        clientId={clientId}
-        config={{
-          loginMethods: ["twitter", "email", "wallet"],
-          appearance: { theme: "light", accentColor: "#18181b" },
-        }}
-      >
-        {children}
-      </PrivyProvider>
-    </PrivyConfiguredContext.Provider>
+    <JotaiProvider>
+      <PrivyConfiguredContext.Provider value>
+        <PrivyProvider
+          appId={appId}
+          clientId={clientId}
+          config={{
+            loginMethods: ["twitter", "email", "wallet"],
+            appearance: { theme: "light", accentColor: "#18181b" },
+          }}
+        >
+          {children}
+        </PrivyProvider>
+      </PrivyConfiguredContext.Provider>
+    </JotaiProvider>
   );
 }
 

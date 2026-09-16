@@ -13,6 +13,7 @@ const INNER = "M100 24 165 62V137L100 175 35 137V62Z";
 export function ProfileAvatar({ seed, themes = [], inferred = [], className }: { seed: string; themes?: ThemeId[]; inferred?: ThemeId[]; className?: string }) {
   const traits = avatarTraits(seed);
   const palette = badgePalette(themes, traits.color, inferred);
+  const motifs = new Set([...themes, ...inferred]);
   const previous = useRef(palette);
   const id = useId().replace(/:/g, "");
   const root = useRef<SVGSVGElement>(null);
@@ -82,12 +83,33 @@ export function ProfileAvatar({ seed, themes = [], inferred = [], className }: {
       </g>
       <g data-badge-layer>
         <path d="M67 140q2-26 33-26t33 26v7H67Z" fill={`url(#${id}-face)`} opacity=".6" />
-        {traits.face % 3 === 0 ? <rect x="76" y="62" width="48" height="65" rx="23" fill={`url(#${id}-face)`} /> : traits.face % 3 === 1 ? <path d="M77 70q23-23 46 0v35q0 23-23 23t-23-23Z" fill={`url(#${id}-face)`} /> : <rect x="76" y="63" width="48" height="64" rx="16" fill={`url(#${id}-face)`} />}
-        <path d="M79 85v-6q0-14 17-14" stroke="#fff" strokeOpacity=".38" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-        <g fill="none" stroke="#fff" strokeOpacity=".72" strokeWidth="1.8" strokeLinecap="round">
-          {traits.eyes % 3 === 0 ? <path d="M89 93v3m22-3v3" /> : traits.eyes % 3 === 1 ? <path d="M86 95h5m18 0h5" /> : <path d="m86 95 3-2 3 2m16 0 3-2 3 2" />}
-          <path d={traits.mouth % 2 ? "M97 109h6" : "M96 108q4 3 8 0"} strokeOpacity=".5" />
+        <g fill={`url(#${id}-face)`} stroke={palette.light} strokeWidth="1.4">
+          {traits.face === 0 ? <rect x="69" y="62" width="62" height="65" rx="30" />
+            : traits.face === 1 ? <path d="M70 73Q72 58 100 58T130 73L125 109Q100 145 75 109Z" />
+            : traits.face === 2 ? <rect x="70" y="65" width="60" height="60" rx="15" />
+            : traits.face === 3 ? <path d="M75 65Q100 52 125 65L133 94Q130 126 100 129Q70 126 67 94Z" />
+            : <path d="M78 63H122L130 79V106L115 126H85L70 106V79Z" />}
         </g>
+        <path d="M78 82q0-14 18-15" stroke="#fff" strokeOpacity=".38" strokeWidth="2" fill="none" strokeLinecap="round" />
+        <g fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round">
+          {traits.eyes === 0 ? <path d="M86 91v6m28-6v6" /> : traits.eyes === 1 ? <path d="m81 94 5-4 5 4m18 0 5-4 5 4" /> : traits.eyes === 2 ? <path d="M81 94h10m23-3v6" /> : <><circle cx="86" cy="93" r="7" strokeWidth="2" /><circle cx="114" cy="93" r="7" strokeWidth="2" /><path d="M93 93h14" strokeWidth="2" /></>}
+          <path d={traits.mouth === 0 ? "M91 108q9 10 18 0" : traits.mouth === 1 ? "M95 111h10" : "M93 111q9 4 15-4"} strokeWidth="2.5" />
+        </g>
+        {motifs.has("ai") && <g data-motif="ai" stroke={palette.dark} strokeWidth="3" fill={palette.light}>
+          <path d="M100 61V45m-17 17-6-13m40 13 6-13" fill="none" strokeLinecap="round" />
+          <circle cx="100" cy="41" r="6" /><circle cx="76" cy="47" r="3" /><circle cx="124" cy="47" r="3" />
+          <circle cx="100" cy="41" r="2" fill="#fff" stroke="none" />
+        </g>}
+        {motifs.has("healthcare") && <path data-motif="healthcare" d="M100 145l-9-8c-9-9 3-17 9-8 6-9 18-1 9 8Z" fill="#ffb7c7" stroke={palette.dark} strokeWidth="1.5" />}
+        {motifs.has("tech") && <g data-motif="tech" stroke={palette.dark} strokeWidth="2" fill={palette.light}>
+          <path d="M132 86h12v15h9m-9-8h10m-16-14v-7" fill="none" />
+          <rect x="136" y="82" width="15" height="15" rx="4" /><path d="m140 89 3-3 4 4-3 3Z" fill="#fff" stroke="none" />
+          <circle cx="155" cy="101" r="3" />
+        </g>}
+        {motifs.has("energy") && <path data-motif="energy" d="m57 105-8 14h8l-3 13 15-19h-9l5-8Z" fill="#ffefad" stroke={palette.dark} strokeWidth="1.3" />}
+        {motifs.has("crypto") && <g data-motif="crypto" fill="none" stroke={palette.dark} strokeWidth="2.5"><rect x="43" y="84" width="13" height="19" rx="6" transform="rotate(-25 50 94)" /><rect x="48" y="96" width="13" height="19" rx="6" transform="rotate(-25 55 106)" /></g>}
+        {motifs.has("consumer") && <path data-motif="consumer" d="m139 119 3 7 8 1-6 5 2 8-7-4-7 4 2-8-6-5 8-1Z" fill={palette.light} stroke={palette.dark} strokeWidth="1.5" />}
+
       </g>
       <g data-badge-layer fill="none" stroke="#fff" strokeOpacity=".65" strokeWidth="1">
         <path d="m100 31 59 34v68l-59 35-59-35V65Z" />

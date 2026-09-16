@@ -1,11 +1,12 @@
 "use client";
 
-import { Bell, Check, MessageSquare, Plus, SlidersHorizontal, X } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { Bell, Brain, Check, Compass, MessageSquare, Plus, Quote, ShieldCheck, SlidersHorizontal, Wallet, X, type LucideIcon } from "lucide-react";
+import { useHubRouter as useRouter } from "./navigation";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { limitsError, PERMISSIONS, type InvestingProfile, type Permission } from "@/lib/socialtrading/profile";
 import { DEFAULT_PLAN, followedAssets, formatCredits, learnedAssets, limitStatus } from "@/lib/socialtrading/plans";
 import { isThemeId, THEMES } from "@/lib/socialtrading/themes";
+import { shortAddress } from "@/lib/crypto/chains";
 import { CharCount, LimitHint, UsagePill } from "./limits-ui";
 import { gsap, useGSAP, rubiconMotion } from "../../_components/motion";
 import { ProfileAvatar } from "../profile-avatar";
@@ -13,11 +14,14 @@ import { learnedThemes } from "../profile-card";
 import { ThemeCards } from "../theme-cards";
 import { timeAgo } from "./format";
 import { useHub } from "./hub-provider";
-import { WalletsSection } from "./wallets";
-import Link from "next/link";
+import { useLinkedWallets, WalletsSection } from "./wallets";
+import { HubLink as Link } from "./navigation";
 
 const TELL = ["I’m becoming more interested in nuclear", "Stop showing me memecoins", "Add VRT to things I’m watching", "Change my daily limit to $200"];
 const ICONS = { notify: Bell, approve: MessageSquare, automatic: SlidersHorizontal };
+const MODE_LINE: Record<Permission, string> = { notify: "It tells you what it sees. Every buy is yours to make.", approve: "It brings you ideas and proposes trades. Nothing moves until you say so.", automatic: "It proposes inside a comfort zone you set. You still sign every one." };
+const money = (v: string) => v && Number.isFinite(Number(v)) ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(v)) : null;
+const list = (items: string[], max = 3) => items.length <= max ? items.join(", ") : `${items.slice(0, max).join(", ")} +${items.length - max}`;
 
 function ChipList({ items, onRemove, onAdd, placeholder, empty, full }: { items: string[]; onRemove: (v: string) => void; onAdd: (v: string) => void; placeholder: string; empty: string; /** The list is at its plan cap: adding is disabled and the input says why. */ full?: boolean }) {
   const [value, setValue] = useState("");
@@ -45,16 +49,33 @@ function ChipList({ items, onRemove, onAdd, placeholder, empty, full }: { items:
   </div>;
 }
 
+/** One facet of the person: a heading, the current state in words, and the editor behind "Adjust". */
+function Facet({ icon: Icon, title, summary, action = "Adjust", tone = "", children }: { icon: LucideIcon; title: string; summary: ReactNode; action?: string; tone?: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  return <section className={`hub-facet${open ? " is-open" : ""} ${tone}`} aria-labelledby={`${id}-title`}>
+    <div className="hub-facet-head">
+      <span className="hub-facet-medallion" aria-hidden="true"><Icon size={16} strokeWidth={1.7} /></span>
+      <div className="hub-facet-copy"><h2 id={`${id}-title`}>{title}</h2><div className="hub-facet-summary">{summary}</div></div>
+      <button type="button" className="hub-facet-toggle" aria-expanded={open} aria-controls={`${id}-body`} onClick={() => setOpen(v => !v)}>{open ? "Done" : action}</button>
+    </div>
+    <div id={`${id}-body`} className="hub-facet-body"><div className="hub-facet-inner">{children}</div></div>
+  </section>;
+}
+
 export function ProfileView() {
   const { state, mutate, setDraft, send, name, userId, account } = useHub();
   const limits = account?.limits ?? DEFAULT_PLAN.limits, planName = account?.planName ?? DEFAULT_PLAN.name;
   const router = useRouter();
+  const wallets = useLinkedWallets();
   const [profile, setProfile] = useState<InvestingProfile>(state.profile);
   const [dislikes, setDislikes] = useState(state.dislikes);
   const [preferences, setPreferences] = useState(state.preferences);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const hero = useRef<HTMLElement>(null);
+  const save_ = useRef<HTMLDivElement>(null);
   useEffect(() => { setProfile(state.profile); setDislikes(state.dislikes); setPreferences(state.preferences); }, [state.profile, state.dislikes, state.preferences]);
   const dirty = JSON.stringify({ p: profile, d: dislikes, pr: preferences }) !== JSON.stringify({ p: state.profile, d: state.dislikes, pr: state.preferences });
   const learned = learnedThemes(state.inferred, state.profile.themes);
@@ -65,28 +86,53 @@ export function ProfileView() {
   const learnedStatus = limitStatus(limits, "learnedAssets", learnedAssets(state.inferred));
   /** Adding to “Paying attention to” is blocked when either the section or the follow cap is reached. */
   const attentionFull = attention.atLimit || follows.atLimit;
+  const agentName = state.agent?.name ?? (name ? `${name}’s agent` : "Your agent");
+  const leaning = [...learned.map(t => THEMES.find(x => x.id === t)!.name), ...inferredAssets.filter(i => i.weight > .25 && i.confidence >= .4).map(i => i.id)].slice(0, 3);
+  const themeNames = THEMES.filter(t => profile.themes.includes(t.id)).map(t => t.name);
+  const signals = state.inferred.reduce((n, i) => n + i.count, 0);
+
+  useGSAP(() => {
+    const media = gsap.matchMedia();
+    media.add("(prefers-reduced-motion: no-preference)", () => {
+      gsap.fromTo("[data-profile-part]", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: .55, stagger: .07, ease: rubiconMotion.ease.enter, clearProps: "all" });
+    });
+    return () => media.revert();
+  }, { scope: hero });
+  useGSAP(() => {
+    if (!save_.current) return;
+    const media = gsap.matchMedia();
+    media.add("(prefers-reduced-motion: no-preference)", () => { gsap.fromTo(save_.current, { opacity: 0, y: 18, scale: .97 }, { opacity: 1, y: 0, scale: 1, duration: .45, ease: rubiconMotion.ease.enter, clearProps: "all" }); });
+    return () => media.revert();
+  }, { dependencies: [dirty || saving || !!savedAt] });
 
   async function save() {
     setError("");
-    if (!profile.thesis.trim()) { setError("Your thesis can’t be empty."); return; }
+    if (!profile.thesis.trim()) { setError("Your point of view can’t be empty."); return; }
     if (profile.thesis.length > limits.thesisChars && profile.thesis.length > state.profile.thesis.length) { setError(`Your point of view can be up to ${limits.thesisChars.toLocaleString("en-US")} characters on the ${planName} plan. Shorten it to save.`); return; }
     const anyLimit = Object.values(profile.limits).some(v => v.trim() !== "");
-    if (profile.permission === "automatic" || anyLimit) { const m = limitsError(profile.limits); if (m) { setError(profile.permission === "automatic" ? m : `${m} Or clear all three to remove limits.`); return; } }
+    if (profile.permission === "automatic" || anyLimit) { const m = limitsError(profile.limits); if (m) { setError(profile.permission === "automatic" ? m : `${m} Or clear all three to remove the comfort zone.`); return; } }
     setSaving(true);
-    const next = await mutate({ action: "profile", profile: { ...profile, permissionConfigured: true, step: 5, completedAt: profile.completedAt ?? new Date().toISOString() }, dislikes, preferences });
+    const next = await mutate({ action: "profile", profile: { ...profile, permissionConfigured: true, step: 6, completedAt: profile.completedAt ?? new Date().toISOString() }, dislikes, preferences });
     setSaving(false);
     if (next) setSavedAt(Date.now());
   }
   const tell = (text: string) => { setDraft(text); router.push("/"); };
+  const zone = [money(profile.limits.perTrade) && `${money(profile.limits.perTrade)} a trade`, money(profile.limits.daily) && `${money(profile.limits.daily)} a day`, money(profile.limits.weekly) && `${money(profile.limits.weekly)} a week`].filter(Boolean).join(" · ");
 
   return (
     <div className="hub-profile">
-      <header className="hub-profile-head">
+      <header ref={hero} className="hub-profile-hero">
+        <span className="hub-profile-hero-light" aria-hidden="true" />
         <ProfileAvatar seed={state.agent?.id ?? userId} themes={state.profile.themes} inferred={learned} className="hub-profile-badge" />
-        <div>
-          <p className="eyebrow">Profile</p>
-          <h1 className="landing-section-title">{state.agent?.name ?? (name ? `${name}’s agent` : "Your agent")}</h1>
-          <p>Your interests, your preferences, your pace.</p>
+        <div className="hub-profile-who">
+          <p className="eyebrow" data-profile-part>Profile</p>
+          <h1 className="landing-section-title" data-profile-part>{name || "You"}</h1>
+          <p className="hub-profile-line" data-profile-part>{agentName} is {leaning.length ? <>learning you · leaning into <strong>{list(leaning)}</strong></> : "learning from how you explore"}.</p>
+          <div className="hub-profile-marks" data-profile-part>
+            {wallets[0] && <span className="hub-profile-mark mono"><Wallet size={12} aria-hidden="true" />{shortAddress(wallets[0].address)}{wallets.length > 1 ? ` +${wallets.length - 1}` : ""}</span>}
+            {themeNames.map(t => <span key={t} className="hub-profile-mark">{t}</span>)}
+            <span className="hub-profile-mark is-quiet">{PERMISSIONS[state.profile.permission]}</span>
+          </div>
         </div>
       </header>
 
@@ -95,20 +141,21 @@ export function ProfileView() {
         <div className="hub-starters">{TELL.map(t => <button key={t} type="button" className="hub-chip-button" onClick={() => tell(t)}>“{t}”</button>)}</div>
       </section>
 
-      <div className="hub-profile-columns">
-        <section className="hub-profile-section" aria-labelledby="explicit">
-          <h2 id="explicit" className="hub-section-title">What you told me</h2>
-
-          <details className="hub-settings-card" name="profile-settings"><summary>Your interests<span>{profile.themes.length} themes · {profile.interests.length} watching</span></summary><div className="hub-settings-body"><div className="hub-field">
-            <div className="hub-field-head"><label htmlFor="thesis">Your point of view</label><CharCount value={profile.thesis} limit={limits.thesisChars} /></div>
+      <div className="hub-facets">
+        <Facet icon={Quote} title="Your point of view" summary={<p className="hub-facet-quote">{profile.thesis.trim() || "No point of view yet. Tell your agent what you believe."}</p>}>
+          <div className="hub-field">
+            <div className="hub-field-head"><label htmlFor="thesis">In your words</label><CharCount value={profile.thesis} limit={limits.thesisChars} /></div>
             <textarea id="thesis" className="socialtrading-input socialtrading-thesis hub-thesis" value={profile.thesis} maxLength={Math.max(limits.thesisChars, state.profile.thesis.length)} onChange={e => setProfile(p => ({ ...p, thesis: e.target.value }))} />
           </div>
+        </Facet>
+
+        <Facet icon={Compass} title="What you care about" summary={<p>{themeNames.length ? themeNames.join(" × ") : "Keeping an open mind"}{profile.interests.length ? <> · watching <strong>{list(profile.interests.map(i => i.symbol || i.name))}</strong></> : ""}{preferences.length ? <> · into {list(preferences)}</> : ""}{dislikes.length ? <> · less {list(dislikes, 2)}</> : ""}</p>}>
           <div className="hub-field">
-            <p>Core interests</p>
+            <p>Themes</p>
             <ThemeCards selected={profile.themes} thesis={profile.thesis} onChange={themes => setProfile(p => ({ ...p, themes }))} />
           </div>
           <div className="hub-field">
-            <div className="hub-field-head"><p>Paying attention to</p><UsagePill limits={limits} limit="follows" used={follows.used} label="followed" /></div>
+            <div className="hub-field-head"><p>Watching</p><UsagePill limits={limits} limit="follows" used={follows.used} label="followed" /></div>
             <ChipList items={profile.interests.map(i => i.symbol || i.name)} empty="Nothing yet." placeholder="Add a ticker, coin, or idea" full={attentionFull}
               onRemove={label => setProfile(p => ({ ...p, interests: p.interests.filter(i => (i.symbol || i.name) !== label) }))}
               onAdd={label => setProfile(p => {
@@ -121,8 +168,8 @@ export function ProfileView() {
               near={<>{follows.remaining} more {follows.remaining === 1 ? "asset" : "assets"} to follow on the {planName} plan. Ideas that aren’t tickers don’t count.</>}
               full={<>You follow {follows.limit} assets, the most the {planName} plan keeps. Unfollow one here (or on any asset) to follow another; ideas that aren’t tickers still fit.</>} />
           </div>
-          </div></details><details className="hub-settings-card" name="profile-settings"><summary>Your preferences<span>{preferences.length} interests · {dislikes.length} muted</span></summary><div className="hub-settings-body"><div className="hub-field">
-            <div className="hub-field-head"><p>Things you care about</p><UsagePill limits={limits} limit="preferenceItems" used={preferences.length} /></div>
+          <div className="hub-field">
+            <div className="hub-field-head"><p>Into</p><UsagePill limits={limits} limit="preferenceItems" used={preferences.length} /></div>
             <ChipList items={preferences} empty="Tell me what you’re curious about." placeholder="e.g. nuclear, power grid" full={preferences.length >= limits.preferenceItems} onRemove={v => setPreferences(l => l.filter(x => x !== v))} onAdd={v => setPreferences(l => l.includes(v) || l.length >= limits.preferenceItems ? l : [...l, v])} />
             <LimitHint limits={limits} limit="preferenceItems" used={preferences.length} near={<>{limits.preferenceItems - preferences.length} left in this list.</>} full={<>This list holds {limits.preferenceItems} items on the {planName} plan. Remove one to add another.</>} />
           </div>
@@ -131,36 +178,28 @@ export function ProfileView() {
             <ChipList items={dislikes} empty="Nothing muted." placeholder="e.g. memecoins" full={dislikes.length >= limits.preferenceItems} onRemove={v => setDislikes(l => l.filter(x => x !== v))} onAdd={v => setDislikes(l => l.includes(v) || l.length >= limits.preferenceItems ? l : [...l, v])} />
             <LimitHint limits={limits} limit="preferenceItems" used={dislikes.length} near={<>{limits.preferenceItems - dislikes.length} left in this list.</>} full={<>This list holds {limits.preferenceItems} items on the {planName} plan. Remove one to add another.</>} />
           </div>
-          </div></details><details className="hub-settings-card" name="profile-settings"><summary>Agent permissions<span>{PERMISSIONS[profile.permission]}</span></summary><div className="hub-settings-body"><div className="hub-field">
-            <p>Agent mode</p>
-            <fieldset className="socialtrading-options">
-              <legend className="sr-only">Agent permissions</legend>
-              {(Object.entries(PERMISSIONS) as [Permission, string][]).map(([value, label]) => { const Icon = ICONS[value]; const selected = profile.permission === value; return <label key={value} className="socialtrading-option">
-                <input type="radio" name="permission" value={value} checked={selected} onChange={() => setProfile(p => ({ ...p, permission: value, permissionConfigured: true }))} />
-                <Icon size={18} strokeWidth={1.5} aria-hidden="true" /><span>{label}</span><span className="socialtrading-option-check" aria-hidden="true">{selected && <Check size={12} />}</span>
-              </label>; })}
-            </fieldset>
-          </div>
-          {profile.permission !== "notify" && <div className="hub-field">
-            <p>{profile.permission === "automatic" ? "Your agent’s limits · USD" : "Your agent’s limits · USD (optional)"}</p>
-            <div className="socialtrading-limits">
-              {([["perTrade", "Maximum per trade"], ["daily", "Daily limit"], ["weekly", "Weekly limit"]] as const).map(([key, label]) => <label key={key}>{label}<input className="socialtrading-input" type="number" inputMode="decimal" min="0.01" step="0.01" value={profile.limits[key]} onChange={e => setProfile(p => ({ ...p, limits: { ...p.limits, [key]: e.target.value } }))} placeholder="0.00" /></label>)}
-            </div>
-            <p className="socialtrading-caption socialtrading-limit-note">Enforced on the server before any order or quote is reserved: your agent can’t propose a trade when its value plus what it already committed in the last 24 hours or 7 days would exceed these. Trades you place yourself aren’t capped and don’t count against them.</p>
-          </div>}
-          </div></details>
-          {error && <p className="hub-error" role="alert">{error}</p>}
-          <div className="socialtrading-actions" hidden={!dirty && !saving && !savedAt}>
-            <button type="button" className="button button-primary" disabled={!dirty || saving} onClick={() => void save()}>{saving ? "Saving…" : "Save changes"}</button>
-            {dirty && <button type="button" className="button button-secondary" onClick={() => { setProfile(state.profile); setDislikes(state.dislikes); setPreferences(state.preferences); }}>Discard</button>}
-            {!dirty && savedAt && <span className="socialtrading-caption" role="status">Saved</span>}
-          </div>
-        </section>
+        </Facet>
 
-        <section className="hub-profile-section" aria-labelledby="learned"><details className="hub-settings-card" name="profile-settings"><summary id="learned">What your agent remembers<span>{state.inferred.length} learned interests</span></summary><div className="hub-settings-body">
-          
-          <p className="hub-section-lead">Inferred from how you explore. Never a rule, and you can clear any of it.</p>
-          {inferredThemes.length === 0 && inferredAssets.length === 0 && <p className="hub-empty">Nothing yet. Open opportunities, ask follow-ups, or approve and reject ideas and this fills in.</p>}
+        <Facet icon={ShieldCheck} title="How your agent works with you" summary={<p><strong>{PERMISSIONS[profile.permission]}</strong> · {MODE_LINE[profile.permission]}{profile.permission !== "notify" && zone ? <> Comfort zone: {zone}.</> : ""}</p>}>
+          <fieldset className="hub-modes">
+            <legend className="sr-only">Agent permissions</legend>
+            {(Object.entries(PERMISSIONS) as [Permission, string][]).map(([value, label]) => { const Icon = ICONS[value]; const selected = profile.permission === value; return <label key={value} className={`hub-mode${selected ? " is-selected" : ""}`}>
+              <input type="radio" name="permission" value={value} checked={selected} onChange={() => setProfile(p => ({ ...p, permission: value, permissionConfigured: true }))} />
+              <span className="hub-mode-icon" aria-hidden="true"><Icon size={18} strokeWidth={1.6} /></span>
+              <span className="hub-mode-copy"><strong>{label}</strong><small>{MODE_LINE[value]}</small></span>
+              <span className="hub-mode-check" aria-hidden="true">{selected && <Check size={12} />}</span>
+            </label>; })}
+          </fieldset>
+          {profile.permission !== "notify" && <div className="hub-field hub-zone">
+            <div className="hub-field-head"><p>{profile.permission === "automatic" ? "Comfort zone · USD" : "Comfort zone · USD (optional)"}</p></div>
+            <div className="hub-zone-fields">
+              {([["perTrade", "Per trade"], ["daily", "Per day"], ["weekly", "Per week"]] as const).map(([key, label]) => <label key={key} className="hub-zone-field"><span>{label}</span><span className="hub-zone-input"><i aria-hidden="true">$</i><input className="socialtrading-input" type="number" inputMode="decimal" min="0.01" step="0.01" value={profile.limits[key]} onChange={e => setProfile(p => ({ ...p, limits: { ...p.limits, [key]: e.target.value } }))} placeholder="0" /></span></label>)}
+            </div>
+            <p className="socialtrading-caption">Your agent stays inside these; trades you place yourself don’t count. Checked on the server before anything is quoted.</p>
+          </div>}
+        </Facet>
+
+        <Facet icon={Brain} title="What your agent remembers" action="Look" summary={<p>{inferredThemes.length || inferredAssets.length ? <>{inferredThemes.length ? `${inferredThemes.length} ${inferredThemes.length === 1 ? "theme" : "themes"}` : ""}{inferredThemes.length && inferredAssets.length ? " and " : ""}{inferredAssets.length ? `${inferredAssets.length} ${inferredAssets.length === 1 ? "asset" : "assets"}` : ""}, picked up from {signals} {signals === 1 ? "signal" : "signals"}. Never a rule; forget any of it.</> : "Nothing yet. Open opportunities, ask follow-ups, or approve and pass on ideas and this fills in."}</p>}>
           {inferredThemes.length > 0 && <div className="hub-field"><p>Themes</p><ul className="hub-inferred">{inferredThemes.map(i => <Inferred key={i.id} id={i.id} label={THEMES.find(t => t.id === i.id)?.name ?? i.id} weight={i.weight} confidence={i.confidence} count={i.count} updatedAt={i.updatedAt} onForget={() => void mutate({ action: "forget", target: i.id })} />)}</ul></div>}
           {(inferredAssets.length > 0 || learnedStatus.atLimit) && <div className="hub-field">
             <div className="hub-field-head"><p>Assets</p><UsagePill limits={limits} limit="learnedAssets" used={learnedStatus.used} label="remembered" /></div>
@@ -169,26 +208,36 @@ export function ProfileView() {
               full={<>I remember {learnedStatus.limit} assets, the most the {planName} plan keeps, so I’ve paused learning new ones. Forget one below and I’ll pick it back up. Themes keep learning either way.</>} />
             <ul className="hub-inferred">{inferredAssets.map(i => <Inferred key={i.id} id={i.id} label={i.id} weight={i.weight} confidence={i.confidence} count={i.count} updatedAt={i.updatedAt} onForget={() => void mutate({ action: "forget", target: i.id })} />)}</ul>
           </div>}
-          </div></details>
-          {account && <details className="hub-settings-card" name="profile-settings"><summary>Plan &amp; usage<span>{account.planName}</span></summary><div className="hub-field">
+          <div className="hub-field">
+            <button type="button" className="hub-chip-button" onClick={() => void send("What have you learned about me so far, and why?")}>“What have you learned about me?”</button>
+          </div>
+        </Facet>
+
+        <Facet icon={Wallet} title="Plan & wallets" action="Look" tone="is-quiet" summary={<p>{account ? <><strong>{account.planName} plan</strong> · {formatCredits(account.credits.balanceMicros)} credits left</> : <strong>{planName} plan</strong>}{wallets.length ? <> · {wallets.length} {wallets.length === 1 ? "wallet" : "wallets"}</> : " · no wallet yet"}</p>}>
+          {account && <div className="hub-field">
             <p>Plan &amp; usage</p>
             <div className="hub-plan-summary" role="group" aria-label="Plan and usage">
               <div className="hub-plan-summary-row"><span><strong>{account.planName} plan</strong> · {formatCredits(account.credits.balanceMicros)} credits left</span><span>{account.credits.requests ? `${formatCredits(account.credits.spentMicros)} used across ${account.credits.requests} model ${account.credits.requests === 1 ? "call" : "calls"}` : "Nothing spent yet"}</span></div>
-              <div className="hub-plan-summary-row"><span>{account.usage.agents} of {limits.agents} agents · {account.usage.enabledAgents} of {limits.enabledAgents} running · {account.usage.chats} of {limits.chats} chats</span><Link className="hub-inline-link" href="/agents">Manage agents</Link></div>
+              <div className="hub-plan-summary-row"><span>{account.usage.agents} of {limits.agents} agents · {account.usage.enabledAgents} of {limits.enabledAgents} running · {account.usage.chats} of {limits.chats} chats</span><Link className="hub-inline-link" href="/agents">Your team</Link></div>
               <span>Credits pay for your agent’s model usage at the provider’s actual cost per request. Paid plans with more room and more credits are coming.</span>
             </div>
-          </div></details>}
-          <details className="hub-settings-card" name="profile-settings"><summary>Wallets<span>Connections &amp; balances</span></summary><div className="hub-settings-body"><div className="hub-field">
+          </div>}
+          <div className="hub-field">
             <p>Wallets for onchain swaps</p>
             <WalletsSection compact />
             <p className="socialtrading-caption">Swaps settle from your own wallet on Uniswap. Your agent can propose them under the mode above; you always sign. <Link className="hub-inline-link" href="/trade">Open Buy</Link></p>
           </div>
-          </div></details><div className="hub-field">
-            <p>Ask me to explain</p>
-            <button type="button" className="hub-chip-button" onClick={() => void send("What have you learned about me so far, and why?")}>“What have you learned about me?”</button>
-          </div>
-        </section>
+        </Facet>
       </div>
+
+      {(dirty || saving || savedAt) && <div ref={save_} className="hub-save" role="region" aria-label="Unsaved changes">
+        {error && <p className="hub-error" role="alert">{error}</p>}
+        <div className="hub-save-row">
+          <span className="hub-save-text">{saving ? "Saving…" : dirty ? "You changed something." : "Saved"}</span>
+          {dirty && <button type="button" className="hub-save-discard" onClick={() => { setProfile(state.profile); setDislikes(state.dislikes); setPreferences(state.preferences); setError(""); }}>Discard</button>}
+          {(dirty || saving) && <button type="button" className="hub-save-button" disabled={!dirty || saving} onClick={() => void save()}>{saving ? "Saving…" : "Save changes"}</button>}
+        </div>
+      </div>}
     </div>
   );
 }

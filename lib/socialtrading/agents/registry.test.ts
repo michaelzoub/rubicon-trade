@@ -1,15 +1,8 @@
 import { expect, it, vi } from "vitest";
-import { agentConfig, defaultAgent } from "./config";
+import { defaultAgent } from "./config";
 import { CapabilityRegistry } from "./registry";
 import { PREVIEW_STATE } from "@/app/preview/fixture";
 
-it("validates configuration and preserves server-owned identity", () => {
-  const agent = defaultAgent("owned-id");
-  expect(agentConfig({ ...agent, id: "forged", name: "  Research  " }, agent)).toMatchObject({ id: "owned-id", name: "Research" });
-  for (const patch of [{ name: " " }, { instructions: "x".repeat(2001) }, { capabilities: ["unknown"] }]) {
-    expect(() => agentConfig({ ...agent, ...patch }, agent)).toThrow();
-  }
-});
 it("adds a capability without changing the runner and blocks disabled execution", async () => {
   const execute = vi.fn(async () => ({ result: "ok", parts: [] }));
   const capability = { id: "custom", tools: [{ schema: { type: "function" as const, function: { name: "custom_tool", description: "Custom service", parameters: {} } }, execute }] };

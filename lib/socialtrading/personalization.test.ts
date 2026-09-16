@@ -20,8 +20,8 @@ it("uses thesis and core interests to shape suggestions without selecting them",
 it("migrates the old four-step profile without losing assets or permissions", () => {
   const legacy = { ...newProfile("alice"), version: 1, thesis: "AI infrastructure", permissionConfigured: true, step: 4, completedAt: "2026-09-14T00:00:00Z" };
   const restored = readProfile(JSON.stringify(legacy), "alice");
-  expect(restored.version).toBe(2);
-  expect(restored.step).toBe(5);
+  expect(restored.version).toBe(3);
+  expect(restored.step).toBe(6);
   expect(restored.thesis).toBe(legacy.thesis);
   expect(restored.completedAt).toBe(legacy.completedAt);
 });
@@ -36,7 +36,7 @@ import { PLANS } from "./plans";
 import type { Asset, HubState } from "./types";
 
 function hub(overrides: Partial<HubState> = {}): HubState {
-  return { revision: 0, profile: { ...newProfile("alice"), thesis: "Power availability will be the bottleneck for AI inference.", themes: ["ai", "energy"], interests: [{ id: "VRT", symbol: "VRT", name: "Vertiv", kind: "stock" }], permissionConfigured: true, step: 5, completedAt: "2026-09-14T00:00:00Z" },
+  return { revision: 0, profile: { ...newProfile("alice"), thesis: "Power availability will be the bottleneck for AI inference.", themes: ["ai", "energy"], interests: [{ id: "VRT", symbol: "VRT", name: "Vertiv", kind: "stock" }], permissionConfigured: true, step: 6, completedAt: "2026-09-14T00:00:00Z" },
     dislikes: [], preferences: [], inferred: [], signals: [], chats: [], events: [], trades: [], ...overrides };
 }
 const asset = (over: Partial<Asset>): Asset => ({ id: "X", symbol: "X", name: "X", kind: "stock", price: 1, change: 0, asOf: null, source: "Massive", themes: [], chart: [], news: [], ...over });
@@ -84,4 +84,14 @@ it("stops learning new assets at the plan cap, keeps learning themes, and explai
   expect(state.events.find(e => e.text === LEARNING_FULL_TEXT)?.detail).toMatch(/remember 2 assets.*Forget one/);
   state.inferred = state.inferred.filter(i => i.id !== "SMR");
   expect(learn(state, "opened", "CEG", [], limits)?.id).toBe("CEG");
+});
+
+it("uses selected topics for discovery without treating related assets as followed", () => {
+  const state = hub({ profile: { ...newProfile("alice"), interests: [{ id: "theme:semiconductors", name: "Semiconductors", kind: "custom" }] } });
+  const result = relevance(asset({ symbol: "NVDA", name: "Nvidia" }), state);
+  expect(result.score).toBeGreaterThan(0);
+  expect(result.label).toBe("Related to Semiconductors");
+  expect(result.reason).toContain("Connected to your interest in Semiconductors");
+  expect(result.reason).not.toContain("You follow");
+  expect(state.profile.interests).toHaveLength(1);
 });

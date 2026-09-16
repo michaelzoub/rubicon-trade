@@ -8,7 +8,7 @@ vi.mock("../providers/brokerage", () => ({ brokerage: {}, BrokerageNotConnected:
 vi.mock("../server", () => ({ HubError: class HubError extends Error {}, database: vi.fn() }));
 import { applyProfileUpdate, profileSummary } from "./tools";
 
-const hub = (): HubState => ({ revision: 0, profile: { ...newProfile("alice"), thesis: "Energy", themes: ["energy"], interests: [{ id: "NVDA", symbol: "NVDA", name: "Nvidia", kind: "stock" }], permission: "approve", permissionConfigured: true, step: 5, completedAt: "2026-09-14T00:00:00Z" }, dislikes: [], preferences: [], inferred: [], signals: [], chats: [], events: [], trades: [] });
+const hub = (): HubState => ({ revision: 0, profile: { ...newProfile("alice"), thesis: "Energy", themes: ["energy"], interests: [{ id: "NVDA", symbol: "NVDA", name: "Nvidia", kind: "stock" }], permission: "approve", permissionConfigured: true, step: 6, completedAt: "2026-09-14T00:00:00Z" }, dislikes: [], preferences: [], inferred: [], signals: [], chats: [], events: [], trades: [] });
 
 describe("update_profile tool", () => {
   it("applies explicit changes and reports each one", () => {
@@ -30,5 +30,14 @@ describe("update_profile tool", () => {
     expect(state.profile.limits).toEqual({ perTrade: "50", daily: "200.00", weekly: "1000" });
     expect(changes.find(c => c.field === "permission")?.after).toBe("Act within my limits");
     expect(profileSummary(state).permissions).toMatch(/\$50 per trade/);
+  });
+  it("gives the agent the adaptive onboarding path in plain language", () => {
+    const state = hub();
+    state.profile.investorAnswers = { knowledge: 1, guidedTest: true, opportunityDrivers: ["Human progress"], esgPriority: 4, aiPriority: 3, technologies: ["AI safety"], conflictCountries: ["Ukraine"], geopoliticalThesis: "Energy security becomes essential", futureVision: "AI safety will become essential infrastructure" };
+    expect(profileSummary(state).onboarding).toEqual({
+      investmentKnowledge: "knows the basics", opportunityDrivers: ["Human progress"], ethicsAndImpact: "impact first", aiPriority: "a lot",
+      technologies: ["AI safety"], fiveToTenYearView: "AI safety will become essential infrastructure",
+      geopoliticalOutlook: { countries: ["Ukraine"], thesis: "Energy security becomes essential" },
+    });
   });
 });

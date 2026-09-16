@@ -2,8 +2,9 @@
 
 import { useGSAP } from "@gsap/react";
 import { gsap } from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 
-gsap.registerPlugin(useGSAP);
+gsap.registerPlugin(useGSAP, ScrollTrigger);
 
 /**
  * Rubicon's motion language, shared with the marketing site. Timings are
@@ -15,4 +16,7 @@ export const rubiconMotion = {
   stagger: { line: 0.08, item: 0.045 },
 } as const;
 
-export { gsap, useGSAP };
+/** True when the visitor asked for less motion. Safe on the server. */
+export const prefersReducedMotion = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+export { gsap, useGSAP, ScrollTrigger };

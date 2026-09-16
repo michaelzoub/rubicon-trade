@@ -1,8 +1,10 @@
+import { isThemeId } from "./themes";
 import "server-only";
 import { PrivyClient } from "@privy-io/node";
 import { serviceClient } from "@/lib/supabase";
 import { readProfile, type InvestingProfile } from "./profile";
 import { defaultAgent, normalizeAgent, type AgentConfig } from "./agents/config";
+import { generatedAgentDescription, generatedAgentName } from "./agents/naming";
 import { CHAT_ID, newChat, normalizeChats } from "./chats";
 import { profileViolation, violationMessage, type LimitViolation } from "./limits";
 import { DEFAULT_PLAN, LIMIT_COPY, type LimitKey, type PlanLimits } from "./plans";
@@ -39,20 +41,28 @@ export function database() {
   try { return serviceClient(); } catch { throw new HubError(503, "Your private workspace is not connected yet. Please try again after setup."); }
 }
 /** Fills defaults for state saved before a field existed. Legacy `messages` become one chat. */
-export function normalizeState(raw: Record<string, unknown>, agentId: string, enabled: boolean, revision: number): HubState {
+export function normalizeState(raw: Record<string, unknown>, agentId: string, enabled: boolean, revision: number, userId?: string): HubState {
   const { messages: _legacy, ...rest } = raw as Record<string, unknown> & { messages?: unknown };
-  return { ...(rest as unknown as HubState), chats: normalizeChats(raw), agent: normalizeAgent(raw.agent, agentId, enabled), revision };
+  // Database rows can predate fields added to the profile schema. Normalize
+  // the persisted profile at the server boundary so chat/runtime code never
+  // receives a partially-shaped InvestingProfile (for example, without
+  // investorAnswers.opportunityDrivers).
+  const rawProfile = rest.profile && typeof rest.profile === "object" ? rest.profile as Record<string, unknown> : {};
+  const profileUserId = userId ?? (typeof rawProfile.userId === "string" ? rawProfile.userId : "");
+  const profile = readProfile(JSON.stringify({ ...rawProfile, userId: profileUserId }), profileUserId);
+  return { ...(rest as unknown as HubState), profile, chats: normalizeChats(raw), agent: normalizeAgent(raw.agent, agentId, enabled), revision };
 }
 export async function loadState(userId: string, agentId = "default"): Promise<HubState | null> {
   const { data, error } = await database().from("socialtrading_agents").select("state,revision,enabled").eq("user_id", userId).eq("agent_id", agentId).maybeSingle();
   if (error) throw new HubError(503, "Your private workspace could not be loaded.");
-  return data ? normalizeState(data.state, agentId, data.enabled === true, data.revision) : null;
+  if (!data) return null;
+  return normalizeState(data.state, agentId, data.enabled === true, data.revision, userId);
 }
 /** Every agent the user owns, oldest first, with the column-backed enabled flag. */
 export async function listAgents(userId: string): Promise<AgentConfig[]> {
-  const { data, error } = await database().from("socialtrading_agents").select("agent_id,enabled,agent:state->agent").eq("user_id", userId).order("updated_at", { ascending: true });
+  const { data, error } = await database().from("socialtrading_agents").select("agent_id,enabled,agent:state->agent,themes:state->profile->themes").eq("user_id", userId).order("updated_at", { ascending: true });
   if (error) throw new HubError(503, "Your agents could not be loaded.");
-  return (data ?? []).map(row => normalizeAgent(row.agent, row.agent_id, row.enabled === true));
+  return (data ?? []).map(row => ({ ...normalizeAgent(row.agent, row.agent_id, row.enabled === true), themes: Array.isArray(row.themes) ? row.themes.filter(isThemeId) : [] }));
 }
 /** Flips scheduled runs for one agent. Postgres enforces the per-user cap; this only translates the outcome. */
 export async function setAgentEnabled(userId: string, agentId: string, enabled: boolean, limits: PlanLimits) {
@@ -69,12 +79,13 @@ export async function deleteAgent(userId: string, agentId: string) {
   const { error } = await database().from("socialtrading_agents").delete().eq("user_id", userId).eq("agent_id", agentId);
   if (error) throw new HubError(503, "This agent could not be deleted. Please retry.");
 }
-export async function initialize(userId: string, input: InvestingProfile, limits: PlanLimits) {
+export async function initialize(userId: string, input: InvestingProfile, limits: PlanLimits, userName?: string) {
   const profile = readProfile(JSON.stringify(input), userId);
   if (!profile.completedAt) throw new HubError(400, "Complete your investing profile first.");
   assertWithin(profileViolation(null, { profile, dislikes: [], preferences: [] }, limits));
   const themes = profile.themes.map(t => t[0].toUpperCase() + t.slice(1)).join(" × ");
-  const state: HubState = { agent: defaultAgent(), revision: 0, profile, dislikes: [], preferences: [], inferred: [], signals: [], trades: [], chats: [newChat()], brokerage: { provider: "robinhood", connected: false },
+  const agent = { ...defaultAgent(), name: generatedAgentName(profile, userName, userId), description: generatedAgentDescription(profile) };
+  const state: HubState = { agent, revision: 0, profile, dislikes: [], preferences: [], inferred: [], signals: [], trades: [], chats: [newChat()], brokerage: { provider: "robinhood", connected: false },
     events: [{ id: crypto.randomUUID(), at: new Date().toISOString(), kind: "profile", text: "Your agent started with your investing worldview", detail: [themes, profile.interests.length ? `Watching ${profile.interests.map(i => i.symbol || i.name).slice(0, 6).join(", ")}` : ""].filter(Boolean).join(". ") || undefined }] };
   const { error } = await database().from("socialtrading_agents").upsert({ user_id: userId, agent_id: "default", revision: 0, state }, { onConflict: "user_id,agent_id", ignoreDuplicates: true });
   if (error) throw translateDatabaseError(error, limits) ?? new HubError(503, "Your profile could not be saved.");

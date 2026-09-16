@@ -1,3 +1,4 @@
+import { classifyTopic } from "./topics";
 import { ASSETS, type Interest } from "./profile";
 import { suggestedThemes, type ThemeId } from "./themes";
 
@@ -25,4 +26,15 @@ export function assetSuggestions(themes: ThemeId[], thesis: string, query = "") 
   const score = (asset: typeof CATALOG[number]) => asset.themes.reduce((n, theme) => n + (themes.includes(theme) ? 3 : 0) + (inferred.includes(theme) ? 1 : 0), 0);
   return CATALOG.filter(asset => `${asset.symbol ?? ""} ${asset.name} ${asset.themes.join(" ")}`.toLowerCase().includes(query.trim().toLowerCase()))
     .sort((a, b) => score(b) - score(a));
+}
+
+/** Exact topic mappings precede keyword classification for free-form interests. */
+export function topicRecommendations(interest: Pick<Interest, "id" | "name">) {
+  const topics = classifyTopic(interest);
+  const ids = [...new Set(topics.flatMap(t => t.assets))];
+  return ids.flatMap(id => {
+    const asset = CATALOG.find(a => a.id === id && a.kind !== "custom");
+    return asset ? [{ id: asset.id, name: asset.name, symbol: asset.symbol, kind: asset.kind,
+      reason: `Related to ${topics.filter(t => t.assets.includes(id)).map(t => t.name.toLowerCase()).join(" and ")}` }] : [];
+  }).slice(0, 4);
 }

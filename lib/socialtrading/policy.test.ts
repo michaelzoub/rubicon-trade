@@ -3,7 +3,7 @@ import { agentSpend, remainingAllowance, tradePolicy } from "./policy";
 import { newProfile } from "./profile";
 import type { TradeIntent } from "./types";
 
-const base = { ...newProfile("alice"), thesis: "Energy", permissionConfigured: true, step: 5 as const, completedAt: "2026-09-14T00:00:00Z" };
+const base = { ...newProfile("alice"), thesis: "Energy", permissionConfigured: true, step: 6 as const, completedAt: "2026-09-14T00:00:00Z" };
 const trade = (value: number, status: TradeIntent["status"], minutesAgo = 5): TradeIntent => ({
   id: crypto.randomUUID(), asset: { id: "VRT", symbol: "VRT", name: "Vertiv", kind: "stock" }, side: "buy", value, estimatedPrice: null, estimatedQuantity: null, resultingExposure: value,
   createdAt: new Date(Date.now() - minutesAgo * 60_000).toISOString(), status, reasoning: "", policy: { allowed: true, reason: "", at: "" },

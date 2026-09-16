@@ -1,3 +1,4 @@
+import { newProfile } from "@/lib/socialtrading/profile";
 import { beforeEach, expect, it, vi } from "vitest";
 import { defaultAgent } from "@/lib/socialtrading/agents/config";
 import { PREVIEW_ACCOUNT } from "@/app/preview/fixture";
@@ -20,8 +21,8 @@ it("creates fresh notify-only state owned by the authenticated user", async () =
   expect(state.brokerage).toBeUndefined();
   expect(insert).toHaveBeenCalledWith(expect.objectContaining({ user_id: "owner", agent_id: state.agent.id }));
 });
-it("rejects malformed configuration and empty thesis before inserting", async () => {
-  for (const body of [null, { ...defaultAgent(), thesis: " " }, { ...defaultAgent(), thesis: "Energy", capabilities: ["unauthorized"] }]) {
+it("rejects a missing or empty thesis before inserting", async () => {
+  for (const body of [null, { ...defaultAgent(), thesis: " " }, { ...defaultAgent(), thesis: 12 }]) {
     expect((await POST(request(body))).status).toBe(400);
   }
   expect(insert).not.toHaveBeenCalled();
@@ -40,4 +41,17 @@ it("refuses a fourth agent, an over-long thesis, and translates the Postgres cap
   const raced = await POST(request({ ...defaultAgent(), name: "Raced", thesis: "Energy" }));
   expect(raced.status).toBe(422);
   expect(await raced.json()).toMatchObject({ code: "limit", limit: "agents" });
+});
+
+it("preserves the completed onboarding choices and keeps the agent paused", async () => {
+  const fresh = newProfile("owner");
+  const profile = { ...fresh, thesis: "Healthcare and AI", investorAnswers: { ...fresh.investorAnswers, knowledge: 4, futureVision: "Healthcare and AI" }, themes: ["ai", "healthcare"], interests: [{ id: "custom:longevity", name: "Longevity", kind: "custom" }], permission: "automatic", permissionConfigured: true, limits: { perTrade: "10", daily: "20", weekly: "100" }, step: 6, completedAt: new Date().toISOString() };
+  const response = await POST(request({ ...defaultAgent(), name: "Longer lives", thesis: profile.thesis, profile }));
+  expect(response.status).toBe(201);
+  const { state } = await response.json();
+  expect(state.profile).toMatchObject({ ...profile, completedAt: expect.any(String), updatedAt: expect.any(String) });
+  expect(state.agent.enabled).toBe(false);
+  expect(state.inferred).toEqual([]);
+  const invalid = await POST(request({ ...defaultAgent(), thesis: profile.thesis, profile: { ...profile, limits: { perTrade: "", daily: "", weekly: "" } } }));
+  expect(invalid.status).toBe(400);
 });

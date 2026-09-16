@@ -1,4 +1,10 @@
-/** Serializable agent identity. Credentials belong in server-side connection storage. */
+import type { ThemeId } from "../themes";
+/**
+ * Serializable agent identity. Everything here is system-owned: the name and
+ * description come from naming.ts, the voice from personality.ts, tools are all
+ * on, and outreach uses Rubicon defaults. Credentials belong in server-side
+ * connection storage.
+ */
 export type NotificationThreshold = "low" | "medium" | "high";
 export type NotificationPreferences = {
   /** How often a scheduled run may wake this agent. The cron itself runs every 30 minutes. */
@@ -10,9 +16,10 @@ export type NotificationPreferences = {
 };
 export type AgentConfig = {
   id: string;
+  /** Theme metadata returned by the agent list for its portrait. */
+  themes?: ThemeId[];
   name: string;
   description: string;
-  instructions: string;
   capabilities: string[];
   createdAt: string;
   /** Server-owned. Whether scheduled runs wake this agent. Mirrors the `enabled` column. */
@@ -41,7 +48,7 @@ export const THRESHOLDS: { id: NotificationThreshold; label: string; description
 export const MAX_NOTIFICATIONS_PER_DAY = 12;
 export const defaultNotifications = (): NotificationPreferences => ({ cadenceMinutes: 60, threshold: "medium", maxPerDay: 3 });
 export function defaultAgent(id = "default"): AgentConfig {
-  return { id, name: "My agent", description: "", instructions: "", capabilities: CAPABILITIES.map(c => c.id), createdAt: new Date().toISOString(), enabled: false, notifications: defaultNotifications() };
+  return { id, name: "My agent", description: "", capabilities: CAPABILITIES.map(c => c.id), createdAt: new Date().toISOString(), enabled: false, notifications: defaultNotifications() };
 }
 /** Fills defaults for configurations stored before a field existed. Never trusts `enabled` from the blob. */
 export function normalizeAgent(input: unknown, id: string, enabled = false): AgentConfig {
@@ -53,7 +60,6 @@ export function normalizeAgent(input: unknown, id: string, enabled = false): Age
     ...base,
     name: typeof p.name === "string" && p.name.trim() ? p.name : base.name,
     description: typeof p.description === "string" ? p.description : "",
-    instructions: typeof p.instructions === "string" ? p.instructions : "",
     capabilities: Array.isArray(p.capabilities) ? p.capabilities.filter((c): c is string => typeof c === "string" && CAPABILITIES.some(k => k.id === c)) : base.capabilities,
     createdAt: typeof p.createdAt === "string" ? p.createdAt : base.createdAt,
     enabled,
@@ -63,23 +69,5 @@ export function normalizeAgent(input: unknown, id: string, enabled = false): Age
       maxPerDay: Number.isInteger(n.maxPerDay) && n.maxPerDay! >= 1 && n.maxPerDay! <= MAX_NOTIFICATIONS_PER_DAY ? n.maxPerDay! : base.notifications.maxPerDay,
     },
   };
-}
-export function agentConfig(input: unknown, existing: AgentConfig): AgentConfig {
-  if (!input || typeof input !== "object") throw new Error("Enter your agent settings.");
-  const p = input as Record<string, unknown>;
-  if (typeof p.name !== "string" || !p.name.trim() || p.name.length > 80 ||
-      typeof p.description !== "string" || p.description.length > 300 ||
-      typeof p.instructions !== "string" || p.instructions.length > 2000 ||
-      !Array.isArray(p.capabilities) || !p.capabilities.every(id => CAPABILITIES.some(c => c.id === id))) {
-    throw new Error("Check the agent name, description, behavior, and capabilities.");
-  }
-  const n = p.notifications === undefined ? existing.notifications : p.notifications as Partial<NotificationPreferences> | null;
-  if (!n || typeof n !== "object" || !CADENCES.some(c => c.minutes === n.cadenceMinutes) || !THRESHOLDS.some(t => t.id === n.threshold) ||
-      !Number.isInteger(n.maxPerDay) || (n.maxPerDay as number) < 1 || (n.maxPerDay as number) > MAX_NOTIFICATIONS_PER_DAY) {
-    throw new Error("Check the notification preferences.");
-  }
-  // `id`, `createdAt`, and `enabled` are server-owned; enabling goes through its own action.
-  return { ...existing, name: p.name.trim(), description: p.description.trim(), instructions: p.instructions.trim(), capabilities: [...new Set(p.capabilities as string[])],
-    notifications: { cadenceMinutes: n.cadenceMinutes as number, threshold: n.threshold as NotificationThreshold, maxPerDay: n.maxPerDay as number } };
 }
 export const agentSelectionKey = (userId: string) => `rubicon:active-agent:${encodeURIComponent(userId)}`;

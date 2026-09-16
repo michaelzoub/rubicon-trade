@@ -15,14 +15,16 @@ import { usePrivyConfigured } from "../../providers";
 import { profileKey, readProfile, type InvestingProfile } from "@/lib/socialtrading/profile";
 import { agentSelectionKey } from "@/lib/socialtrading/agents/config";
 import type { HubState } from "@/lib/socialtrading/types";
-import type { AccountSummary } from "@/lib/socialtrading/plans";
 import { gsap, useGSAP, rubiconMotion } from "../../_components/motion";
 import { ProfileFlow } from "../social-trading";
-import { learnedThemes, ProfileCard } from "../profile-card";
+import { learnedThemes } from "../profile-card";
+import { AgentPresence } from "./agent-presence";
 import { hubApi, HubRequestError } from "./client";
+import { useAccountSummary } from "./account-state";
 import { HubProvider, useHub } from "./hub-provider";
 import "../socialtrading.css";
 import "./hub.css";
+import "./hub-consumer.css";
 
 export const NAV = [
   { href: "/", label: "Home", icon: MessageCircle, exact: true },
@@ -33,8 +35,8 @@ export const NAV = [
   { href: "/profile", label: "Profile", icon: UserRound, exact: true },
 ] as const;
 
-function Frame({ children, wide = false, accountStatus }: { children: ReactNode; wide?: boolean; accountStatus?: ReactNode }) {
-  return <div className="landing-page socialtrading-page"><HoverTooltips /><SiteHeader accountStatus={accountStatus} session={!accountStatus} /><main className={`container socialtrading-main${wide ? " is-hub" : ""}`}><div className="dashboard-theme socialtrading-flow">{children}</div></main></div>;
+function Frame({ children, wide = false, accountStatus, nav }: { children: ReactNode; wide?: boolean; accountStatus?: ReactNode; nav?: ReactNode }) {
+  return <div className="landing-page socialtrading-page"><HoverTooltips /><SiteHeader accountStatus={accountStatus} session={!accountStatus} nav={nav} /><main className={`container socialtrading-main${wide ? " is-hub" : ""}`}><div className="dashboard-theme socialtrading-flow">{children}</div></main></div>;
 }
 
 export function HubShell({ children }: { children: ReactNode }) {
@@ -55,7 +57,7 @@ function Gate({ children }: { children: ReactNode }) {
 function Boot({ userId, name, children }: { userId: string; name?: string; children: ReactNode }) {
   const { getAccessToken } = usePrivy();
   const [state, setState] = useState<HubState | null | undefined>(undefined);
-  const [account, setAccount] = useState<AccountSummary | null>(null);
+  const [account, setAccount] = useAccountSummary(userId);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const token = () => getAccessToken();
@@ -76,7 +78,7 @@ function Boot({ userId, name, children }: { userId: string; name?: string; child
         // A profile completed in this browser before the hub existed seeds the workspace.
         let local: InvestingProfile | null = null;
         try { local = readProfile(localStorage.getItem(profileKey(userId)), userId); } catch { /* storage unavailable */ }
-        if (local?.completedAt) { const created = await hubApi.post(token, 0, { action: "initialize", profile: local }); if (!cancelled) { if (created.account) setAccount(created.account); setState(created.state); } }
+        if (local?.completedAt) { const created = await hubApi.post(token, 0, { action: "initialize", profile: local, userName: name }); if (!cancelled) { if (created.account) setAccount(created.account); setState(created.state); } }
         else setState(null);
       } catch (e) { if (!cancelled) { setError(e instanceof Error ? e.message : "Your workspace could not be loaded."); setState(null); } }
     })();
@@ -86,7 +88,7 @@ function Boot({ userId, name, children }: { userId: string; name?: string; child
 
   async function complete(profile: InvestingProfile) {
     setSaving(true); setError("");
-    try { const created = await hubApi.post(token, 0, { action: "initialize", profile }); if (created.account) setAccount(created.account); setState(created.state); }
+    try { const created = await hubApi.post(token, 0, { action: "initialize", profile, userName: name }); if (created.account) setAccount(created.account); setState(created.state); }
     catch (e) { setError(e instanceof HubRequestError ? e.message : "Your profile could not be saved. Please try again."); }
     finally { setSaving(false); }
   }
@@ -150,8 +152,10 @@ export function Hub({ children, path, resolveHref = href => href }: {
   const routePath = usePathname();
   const pathname = path ?? routePath;
   const router = useRouter();
-  const { state, name, userId, error, clearError, lastChange, account } = useHub();
-  const showCard = pathname !== "/profile" && pathname !== "/agents" && pathname !== "/trade";
+  const { state, name, userId, error, clearError, account } = useHub();
+  /** Pages that are about something else carry the agent as one quiet line.
+   * Profile, agents and buy already lead with their own identity. */
+  const showPresence = pathname !== "/profile" && pathname !== "/agents" && pathname !== "/trade";
   const stage = useRef<HTMLDivElement>(null);
   const previousPath = useRef(pathname);
   const direction = useRef(1);
@@ -188,15 +192,15 @@ export function Hub({ children, path, resolveHref = href => href }: {
   });
 
   return (
-    <Frame wide accountStatus={<AccountMenu userId={userId} name={name} planName={planName(account)} account={account} themes={state.profile.themes} learned={learnedThemes(state.inferred, state.profile.themes)} profileHref={resolveHref("/profile")} preview={path !== undefined} />}>
-      <div className={`hub-layout${showCard ? "" : " is-solo"}`}>
-        <TabBar pathname={pathname} onNavigate={navigate} resolveHref={resolveHref} />
+    <Frame wide
+      nav={<TabBar pathname={pathname} onNavigate={navigate} resolveHref={resolveHref} />}
+      accountStatus={<AccountMenu userId={userId} name={name} planName={planName(account)} account={account} themes={state.profile.themes} learned={learnedThemes(state.inferred, state.profile.themes)} profileHref={resolveHref("/profile")} preview={path !== undefined} />}>
+      <div className="hub-layout">
         <div ref={stage} className="hub-stage">
-          <p className="socialtrading-caption">Active agent · <Link href={resolveHref("/agents")}>{state.agent?.name ?? "My agent"}</Link></p>
+          {showPresence && <AgentPresence resolveHref={resolveHref} />}
           {error && <p className="hub-error" role="alert">{error} <button type="button" onClick={clearError}>Dismiss</button></p>}
           <div key={state.agent?.id ?? "default"}>{children}</div>
         </div>
-        {showCard && <ProfileCard profile={state.profile} name={name} agentName={state.agent?.name} inferred={state.inferred} compact highlight={lastChange?.at} />}
       </div>
     </Frame>
   );

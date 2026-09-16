@@ -1,4 +1,5 @@
 "use client";
+import type { InvestingProfile } from "@/lib/socialtrading/profile";
 import { agentSelectionKey, type AgentConfig } from "@/lib/socialtrading/agents/config";
 
 import { usePrivy } from "@privy-io/react-auth";
@@ -8,19 +9,22 @@ import { latestChat } from "@/lib/socialtrading/chats";
 import type { AccountSummary } from "@/lib/socialtrading/plans";
 import { hubApi, HubRequestError, streamChat, type CryptoAction, type CryptoResult, type StateAction } from "./client";
 import type { RunOutcome, RunRecord } from "@/lib/socialtrading/runtime/types";
+import { useAccountSummary } from "./account-state";
 
 export type HubContextValue = {
   agents: AgentConfig[];
   switchAgent: (id: string) => Promise<void>;
-  createAgent: (config: AgentConfig & { thesis: string }) => Promise<boolean>;
+  createAgent: (input: { thesis: string; profile?: InvestingProfile; userName?: string }) => Promise<boolean>;
   refreshAgents: () => Promise<void>;
   /** Scheduled-run toggle. Works on any agent, not only the selected one. */
   setAgentEnabled: (id: string, enabled: boolean) => Promise<boolean>;
   /** Removes an agent; when it was selected, the hub moves to the first remaining agent. */
   deleteAgent: (id: string) => Promise<boolean>;
-  /** Wakes the selected agent now through the same runtime the cron uses. */
-  runNow: () => Promise<RunOutcome | null>;
+  /** Wakes an agent now through the same runtime the cron uses. Defaults to the selected agent. */
+  runNow: (agentId?: string) => Promise<RunOutcome | null>;
   loadRuns: () => Promise<RunRecord[]>;
+  /** Reads another agent's workspace and recent wake-ups without switching to it. */
+  inspectAgent: (id: string) => Promise<{ state: HubState | null; runs: RunRecord[] }>;
   userId: string; name?: string;
   state: HubState;
   /** The signed-in user's plan, credits, and cross-agent usage. Null until the first server response carries it. */
@@ -82,16 +86,17 @@ const rememberedChat = (userId: string, state: HubState) => {
   return (stored && state.chats.find(c => c.id === stored)) ? stored : latestChat(state.chats).id;
 };
 
-export function HubProvider({ userId, name, initial, initialAccount = null, api: overrides, children }: {
+export function HubProvider({ userId, name, initial, initialAccount = null, api: overrides, chatStream = streamChat, children }: {
   userId: string; name?: string; initial: HubState; initialAccount?: AccountSummary | null; children: ReactNode;
   /** Preview/test seam: replace individual API calls. Production passes nothing. */
   api?: Partial<typeof hubApi>;
+  chatStream?: typeof streamChat;
 }) {
   const { getAccessToken } = usePrivy();
   const api = useMemo(() => ({ ...hubApi, ...overrides }), [overrides]);
   const token = useCallback(() => getAccessToken(), [getAccessToken]);
   const [state, setState] = useState(initial);
-  const [account, setAccount] = useState<AccountSummary | null>(initialAccount);
+  const [account, setAccount] = useAccountSummary(userId, initialAccount);
   const [agents, setAgents] = useState<AgentConfig[]>(initial.agent ? [initial.agent] : []);
   const activeId = useRef(initial.agent?.id ?? "default");
   const [activeChatId, setActiveChatId] = useState(() => rememberedChat(userId, initial));
@@ -150,10 +155,10 @@ export function HubProvider({ userId, name, initial, initialAccount = null, api:
     } catch (e) { setError(e instanceof Error ? e.message : "Could not switch agents."); }
     finally { operation.current = false; setBusy(false); }
   }, [api, token, busy, activate, absorb]);
-  const createAgent = useCallback(async (config: AgentConfig & { thesis: string }) => {
+  const createAgent = useCallback(async (input: { thesis: string; profile?: InvestingProfile; userName?: string }) => {
     if (operation.current || busy) return false;
     operation.current = true; setBusy(true);
-    try { const { state: next } = absorb(await api.createAgent(token, config)); activate(next); await refreshAgents(); return true; }
+    try { const { state: next } = absorb(await api.createAgent(token, input)); activate(next); await refreshAgents(); return true; }
     catch (e) { setError(e instanceof Error ? e.message : "Could not create agent."); return false; }
     finally { operation.current = false; setBusy(false); }
   }, [api, token, busy, activate, refreshAgents, absorb]);
@@ -186,19 +191,23 @@ export function HubProvider({ userId, name, initial, initialAccount = null, api:
     } catch (e) { setError(e instanceof Error ? e.message : "Could not delete this agent."); return false; }
     finally { operation.current = false; setBusy(false); }
   }, [api, token, busy, activate, absorb]);
-  const runNow = useCallback(async () => {
+  const runNow = useCallback(async (agentId?: string) => {
     if (operation.current || busy) return null;
     operation.current = true; setBusy(true);
-    const epoch = generation.current;
+    const epoch = generation.current, target = agentId ?? activeId.current;
     try {
-      const { outcome, state: next } = absorb(await api.runAgent(token, activeId.current));
-      if (epoch === generation.current && next) { revision.current = next.revision; setState(next); }
+      const { outcome, state: next } = absorb(await api.runAgent(token, target));
+      if (epoch === generation.current && next && target === activeId.current) { revision.current = next.revision; setState(next); }
       return outcome;
     } catch (e) { setError(e instanceof Error ? e.message : "The agent could not run right now."); return null; }
     finally { operation.current = false; setBusy(false); }
   }, [api, token, busy, absorb]);
   const loadRuns = useCallback(async () => {
     try { return (await api.runs(token, activeId.current)).runs; } catch { return []; }
+  }, [api, token]);
+  const inspectAgent = useCallback(async (id: string) => {
+    const [loaded, runs] = await Promise.all([api.load(token, id).catch(() => ({ state: null })), api.runs(token, id).then(r => r.runs).catch(() => [] as RunRecord[])]);
+    return { state: loaded.state, runs };
   }, [api, token]);
 
   const post = useCallback(async (action: StateAction) => {
@@ -284,7 +293,7 @@ export function HubProvider({ userId, name, initial, initialAccount = null, api:
     setPending({ chatId, user, assistant }); setBusy(true); setError(null); setDraft("");
     const controller = new AbortController(); abort.current = controller;
     try {
-      await streamChat(token, { text: trimmed, revision: revision.current, agentId: activeId.current, chatId }, event => {
+      await chatStream(token, { text: trimmed, revision: revision.current, agentId: activeId.current, chatId }, event => {
         if (event.type === "account") { setAccount(event.account); return; }
         if (event.type === "state") {
           const changes = event.state.chats.find(c => c.id === chatId)?.messages.at(-1)?.parts.flatMap(p => p.type === "profile_update" ? p.changes : []) ?? [];
@@ -305,7 +314,7 @@ export function HubProvider({ userId, name, initial, initialAccount = null, api:
     } finally {
       setBusy(false); operation.current = false; abort.current = null;
     }
-  }, [busy, token, reload, refreshAccount]);
+  }, [busy, token, reload, refreshAccount, chatStream]);
 
   const stop = useCallback(() => { abort.current?.abort(); }, []);
 
@@ -318,9 +327,9 @@ export function HubProvider({ userId, name, initial, initialAccount = null, api:
   }, [chat, pending]);
 
   const value = useMemo<HubContextValue>(() => ({
-    agents, switchAgent, createAgent, refreshAgents, setAgentEnabled, deleteAgent, runNow, loadRuns, userId, name, state, account, refreshAccount,
+    agents, switchAgent, createAgent, refreshAgents, setAgentEnabled, deleteAgent, runNow, loadRuns, inspectAgent, userId, name, state, account, refreshAccount,
     chats: state.chats, chat, selectChat, newChat, deleteChat, messages, busy, error, clearError: () => setError(null), send, stop, mutate, crypto, wallets, searchTokens, signal, market, draft, setDraft, lastChange, reload,
-  }), [agents, switchAgent, createAgent, refreshAgents, setAgentEnabled, deleteAgent, runNow, loadRuns, userId, name, state, account, refreshAccount, chat, selectChat, newChat, deleteChat, messages, busy, error, send, stop, mutate, crypto, wallets, searchTokens, signal, market, draft, lastChange, reload]);
+  }), [agents, switchAgent, createAgent, refreshAgents, setAgentEnabled, deleteAgent, runNow, loadRuns, inspectAgent, userId, name, state, account, refreshAccount, chat, selectChat, newChat, deleteChat, messages, busy, error, send, stop, mutate, crypto, wallets, searchTokens, signal, market, draft, lastChange, reload]);
 
   return <HubContext.Provider value={value}>{children}</HubContext.Provider>;
 }

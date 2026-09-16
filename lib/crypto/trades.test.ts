@@ -58,7 +58,7 @@ describe("agent swap proposals", () => {
   });
   it("refuses to prepare an agent swap when the agent lost the trading capability", async () => {
     const s = state(), t = await proposeSwap(s, "alice", req, "test");
-    s.agent = { id: "default", name: "A", description: "", instructions: "", capabilities: ["market"], createdAt: "" };
+    s.agent = { id: "default", name: "A", description: "", capabilities: ["market"], createdAt: "" };
     await expect(prepareSwap(s, "alice", t)).rejects.toThrow(/disabled/);
   });
 });
@@ -96,7 +96,7 @@ describe("user-initiated swaps", () => {
     expect(mocks.quote).not.toHaveBeenCalled();
   });
   it("lets the user prepare their swap even when the agent cannot trade", async () => {
-    const s = state("notify"); s.agent = { id: "default", name: "A", description: "", instructions: "", capabilities: ["market"], createdAt: "" };
+    const s = state("notify"); s.agent = { id: "default", name: "A", description: "", capabilities: ["market"], createdAt: "" };
     const t = await userSwap(s, "alice", input);
     await prepareSwap(s, "alice", t); expect(t.crypto?.phase).toBe("issued");
   });

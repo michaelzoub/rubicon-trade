@@ -1,3 +1,4 @@
+import type { InvestingProfile } from "@/lib/socialtrading/profile";
 import type { AgentConfig } from "@/lib/socialtrading/agents/config";
 import type { Asset, ChatEvent, HubState, SignalAction } from "@/lib/socialtrading/types";
 import type { Transaction } from "@/lib/crypto/types";
@@ -23,9 +24,9 @@ async function request<T>(token: Token, url: string, init?: RequestInit): Promis
 }
 
 export type StateAction =
-  /** Configuration plus the profile fields the agents page edits alongside it. */
-  | { action: "agent"; config: AgentConfig; thesis?: string; interests?: HubState["profile"]["interests"]; permission?: HubState["profile"]["permission"]; limits?: HubState["profile"]["limits"] }
-  | { action: "initialize"; profile: unknown }
+  /** The small set of choices people explicitly control for an agent. */
+  | { action: "agent"; thesis?: string; interests?: HubState["profile"]["interests"]; permission?: HubState["profile"]["permission"]; limits?: HubState["profile"]["limits"] }
+  | { action: "initialize"; profile: unknown; userName?: string }
   | { action: "profile"; profile: HubState["profile"]; dislikes: string[]; preferences: string[] }
   | { action: "signal"; signal: SignalAction; target: string; kind?: Asset["kind"]; symbol?: string; name?: string; themes?: string[] }
   | { action: "forget"; target: string }
@@ -46,7 +47,7 @@ export const hubApi = {
   searchTokens: (token: Token, q: string) => request<{ tokens: TokenMatch[] }>(token, `/api/trade/crypto?${new URLSearchParams({ q })}`, { cache: "no-store" }),
   crypto: (token: Token, revision: number, body: CryptoAction, agentId = "default") => request<CryptoResult>(token, "/api/trade/crypto", { method: "POST", body: JSON.stringify({ ...body, revision, agentId }) }),
   agents: (token: Token) => request<{ agents: AgentConfig[]; account?: AccountSummary }>(token, "/api/trade/agents", { cache: "no-store" }),
-  createAgent: (token: Token, config: AgentConfig & { thesis: string }) => request<{ state: HubState; account?: AccountSummary }>(token, "/api/trade/agents", { method: "POST", body: JSON.stringify(config) }),
+  createAgent: (token: Token, input: { thesis: string; profile?: InvestingProfile; userName?: string }) => request<{ state: HubState; account?: AccountSummary }>(token, "/api/trade/agents", { method: "POST", body: JSON.stringify(input) }),
   setAgentEnabled: (token: Token, agentId: string, enabled: boolean) => request<{ agents: AgentConfig[]; account?: AccountSummary }>(token, "/api/trade/agents", { method: "PATCH", body: JSON.stringify({ agentId, enabled }) }),
   deleteAgent: (token: Token, agentId: string) => request<{ agents: AgentConfig[]; account?: AccountSummary }>(token, `/api/trade/agents?${new URLSearchParams({ agentId })}`, { method: "DELETE" }),
   runAgent: (token: Token, agentId: string) => request<{ outcome: RunOutcome; state: HubState | null; runs: RunRecord[]; account?: AccountSummary }>(token, "/api/trade/agents/run", { method: "POST", body: JSON.stringify({ agentId }) }),
