@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { EYES } from "@/lib/socialtrading/face";
 import * as React from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -83,7 +84,8 @@ it("completes the compact flow with explicit automatic limits, then saves before
   expect(container.querySelector("[aria-label='Step 3 of 3']")).not.toBeNull();
   expect(container.querySelector("#interest-search")).toBeNull();
   expect(container.textContent).toContain("Eyes · Spectacles");
-  expect(container.querySelector("svg circle[cx='86'][r='7']")).not.toBeNull();
+  // Spectacles are one path now, so the creature can morph the badge's own eyes.
+  expect(container.querySelector(`svg path[d="${EYES[3]}"]`)).not.toBeNull();
   await act(async () => (container.querySelector('input[value="automatic"]') as HTMLInputElement).click());
   await click("Meet my agent");
   expect(container.textContent).toContain("Enter a positive USD amount");

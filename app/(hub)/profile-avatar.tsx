@@ -3,6 +3,7 @@
 import { useId, useRef } from "react";
 import type { InvestingProfile } from "@/lib/socialtrading/profile";
 import { agentAvatarTraits } from "@/lib/socialtrading/avatar";
+import { facePaths } from "@/lib/socialtrading/face";
 import { badgePalette, type ThemeId } from "@/lib/socialtrading/themes";
 import { gsap, useGSAP, rubiconMotion } from "../_components/motion";
 
@@ -20,6 +21,8 @@ export function ProfileAvatar({ seed, themes = [], inferred = [], className, pro
   const id = useId().replace(/:/g, "");
   const root = useRef<SVGSVGElement>(null);
   const material = `${palette.light}:${palette.color}:${palette.dark}`;
+  // The creature that inhabits the product draws from these same paths.
+  const paths = facePaths(traits);
 
   useGSAP(() => {
     const media = gsap.matchMedia();
@@ -86,16 +89,12 @@ export function ProfileAvatar({ seed, themes = [], inferred = [], className, pro
       <g data-badge-layer>
         <path d="M67 140q2-26 33-26t33 26v7H67Z" fill={`url(#${id}-face)`} opacity=".6" />
         <g fill={`url(#${id}-face)`} stroke={palette.light} strokeWidth="1.4">
-          {traits.face === 0 ? <rect x="69" y="62" width="62" height="65" rx="30" />
-            : traits.face === 1 ? <path d="M70 73Q72 58 100 58T130 73L125 109Q100 145 75 109Z" />
-            : traits.face === 2 ? <rect x="70" y="65" width="60" height="60" rx="15" />
-            : traits.face === 3 ? <path d="M75 65Q100 52 125 65L133 94Q130 126 100 129Q70 126 67 94Z" />
-            : <path d="M78 63H122L130 79V106L115 126H85L70 106V79Z" />}
+          <path d={paths.head} />
         </g>
         <path d="M78 82q0-14 18-15" stroke="#fff" strokeOpacity=".38" strokeWidth="2" fill="none" strokeLinecap="round" />
-        <g fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round">
-          {traits.eyes === 0 ? <path d="M86 91v6m28-6v6" /> : traits.eyes === 1 ? <path d="m81 94 5-4 5 4m18 0 5-4 5 4" /> : traits.eyes === 2 ? <path d="M81 94h10m23-3v6" /> : <><circle cx="86" cy="93" r="7" strokeWidth="2" /><circle cx="114" cy="93" r="7" strokeWidth="2" /><path d="M93 93h14" strokeWidth="2" /></>}
-          <path d={traits.mouth === 0 ? "M91 108q9 10 18 0" : traits.mouth === 1 ? "M95 111h10" : "M93 111q9 4 15-4"} strokeWidth="2.5" />
+        <g fill="none" stroke="#fff" strokeLinecap="round">
+          <path d={paths.eyes} strokeWidth={traits.eyes === 3 ? 2 : 3} />
+          <path d={paths.mouth} strokeWidth="2.5" />
         </g>
         {motifs.has("ai") && <g data-motif="ai" stroke={palette.dark} strokeWidth="3" fill={palette.light}>
           <path d="M100 61V45m-17 17-6-13m40 13 6-13" fill="none" strokeLinecap="round" />
