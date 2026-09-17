@@ -20,11 +20,12 @@ export async function readPurchaseBalance(provider: WalletProvider, wallet: stri
   return { wallet: wallet.toLowerCase(), chainId, usdc: BigInt(usdc as string), native: BigInt(native as string) };
 }
 export function purchaseShortfall(balance: PurchaseBalance, amount: string) {
-  return balance.usdc < BigInt(parseUnits(amount, 6)) + feeCap(balance.chainId);
+  return balance.usdc < BigInt(parseUnits(amount, 6));
 }
 export function purchaseError(error: unknown): string {
   const message = error instanceof Error ? error.message : '';
   if (/reject|denied|4001/i.test(message)) return 'Wallet request declined. No confirmation has been recorded. Check the purchase status before retrying.';
+  if (/native gas|sponsorship|Permit2|on .*chain|on Base|on Ethereum/i.test(message)) return message;
   if (/insufficient|balance|funds/i.test(message)) return 'Not enough funds on this network. Check your USDC and network fee balance, then refresh.';
   if (/expired|minimum output|quote moved/i.test(message)) return 'The price changed or the quote expired. Request a fresh quote before signing.';
   if (/different smart account/i.test(message)) return 'This wallet uses a different smart account. Choose a compatible wallet; its configuration has not been changed.';

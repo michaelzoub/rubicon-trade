@@ -47,11 +47,22 @@ export function GlossProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => () => clearTimeout(timer.current), []);
+  // A reveal belongs to a resting pointer. Anything that moves the page under
+  // it, opens something over it, or asks for it to go, takes it away at once.
   useEffect(() => {
     if (!active) return;
-    const dismiss = (event: KeyboardEvent) => { if (event.key === "Escape") setActive(null); };
+    const away = () => { clearTimeout(timer.current); setActive(null); window.dispatchEvent(new CustomEvent("rubicon:attend", { detail: null })); };
+    const dismiss = (event: KeyboardEvent) => { if (event.key === "Escape") away(); };
     window.addEventListener("keydown", dismiss);
-    return () => window.removeEventListener("keydown", dismiss);
+    window.addEventListener("rubicon:gloss-hide", away);
+    window.addEventListener("scroll", away, { capture: true, passive: true });
+    window.addEventListener("resize", away);
+    return () => {
+      window.removeEventListener("keydown", dismiss);
+      window.removeEventListener("rubicon:gloss-hide", away);
+      window.removeEventListener("scroll", away, { capture: true });
+      window.removeEventListener("resize", away);
+    };
   }, [active]);
 
   const value = useMemo(() => ({ show, hide }), [show, hide]);
@@ -64,7 +75,7 @@ function GlossLayer({ active }: { active: Active | null }) {
   useEffect(() => {
     const node = surface.current;
     if (!node) return;
-    if (!active) { gsap.killTweensOf(node); gsap.set(node, { autoAlpha: 0 }); return; }
+    if (!active) { gsap.killTweensOf(node); if (prefersReducedMotion()) gsap.set(node, { autoAlpha: 0 }); else gsap.to(node, { autoAlpha: 0, duration: .09, ease: "power1.in" }); return; }
     const width = Math.min(300, window.innerWidth - 32);
     // Beside the object, flipping to whichever side has room.
     const right = active.rect.right + 14;

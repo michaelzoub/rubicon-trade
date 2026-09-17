@@ -5,7 +5,7 @@ import { announcePresence } from "@/lib/socialtrading/presence";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { ArrowUpRight, Search, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { CHAINS, DEFAULT_CHAIN, explorerAddress, feeReserveUsd, shortAddress, type ChainId } from "@/lib/crypto/chains";
+import { CHAINS, DEFAULT_CHAIN, explorerAddress, shortAddress, type ChainId } from "@/lib/crypto/chains";
 import { readPurchaseBalance, purchaseShortfall, purchaseError, type PurchaseBalance } from "@/lib/crypto/readiness";
 import type { TokenMatch } from "@/lib/crypto/search";
 import { useCelebration } from "../../_components/celebration";
@@ -91,9 +91,8 @@ export function BuyPanel({ preselected, title = "Buy", initialQuery = "", initia
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallet, target?.chainId, selectedWallet?.chainId, refresh]);
 
-  const reserve = target ? feeReserveUsd(target.chainId) * 2 : 0;
   const shortfall = balance && USD.test(amount) && Number(amount) > 0 && purchaseShortfall(balance, amount)
-    ? `You have ${(Number(balance.usdc) / 1e6).toFixed(2)} USDC. This buy needs ${(Number(amount) + reserve).toFixed(2)} including the network fee.`
+    ? `You have ${(Number(balance.usdc) / 1e6).toFixed(2)} USDC. This buy needs ${Number(amount).toFixed(2)} USDC on this network.`
     : "";
   const valid = ready && !!selectedWallet && !!balance && balance.wallet === wallet && balance.chainId === target?.chainId && !shortfall && !!target && !!net && USD.test(amount) && Number(amount) > 0 && /^0x[0-9a-fA-F]{40}$/.test(wallet);
   const estimate = picked?.priceUsd && USD.test(amount) ? Number(amount) / picked.priceUsd : null;
@@ -130,7 +129,7 @@ export function BuyPanel({ preselected, title = "Buy", initialQuery = "", initia
     try {
       const fresh = await readPurchaseBalance(await selectedWallet!.getEthereumProvider(), wallet, target.chainId);
       setBalance(fresh);
-      if (purchaseShortfall(fresh, amount)) throw new Error("Insufficient USDC for the purchase and network fee.");
+      if (purchaseShortfall(fresh, amount)) throw new Error("Insufficient USDC for the purchase on this network.");
       announcePresence({ kind: "buy", asset: { id: `${target.chainId}:${target.address}`, symbol: target.symbol.toUpperCase(), name: target.name } });
       const result = await crypto({ action: "propose", chainId: target.chainId, wallet, tokenIn: net.usdc, tokenOut: target.address, amount, slippageBps: 50, note: `Buy ${usd(Number(amount), 2)} of ${target.symbol.toUpperCase()}` });
       if (result.tradeId) setTradeId(result.tradeId);
@@ -181,12 +180,12 @@ export function BuyPanel({ preselected, title = "Buy", initialQuery = "", initia
         {estimate !== null && <p className="hub-buy-estimate" aria-live="polite">≈ {estimate.toLocaleString("en-US", { maximumFractionDigits: estimate < 1 ? 6 : 4 })} {target.symbol.toUpperCase()} at today’s price</p>}
       </div>
       {wallets.length > 0 && <label className="hub-buy-wallet">From wallet<select className="socialtrading-input mono" value={wallet} onChange={e => setWallet(e.target.value)}>{wallets.map(w => <option key={w.address} value={w.address.toLowerCase()}>{shortAddress(w.address)} · {w.walletClientType === "privy" ? "embedded" : w.walletClientType}</option>)}</select></label>}
-      {ready && wallets.length === 0 && <p className="hub-notice"><button type="button" className="hub-chip-button" onClick={() => connectWallet()}>Connect wallet</button> Connect or create a wallet in your profile first. You’ll need USDC on {net.name} and a network fee reserve.</p>}
+      {ready && wallets.length === 0 && <p className="hub-notice"><button type="button" className="hub-chip-button" onClick={() => connectWallet()}>Connect wallet</button> Connect or create a wallet in your profile first. You’ll need USDC on {net.name} and native tokens for gas.</p>}
       <p className="purchase-requirements" role="status">{balance ? `Available: ${(Number(balance.usdc) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC on ${net.name}` : balanceNote}</p>
       <div className="purchase-readiness">
         <strong>{net.name} only <span>· {shortAddress(wallet)}</span></strong>
-        <p>Spend {USD.test(amount) ? amount : "…"} USDC + up to {reserve} USDC for network fees.</p>
-        {balance && <p>Native gas balance: {(Number(balance.native) / 1e18).toLocaleString(undefined, { maximumFractionDigits: 6 })} {net.nativeSymbol}. This purchase pays gas in USDC.</p>}
+        <p>Spend {USD.test(amount) ? amount : "…"} USDC. Network fees are paid separately in {net.nativeSymbol}.</p>
+        {balance && <p>Native gas balance: {(Number(balance.native) / 1e18).toLocaleString(undefined, { maximumFractionDigits: 6 })} {net.nativeSymbol}. You need native tokens on this network to pay gas.</p>}
         <p>USDC on Ethereum cannot pay for a Base purchase. Funds must be on {net.name}.</p>
         <button type="button" className="hub-chip-button" disabled={switching || busy} onClick={async () => {
           if (!selectedWallet) return;
@@ -196,7 +195,7 @@ export function BuyPanel({ preselected, title = "Buy", initialQuery = "", initia
           finally { setSwitching(false); }
         }}>{switching ? "Check your wallet…" : `Connect to ${net.name} / refresh funds`}</button>
       </div>
-      <details className="hub-disclosure"><summary>Purchase details</summary><p className="purchase-requirements">Uniswap · maximum slippage 0.5%. Approvals and swap are batched. The wallet may request network, account authorization and fee signatures. Review each request.</p></details>
+      <details className="hub-disclosure"><summary>Purchase details</summary><p className="purchase-requirements">Uniswap · maximum slippage 0.5%. Any token approval must confirm first. Then review a fresh quote, a Permit2 signature if required, and the swap transaction.</p></details>
       {shortfall && <p className="hub-notice" role="status">{shortfall}</p>}
       {error && <p className="hub-error" role="alert">{error}</p>}
       <div className="hub-trade-actions hub-buy-actions">

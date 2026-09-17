@@ -41,7 +41,7 @@
 .hub-field-tick.is-left { bottom: -.35rem; left: 0; }
 .hub-field-tick.is-right { bottom: -.35rem; right: 0; }
 
-.hub-orbit { position: absolute; width: min(10.5rem, 19%); min-width: 9rem; will-change: transform; }
+.hub-orbit { position: absolute; width: 19%; min-width: 0; will-change: transform; }
 .hub-orbit-gather, .hub-orbit-float { will-change: transform; }
 /* One card, one glance: what it is, what it costs, which way it went. */
 .hub-orbit-card { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .55rem; padding: .7rem .8rem; border-radius: 16px; background: #fff; color: var(--ink); text-decoration: none;

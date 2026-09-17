@@ -35,6 +35,8 @@ export function ExploreView() {
   const [query, setQuery] = useState("");
   const [theme, setTheme] = useState<string | null>(null);
   const [assets, setAssets] = useState<Asset[] | null>(null);
+  /** Something newer is on its way. What is on screen dims and waits rather than vanishing. */
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const search = query.trim();
   /** The field as it stands, taken the moment before a change, so the same
@@ -48,15 +50,15 @@ export function ExploreView() {
   }, [market]);
 
   useEffect(() => {
-    if (lens === "themes" && !theme) { setAssets(null); return; }
+    if (lens === "themes" && !theme) { setAssets(null); setLoading(false); return; }
     let cancelled = false;
-    setError("");
+    setError(""); setLoading(true);
     const load = lens === "forYou" ? () => forYou(search) : lens === "themes" ? () => market({ kind: "stock", q: theme ?? "" }) : () => market({ kind: lens === "new" ? "ipos" : "trends", q: "" });
     const handle = setTimeout(() => {
       load().then(list => {
         if (cancelled) return;
-        setAssets(list);
-      }).catch(e => { if (!cancelled) { setAssets([]); setError(e instanceof Error ? e.message : "Market data is unavailable."); } });
+        setAssets(list); setLoading(false);
+      }).catch(e => { if (!cancelled) { setAssets([]); setLoading(false); setError(e instanceof Error ? e.message : "Market data is unavailable."); } });
     }, search ? 350 : 0);
     return () => { cancelled = true; clearTimeout(handle); };
   }, [forYou, market, lens, search, theme]);
@@ -69,7 +71,7 @@ export function ExploreView() {
   const change = (next: () => void) => { next(); };
 
   return (
-    <div className="hub-explore">
+    <div className={`hub-explore${loading && assets ? " is-loading" : ""}`}>
       <div className="hub-explore-controls">
         <Lens className="hub-discovery-lenses" items={LENSES} value={lens} label="Ways to explore" onChange={id => change(() => { setLens(id); setTheme(null); setQuery(""); })} />
         {lens === "forYou" && <label className="hub-search hub-explore-search"><Search size={14} aria-hidden="true" /><span className="sr-only">Search stocks and crypto</span>

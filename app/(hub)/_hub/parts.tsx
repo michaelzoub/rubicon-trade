@@ -13,6 +13,7 @@ import { compact, pct, timeAgo, usd } from "./format";
 import { assetGloss, useGloss } from "./gloss";
 import { useHub } from "./hub-provider";
 import { CryptoTradeCard } from "./crypto-trade-card";
+import { PriceTrace, traceDate, type TraceHit } from "./price-trace";
 
 export const assetHref = (asset: Pick<Asset, "kind" | "id">) => `/explore/${asset.kind}/${encodeURIComponent(asset.id)}`;
 
@@ -28,6 +29,12 @@ export function Sparkline({ points, width = 96, height = 28, className = "" }: {
 export function ChangeText({ value, className = "" }: { value: number | null; className?: string }) {
   const tone = value === null ? "" : value > 0 ? " is-up" : value < 0 ? " is-down" : "";
   return <span className={`hub-change${tone} ${className}`}>{pct(value)}</span>;
+}
+
+/** The move as a pill: tinted by direction, with an arrow that says it twice. */
+export function ChangePill({ value, className = "" }: { value: number | null; className?: string }) {
+  const tone = value === null ? "" : value > 0 ? " is-up" : value < 0 ? " is-down" : "";
+  return <span className={`hub-change hub-pill${tone} ${className}`}>{pct(value)}{value !== null && value !== 0 && <ArrowUpRight size={11} aria-hidden="true" style={value < 0 ? { transform: "rotate(90deg)" } : undefined} />}</span>;
 }
 
 export function RelevanceLabel({ asset }: { asset: Pick<Asset, "label" | "labelTone"> }) {
@@ -137,16 +144,32 @@ function DiscoveryCard({ asset }: { asset: Asset }) {
   </article>;
 }
 
-/** A quiet, tactile opening. Further actions live on the asset page. */
+/** A quiet, tactile opening. Further actions live on the asset page.
+ *
+ * The card is a small instrument: what it is, what it costs, how it moved, and
+ * the trace of how it got here running off the bottom edge. Reaching across
+ * the trace reads a point off it; the rest of the card stays exactly as it was. */
 function QuietAssetCard({ asset }: { asset: Asset }) {
   const { signal } = useHub();
   const tilt = useTilt<HTMLElement>(2);
-  return <article ref={tilt.root} className="hub-quiet-card" data-asset={asset.symbol} onPointerMove={tilt.onPointerMove} onPointerLeave={tilt.onPointerLeave}>
+  const [hit, setHit] = useState<TraceHit | null>(null);
+  const points = asset.chart.slice(-40);
+  const read = hit ? points[hit.index] : null;
+  return <article ref={tilt.root} className={`hub-quiet-card${hit ? " is-reading" : ""}`} data-asset={asset.symbol} onPointerMove={tilt.onPointerMove} onPointerLeave={tilt.onPointerLeave}>
     <Link href={assetHref(asset)} onClick={() => { void signal("opened", asset); }} aria-label={`Open ${asset.name}`}>
-      <span className="quiet-card-head"><AssetLogo asset={asset}/><span><strong>{asset.symbol}</strong><small>{asset.name}</small></span><ArrowUpRight size={15}/></span>
-      <span className="quiet-card-quote"><strong>{usd(asset.price)}</strong><ChangeText value={asset.change}/></span>
-      <Sparkline points={asset.chart.slice(-40)} width={280} height={64}/>
-      <span className="quiet-card-signal">{asset.label || "A new connection"}</span>
+      <span className="quiet-card-top">
+        <span className="quiet-card-title"><AssetLogo asset={asset}/><span><strong>{asset.symbol}</strong><small>{asset.name}</small></span></span>
+        <span className="quiet-card-open" aria-hidden="true"><ArrowUpRight size={14}/></span>
+      </span>
+      <span className="quiet-card-quote">
+        <strong className="quiet-card-price">{usd(asset.price)}</strong>
+        <span className="quiet-card-delta"><small>today</small><ChangePill value={asset.change}/></span>
+      </span>
+      <span className="quiet-card-chart">
+        <PriceTrace points={points} height={92} pad={{ top: 30, bottom: 0 }} onScrub={setHit} />
+        {read && hit && <span className={`trace-chip${hit.y < 52 ? " is-below" : ""}`} style={{ left: Math.min(Math.max(hit.x, 64), hit.width - 64), top: hit.y < 52 ? hit.y + 14 : hit.y - 12 }}><small>{traceDate(read.time)}</small><b>{usd(read.price)}</b></span>}
+        <span className="quiet-card-signal">{asset.label || "A new connection"}</span>
+      </span>
     </Link>
   </article>;
 }

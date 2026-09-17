@@ -30,7 +30,7 @@ export function PreviewExperience({ view, kind, id }: { view: string; kind?: str
   const [attempt, setAttempt] = useState(0);
   const [onboarding, setOnboarding] = useState(view === "onboarding");
   return <>
-    <div className="container" style={{ paddingTop: 12, display: "flex", gap: 16, alignItems: "center" }}>
+    <div className="container" style={{ position: "relative", zIndex: 60, padding: "12px 0 10px", display: "flex", gap: 16, alignItems: "center", background: "#fff" }}>
       <span className="socialtrading-caption">Preview · sample data</span>
       <button className="hub-inline-link" onClick={() => { setProfile(undefined); setAttempt(n => n + 1); setOnboarding(true); }}>Restart onboarding</button>
       <button className="hub-inline-link" onClick={() => setOnboarding(false)}>View hub</button>

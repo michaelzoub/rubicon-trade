@@ -31,6 +31,7 @@ import "../socialtrading.css";
 import "./hub.css";
 import "./hub-consumer.css";
 import "./quiet-refinement.css";
+import "./instruments.css";
 
 export const NAV = [
   { href: "/", label: "Home", icon: MessageCircle, exact: true },
@@ -167,16 +168,17 @@ export function Hub({ children, path, resolveHref = href => href }: {
   const direction = useRef(1);
   const leaving = useRef<string | null>(null);
 
-  // Entering: the new view arrives from the side the user moved toward.
+  // Entering: the new view arrives from the side the user moved toward, or
+  // rises into place when the move was into or out of something rather than across.
   useGSAP(() => {
     if (previousPath.current === pathname || !stage.current) { previousPath.current = pathname; return; }
     const dir = Math.sign(index(pathname) - index(previousPath.current)) || direction.current;
-    previousPath.current = pathname; leaving.current = null;
+    previousPath.current = pathname; leaving.current = null; direction.current = 1;
     const media = gsap.matchMedia();
     media.add("(prefers-reduced-motion: no-preference)", () => {
       const parts = stage.current!.querySelectorAll(":scope > :not(.hub-error) > *");
       gsap.timeline({ defaults: { ease: rubiconMotion.ease.enter } })
-        .fromTo(stage.current, { opacity: 0, x: dir * 22, filter: "blur(6px)" }, { opacity: 1, x: 0, filter: "blur(0px)", duration: .46, clearProps: "all" })
+        .fromTo(stage.current, { opacity: 0, x: dir * 22, y: dir ? 0 : 14, filter: "blur(6px)" }, { opacity: 1, x: 0, y: 0, filter: "blur(0px)", duration: .46, clearProps: "all" })
         .fromTo(parts, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: .5, stagger: .05, clearProps: "all" }, .05);
     });
     return () => media.revert();
@@ -184,18 +186,40 @@ export function Hub({ children, path, resolveHref = href => href }: {
 
   // Leaving: a short exit before the route changes, in the direction of travel.
   const { contextSafe } = useGSAP({ scope: stage });
-  const navigate = contextSafe((event: MouseEvent<HTMLAnchorElement>, href: string) => {
-    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
-    if (href === pathname || leaving.current === href) return;
-    event.preventDefault();
-    const dir = Math.sign(index(href) - index(pathname)) || 1;
+  const leave = contextSafe((target: string, dir: number) => {
     direction.current = dir;
-    const target = resolveHref(href);
     if (!stage.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) { router.push(target); return; }
-    leaving.current = href;
+    leaving.current = target;
     gsap.killTweensOf(stage.current);
-    gsap.to(stage.current, { opacity: 0, x: -dir * 14, filter: "blur(3px)", duration: .16, ease: rubiconMotion.ease.exit, onComplete: () => router.push(target) });
+    // The route change waits for the exit, but never on it: a throttled tab
+    // must not leave the page blank with nowhere to go.
+    let gone = false;
+    const go = () => { if (gone) return; gone = true; router.push(target); };
+    const fallback = setTimeout(go, 260);
+    gsap.to(stage.current, { opacity: 0, x: -dir * 14, y: dir ? 0 : -8, filter: "blur(3px)", duration: .16, ease: rubiconMotion.ease.exit, onComplete: () => { clearTimeout(fallback); go(); } });
   });
+  const navigate = (event: MouseEvent<HTMLAnchorElement>, href: string) => {
+    if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    if (href === pathname || leaving.current === resolveHref(href)) return;
+    event.preventDefault();
+    leave(resolveHref(href), Math.sign(index(href) - index(pathname)) || 1);
+  };
+  // Cards, back links and inline links inside the stage all go out the same
+  // door. Caught before Link sees the click, so Link still runs its own
+  // handlers but leaves the navigation to the exit.
+  const navigateWithin = (event: MouseEvent<HTMLDivElement>) => {
+    const anchor = (event.target as HTMLElement).closest?.("a[href]") as HTMLAnchorElement | null;
+    if (!anchor || event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    if (anchor.target === "_blank" || anchor.hasAttribute("download")) return;
+    const url = new URL(anchor.href, window.location.href);
+    if (url.origin !== window.location.origin) return;
+    const target = url.pathname + url.search;
+    if (target === window.location.pathname + window.location.search || leaving.current === target) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    event.preventDefault();
+    const from = index(pathname), to = index(url.pathname);
+    leave(target, from >= 0 && to >= 0 && from !== to ? Math.sign(to - from) : 0);
+  };
 
   return (
     <Frame wide
@@ -208,7 +232,7 @@ export function Hub({ children, path, resolveHref = href => href }: {
         <AmbientAgent resolveHref={resolveHref} />
         <PurchaseDialog />
         <div className="hub-layout" style={identityVars(palette) as CSSProperties}>
-          <div ref={stage} className="hub-stage">
+          <div ref={stage} className="hub-stage" onClickCapture={navigateWithin}>
             {error && <p className="hub-error" role="alert">{error} <button type="button" onClick={clearError}>Dismiss</button></p>}
             <div key={state.agent?.id ?? "default"}>{children}</div>
           </div>

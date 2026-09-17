@@ -1,22 +1,5 @@
-/* Focused consumer surfaces; shared trade and Memory components retain their styles. */
-.hub-quiet-card { position:relative; min-width:0; border:1px solid #dce6f2; border-radius:22px; background:linear-gradient(145deg,#fff 25%,#f1f6ff); box-shadow:0 4px 8px -6px #5578a633,0 14px 36px -26px #5578a666; transition:box-shadow .3s,border-color .3s; isolation:isolate; }
-.hub-quiet-card::before { content:""; position:absolute; inset:0; z-index:-1; border-radius:inherit; background:radial-gradient(circle at var(--mx,50%) var(--my,30%),#b7d5ff66,transparent 65%); opacity:0; transition:opacity .3s; pointer-events:none; }
-.hub-quiet-card:hover::before,.hub-quiet-card:focus-within::before { opacity:1; }
-.hub-quiet-card:hover,.hub-quiet-card:focus-within { border-color:#b7cee9; box-shadow:0 20px 40px -24px #5a87be88,inset 0 1px #fff; }
-.hub-quiet-card>a { display:flex; flex-direction:column; gap:20px; padding:22px; color:var(--ink); text-decoration:none; border-radius:inherit; }
-.hub-quiet-card>a:focus-visible { outline:2px solid #6f9de0; outline-offset:4px; }
-.quiet-card-head { display:flex; align-items:center; gap:11px; }
-.quiet-card-head .hub-asset-logo { width:36px; height:36px; border-radius:12px; font-size:12px; }
-.quiet-card-head .hub-asset-logo img { width:24px; height:24px; }
-.quiet-card-head>span:nth-child(2) { display:grid; min-width:0; flex:1; }
-.quiet-card-head strong { font-size:13px; font-weight:600; }
-.quiet-card-head small { font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.quiet-card-head>svg { color:#9aabc1; }
-.quiet-card-quote { display:flex; align-items:baseline; gap:10px; font-variant-numeric:tabular-nums; }
-.quiet-card-quote strong { font-size:25px; font-weight:500; letter-spacing:-1px; }
-.quiet-card-quote .hub-change { font-size:12px; }
-.hub-quiet-card .hub-sparkline { width:100%; height:64px; overflow:visible; filter:drop-shadow(0 7px 5px #7bade322); }
-.quiet-card-signal { color:#71859e; font-size:11px; white-space:nowrap; text-overflow:ellipsis; overflow:hidden; }
+/* Focused consumer surfaces; shared trade and Memory components retain their styles.
+   The market card and the Explore field live in instruments.css. */
 .hub-explore-controls { flex-wrap:wrap; gap:20px; }
 .hub-discovery-lenses.hub-lens { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); width:100%; padding:0; gap:12px; overflow:visible; background:none; box-shadow:none; border-radius:0; }
 .hub-discovery-lenses .hub-lens-light { display:none; }
@@ -27,19 +10,6 @@
 .hub-discovery-lenses .hub-lens-item:hover { transform:translateY(-4px); box-shadow:0 16px 30px -23px var(--lens-hue); }
 .hub-discovery-lenses .hub-lens-item.is-active { border-color:color-mix(in srgb,var(--lens-hue) 38%,#fff); }
 .hub-explore-search { margin-left:auto; }
-.rubicon-xy-scroll { padding:24px 12px 38px; }
-.hub-constellation.rubicon-xy { display:block; height:440px; margin:0 30px; isolation:isolate; }
-.rubicon-xy .hub-field-rule.is-horizontal { top:auto; bottom:8%; }
-.rubicon-xy .hub-field-rule.is-vertical { left:0; top:4%; bottom:8%; }
-.rubicon-xy .hub-field-tick.is-top { left:0; top:-16px; transform:none; }
-.rubicon-xy .hub-field-tick.is-bottom { bottom:12%; left:0; }
-.rubicon-xy .hub-field-tick.is-left,.rubicon-xy .hub-field-tick.is-right { bottom:0; }
-.rubicon-xy .hub-orbit { min-width:0; width:17%; }
-.rubicon-xy .hub-orbit:hover,.rubicon-xy .hub-orbit:focus-within { z-index:30!important; }
-.rubicon-xy .hub-orbit-card { grid-template-columns:auto 1fr; gap:8px; padding:12px; }
-.rubicon-xy .hub-orbit-card>.hub-change { grid-column:2; margin-top:-5px; }
-.rubicon-xy .hub-constellation-glow { inset:0; width:100%; height:100%; }
-.hub-explore-results { margin-top:12px; }
 .rubicon-more { position:relative; align-self:center; }
 .rubicon-more-trigger { display:grid; place-items:center; width:32px; height:32px; border:1px solid transparent; border-radius:50%; color:#71849d; background:transparent; cursor:pointer; transition:background .2s,transform .3s; }
 .rubicon-more-trigger:hover,.rubicon-more-trigger[aria-expanded=true] { background:#eaf0f8; color:#274c7c; }
@@ -67,8 +37,6 @@
  .hub-discovery-lenses .hub-lens-item { padding:16px; min-height:110px; gap:20px; }
  .rubicon-portals { position:fixed; top:112px; left:16px; right:16px; width:auto; max-height:calc(100dvh - 140px); overflow:auto; }
  .rubicon-portal { height:190px; padding:15px; }
- .rubicon-xy-scroll { overflow-x:auto; padding:28px 10px 30px; margin-inline:-10px; }
- .hub-constellation.rubicon-xy { min-width:700px; margin-inline:16px; height:400px; }
 }
 @media(max-width:420px) { .hub-discovery-lenses.hub-lens { gap:8px; }.hub-discovery-lenses .hub-lens-item { padding:13px 10px; font-size:12px; } }
-@media(prefers-reduced-motion:reduce) { .hub-quiet-card,.hub-quiet-card::before,.hub-discovery-lenses .hub-lens-item,.hub-discovery-lenses .hub-lens-item::before,.rubicon-more-trigger,.rubicon-more-trigger svg,.rubicon-portal,.portal-strata,.portal-orbit i { transition:none; }.hub-discovery-lenses .hub-lens-item:hover { transform:none; } }
+@media(prefers-reduced-motion:reduce) { .hub-discovery-lenses .hub-lens-item,.hub-discovery-lenses .hub-lens-item::before,.rubicon-more-trigger,.rubicon-more-trigger svg,.rubicon-portal,.portal-strata,.portal-orbit i { transition:none; }.hub-discovery-lenses .hub-lens-item:hover { transform:none; } }

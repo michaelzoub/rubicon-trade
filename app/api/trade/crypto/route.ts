@@ -1,5 +1,5 @@
 import { authenticate, bodyOf, failure, HubError, loadState, requestedAgent, saveState } from "@/lib/socialtrading/server";
-import { prepareSwap, userSwap } from "@/lib/crypto/trades";
+import { authorizeSwap, prepareSwap, userSwap } from "@/lib/crypto/trades";
 import { verifyTransaction, verifyUserOperation } from "@/lib/crypto/rpc";
 import { userWallets } from "@/lib/crypto/wallet";
 import { cryptoServices } from "@/lib/crypto/services";
@@ -38,14 +38,19 @@ export async function POST(request: Request) {
     const trade = state.trades.find(t => t.id === body.tradeId), c = trade?.crypto;
     if (!trade || !c) throw new HubError(404, "Swap not found.");
     if (body.action === "prepare") {
-      const batch = await prepareSwap(state, userId, trade);
+      const result = await prepareSwap(state, userId, trade);
       // Optimistic revision update is the cross-process claim: only one caller receives calldata.
       await saveState(userId, state);
-      return Response.json({ state, batch, step: c.step, expiresAt: c.expiresAt });
+      return Response.json({ state, ...result });
+    }
+    if (body.action === "authorize") {
+      const result = await authorizeSwap(state, userId, trade, body.quoteId, body.signature);
+      await saveState(userId, state);
+      return Response.json({ state, ...result });
     }
     if (body.action === "reject") {
       if (trade.status !== "rejected") {
-        if (c.phase !== "ready" || !["approval_required", "reserved"].includes(trade.status)) throw new HubError(409, "This swap can no longer be declined. Check its status.");
+        if (!["ready", "authorizing"].includes(c.phase) || !["approval_required", "reserved"].includes(trade.status)) throw new HubError(409, "This swap can no longer be declined. Check its status.");
         trade.status = "rejected"; trade.approval = { decision: "rejected", at: new Date().toISOString() }; c.detail = "Declined. Nothing was sent to your wallet and no allowance is held.";
         recordEvent(state, "trade", `You declined the ${trade.asset.symbol} swap`, undefined, trade.id);
       }
@@ -68,9 +73,14 @@ export async function POST(request: Request) {
         ? await verifyUserOperation(c.batch, c.userOpHash, c.hash)
         : await verifyTransaction(c.transaction!, c.hash);
       if (result === "confirmed") {
-        c.phase = "complete"; trade.status = "confirmed"; c.detail = "Swap confirmed onchain.";
+        (c.history ??= []).push({ step: c.step ?? "swap", hash: c.hash, result });
+        if (c.step === "approval") {
+          c.phase = "ready"; trade.status = "reserved"; c.hash = undefined; c.transaction = undefined;
+          c.quote = undefined; c.quoteId = undefined;
+          c.detail = "Token approval confirmed. Continue to get a fresh quote and sign the purchase.";
+        } else { c.phase = "complete"; trade.status = "confirmed"; c.detail = "Swap confirmed onchain."; }
         recordEvent(state, "trade", c.detail, c.hash, trade.id);
-      } else if (result === "reverted") { c.phase = "complete"; trade.status = "failed"; c.detail = "Transaction reverted onchain. Network fees may have been charged."; recordEvent(state, "trade", `The ${trade.asset.symbol} swap reverted onchain`, c.hash, trade.id); }
+      } else if (result === "reverted") { (c.history ??= []).push({ step: c.step ?? "swap", hash: c.hash, result }); c.phase = "complete"; trade.status = "failed"; c.detail = "Transaction reverted onchain. Network fees may have been charged."; recordEvent(state, "trade", `The ${trade.asset.symbol} swap reverted onchain`, c.hash, trade.id); }
       else c.detail = "Waiting for the transaction and two block confirmations.";
     } else throw new HubError(400, "Unknown swap action.");
     return Response.json({ state: await saveState(userId, state) });

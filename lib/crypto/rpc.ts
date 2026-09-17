@@ -12,12 +12,12 @@ export async function rpc<T>(chainId: number, method: string, params: unknown[])
 export async function verifyTransaction(tx: Transaction, hash: string): Promise<"pending" | "confirmed" | "reverted"> {
   const [network, sent, receipt] = await Promise.all([
     rpc<string>(tx.chainId, "eth_chainId", []),
-    rpc<{ from: string; to: string; input: string; value: string } | null>(tx.chainId, "eth_getTransactionByHash", [hash]),
+    rpc<{ from: string; to: string; input: string; value: string; nonce?: string } | null>(tx.chainId, "eth_getTransactionByHash", [hash]),
     rpc<{ status: string; blockNumber: string; blockHash: string } | null>(tx.chainId, "eth_getTransactionReceipt", [hash]),
   ]);
   if (BigInt(network) !== BigInt(tx.chainId)) throw new Error("RPC network mismatch.");
   if (!sent) return "pending";
-  if (sent.from.toLowerCase() !== tx.from.toLowerCase() || sent.to?.toLowerCase() !== tx.to.toLowerCase() || sent.input.toLowerCase() !== tx.data.toLowerCase() || BigInt(sent.value) !== BigInt(tx.value)) throw new Error("Transaction hash does not match the authorized transaction.");
+  if (sent.from.toLowerCase() !== tx.from.toLowerCase() || sent.to?.toLowerCase() !== tx.to.toLowerCase() || sent.input.toLowerCase() !== tx.data.toLowerCase() || BigInt(sent.value) !== BigInt(tx.value) || (tx.nonce !== undefined && (sent.nonce === undefined || BigInt(sent.nonce) !== BigInt(tx.nonce)))) throw new Error("Transaction hash does not match the authorized transaction.");
   if (!receipt) return "pending";
   if (!(await settled(tx.chainId, receipt))) return "pending";
   if (receipt.status !== "0x0" && receipt.status !== "0x1") throw new Error("Invalid transaction receipt.");

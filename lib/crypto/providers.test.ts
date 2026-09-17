@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createTransport } from "./http";
 import { swapRequest } from "./chains";
+import { PERMIT_TYPES, ROUTERS } from "./permit";
+import { PERMIT2 } from "./aa";
 import { createUniswap } from "./providers/uniswap";
 import { createDexScreener } from "./providers/dexscreener";
 import { createCoinGecko } from "./providers/coingecko";
@@ -67,7 +69,7 @@ describe("Uniswap execution adapter", () => {
   });
   it("accepts the Permit2 data the gateway now returns on every classic quote", async () => {
     vi.stubEnv("UNISWAP_API_KEY", "test-key");
-    const withPermit = { ...raw(), permitData: { domain: { name: "Permit2" }, types: {}, values: {} } };
+    const withPermit = { ...raw(), permitData: { domain: { name: "Permit2", chainId: 1, verifyingContract: PERMIT2 }, types: PERMIT_TYPES, values: { details: { token: input, amount: req.amount, expiration: String(Math.floor(Date.now()/1000)+1800), nonce: "0" }, spender: ROUTERS[1], sigDeadline: String(Math.floor(Date.now()/1000)+1800) } } };
     await expect(createUniswap(createTransport(vi.fn().mockResolvedValue(Response.json(withPermit)))).quote(req)).resolves.toMatchObject({ minimumOutput: "1990000" });
   });
   it.each(["routing", "recipient", "amount", "slippage"])("rejects mismatched %s", async field => {
@@ -80,17 +82,17 @@ describe("Uniswap execution adapter", () => {
   });
   it("rejects expired quotes and unexpected native spend", async () => {
     vi.stubEnv("UNISWAP_API_KEY", "test-key");
-    const fetcher = vi.fn().mockResolvedValueOnce(Response.json(raw())).mockResolvedValueOnce(Response.json({ swap: { chainId: 1, from: wallet, to: output, data: "0xaabb", value: "1" } }));
+    const fetcher = vi.fn().mockResolvedValueOnce(Response.json(raw())).mockResolvedValueOnce(Response.json({ swap: { chainId: 1, from: wallet, to: ROUTERS[1], data: "0xaabb", value: "1" } }));
     const api = createUniswap(createTransport(fetcher)); const q = await api.quote(req);
     await expect(api.swap({ ...q, expiresAt: 0 })).rejects.toThrow(/expired/);
     await expect(api.swap(q)).rejects.toThrow(/native/);
   });
-  it("does not ask the gateway to simulate, because the Permit2 allowance is still in the same batch", async () => {
+  it("simulates the swap after approvals have settled", async () => {
     vi.stubEnv("UNISWAP_API_KEY", "test-key");
-    const fetcher = vi.fn().mockResolvedValueOnce(Response.json(raw())).mockResolvedValueOnce(Response.json({ swap: { chainId: 1, from: wallet, to: output, data: "0xaabb", value: "0" } }));
+    const fetcher = vi.fn().mockResolvedValueOnce(Response.json(raw())).mockResolvedValueOnce(Response.json({ swap: { chainId: 1, from: wallet, to: ROUTERS[1], data: "0xaabb", value: "0" } }));
     const api = createUniswap(createTransport(fetcher));
     await api.swap(await api.quote(req));
-    expect(JSON.parse(fetcher.mock.calls[1][1].body).simulateTransaction).toBe(false);
+    expect(JSON.parse(fetcher.mock.calls[1][1].body).simulateTransaction).toBe(true);
   });
 });
 describe("unit conversion", () => {

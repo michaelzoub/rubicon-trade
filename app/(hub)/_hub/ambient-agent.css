@@ -57,3 +57,6 @@
   .ambient-agent{transition:none}
   .ambient-body{will-change:auto}
 }
+
+/* On a phone the creature is company, not a landmark: smaller, and it keeps to one edge. */
+@media(max-width:760px){.ambient-orb{transform:scale(.8);transform-origin:100% 100%}}

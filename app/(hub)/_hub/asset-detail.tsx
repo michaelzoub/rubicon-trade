@@ -3,15 +3,14 @@
 import { ArrowLeft, Eye, EyeOff, MessageCircle } from "lucide-react";
 import { HubLink as Link } from "./navigation";
 import { useHubRouter as useRouter } from "./navigation";
-import { useEffect, useId, useRef, useState } from "react";
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useEffect, useRef, useState } from "react";
 import type { Asset } from "@/lib/socialtrading/types";
-import { ChartFrame, ChartTooltip } from "../../_components/charts";
 import { gsap, useGSAP, prefersReducedMotion, rubiconMotion } from "../../_components/motion";
 import { compact, timeAgo, usd } from "./format";
 import { useHub } from "./hub-provider";
 import { Lens } from "./lens";
-import { ChangeText, Fact, Facts, NewsList, RelevanceLabel, useFollowRoom } from "./parts";
+import { ChangePill, Fact, Facts, NewsList, RelevanceLabel, useFollowRoom } from "./parts";
+import { PriceTrace, type TraceHit } from "./price-trace";
 import { openPurchase } from "./purchase";
 
 const RANGES = [
@@ -33,7 +32,7 @@ export function AssetDetail({ kind, id }: { kind: Asset["kind"]; id: string }) {
   const plot = useRef<HTMLDivElement>(null);
   const priceNode = useRef<HTMLElement>(null);
   const opened = useRef(false);
-  const gradient = useId().replace(/:/g, "");
+  const [hit, setHit] = useState<TraceHit | null>(null);
   const follow = useFollowRoom();
 
   useEffect(() => {
@@ -57,8 +56,9 @@ export function AssetDetail({ kind, id }: { kind: Asset["kind"]; id: string }) {
   }, { scope: stage, dependencies: [asset?.id] });
 
   const watched = !!asset && state.profile.interests.some(i => i.id === asset.id || i.symbol?.toUpperCase() === asset.symbol.toUpperCase());
-  const data = (asset?.chart ?? []).map(p => ({ ...p, label: new Intl.DateTimeFormat("en-US", days <= 7 ? { weekday: "short", hour: "numeric" } : { month: "short", day: "numeric" }).format(new Date(p.time)) }));
-  const min = Math.min(...data.map(d => d.price)), max = Math.max(...data.map(d => d.price));
+  const data = asset?.chart ?? [];
+  const read = hit ? data[hit.index] : null;
+  const when = (time: number) => new Intl.DateTimeFormat("en-US", days <= 7 ? { weekday: "short", hour: "numeric" } : { month: "short", day: "numeric" }).format(new Date(time));
   /** The chart draws itself, and the headline price travels from where the
    * range started to where it is now. Switching range replays both, so the
    * change reads as something happening rather than a swap.
@@ -70,16 +70,16 @@ export function AssetDetail({ kind, id }: { kind: Asset["kind"]; id: string }) {
   useGSAP(() => {
     const node = priceNode.current;
     const settle = () => { if (node && asset?.price != null) node.textContent = usd(asset.price); };
-    const line = plot.current?.querySelector<SVGPathElement>(".recharts-area-curve");
+    const line = plot.current?.querySelector<SVGPathElement>(".trace-line");
     if (!asset || data.length < 2 || !line || prefersReducedMotion()) { settle(); return; }
 
-    const fill = plot.current?.querySelector<SVGPathElement>(".recharts-area-area");
+    const fill = plot.current?.querySelector<SVGPathElement>(".trace-area");
     const length = line.getTotalLength();
     const tl = gsap.timeline({ onComplete: settle });
     tl.fromTo(line, { strokeDasharray: length, strokeDashoffset: length },
       { strokeDashoffset: 0, duration: .95, ease: "power2.inOut", clearProps: "strokeDasharray,strokeDashoffset" });
     if (fill) tl.fromTo(fill, { opacity: 0, transformOrigin: "50% 100%", scaleY: .82 }, { opacity: 1, scaleY: 1, duration: .7, ease: rubiconMotion.ease.enter, clearProps: "all" }, .2);
-    tl.fromTo(plot.current!.querySelectorAll(".recharts-cartesian-axis-tick"), { opacity: 0, y: 5 }, { opacity: 1, y: 0, duration: .4, stagger: .02, clearProps: "all" }, .15);
+    tl.fromTo(plot.current!.querySelectorAll(".hub-plot-axis span"), { opacity: 0, y: 5 }, { opacity: 1, y: 0, duration: .4, stagger: .05, clearProps: "all" }, .15);
     if (node && asset.price != null) {
       const counter = { value: data[0].price };
       tl.to(counter, { value: asset.price, duration: .95, ease: "power2.inOut", onUpdate: () => { node.textContent = usd(counter.value); } }, 0);
@@ -102,32 +102,23 @@ export function AssetDetail({ kind, id }: { kind: Asset["kind"]; id: string }) {
             <h1 className="landing-section-title">{asset.name}</h1>
             <RelevanceLabel asset={asset} />
           </div>
-          <div className="hub-detail-price">
-            <strong ref={priceNode}>{usd(asset.price)}</strong>
-            <ChangeText value={asset.change} />
-            {asset.asOf && <small>as of {timeAgo(asset.asOf)}</small>}
+          <div className={`hub-detail-price${read ? " is-reading" : ""}`}>
+            <strong ref={priceNode}>{usd(read ? read.price : asset.price)}</strong>
+            <ChangePill value={asset.change} />
+            <small>{read ? when(read.time) : asset.asOf ? `as of ${timeAgo(asset.asOf)}` : ""}</small>
           </div>
         </header>
         <section className="hub-detail-chart" data-detail-part aria-label="Price history">
           <Lens items={RANGES} value={range} onChange={setRange} label="Chart range" className="hub-range-lens" />
-          {data.length > 1 ? <div ref={plot} className="hub-plot"><ChartFrame height={260}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data} margin={{ top: 10, right: 8, bottom: 0, left: 0 }} accessibilityLayer>
-                <defs>
-                  <linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="var(--hub-blue)" stopOpacity={.24} />
-                    <stop offset="100%" stopColor="var(--hub-blue)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="label" axisLine={{ stroke: "var(--line)" }} tickLine={false} interval="preserveStartEnd" minTickGap={48} tick={{ fill: "var(--quiet)", fontSize: 10 }} tickMargin={9} />
-                <YAxis axisLine={false} tickLine={false} width={56} domain={[min, max]} tick={{ fill: "var(--quiet)", fontSize: 10 }} tickFormatter={v => usd(v, Math.abs(v) < 1 ? 4 : 0)} tickCount={4} orientation="right" />
-                <Tooltip cursor={{ stroke: "var(--hub-blue)", strokeWidth: 1, strokeDasharray: "3 3" }} isAnimationActive={false} wrapperStyle={{ outline: "none", pointerEvents: "none" }}
-                  content={({ active, payload }) => active && payload?.length ? <ChartTooltip label={new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: days <= 7 ? "short" : undefined }).format(new Date((payload[0].payload as { time: number }).time))} value={usd((payload[0].payload as { price: number }).price)} /> : null} />
-                <Area type="monotone" dataKey="price" stroke="var(--hub-blue)" strokeWidth={1.75} fill={`url(#${gradient})`} dot={false}
-                  activeDot={{ r: 4, fill: "var(--hub-blue)", stroke: "white", strokeWidth: 2 }} isAnimationActive={false} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </ChartFrame></div> : <p className="hub-notice">No price history is available for this range.</p>}
+          {data.length > 1 ? <div ref={plot} className="hub-plot">
+            <PriceTrace points={data} height={300} pad={{ top: 28, bottom: 18 }} onScrub={setHit} label={`${asset.name} price over the last ${range === "365" ? "year" : `${days} days`}`} />
+            {read && hit && <span className={`trace-chip is-large${hit.y < 64 ? " is-below" : ""}`} style={{ left: Math.min(Math.max(hit.x, 90), hit.width - 90), top: hit.y < 64 ? hit.y + 16 : hit.y - 14 }}><small>{when(read.time)}</small><b>{usd(read.price)}</b></span>}
+            <div className="hub-plot-axis" aria-hidden="true">
+              <span>{when(data[0].time)}</span>
+              {read && hit && <span className="hub-plot-cursor" style={{ left: hit.x }}>{when(read.time)}</span>}
+              <span>{when(data[data.length - 1].time)}</span>
+            </div>
+          </div> : <p className="hub-notice">No price history is available for this range.</p>}
         </section>
         <section className="hub-detail-why" data-detail-part>
           <p className="hub-part-title">Why this matters to you</p>

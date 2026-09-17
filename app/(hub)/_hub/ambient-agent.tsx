@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ArrowUp, ArrowUpRight, Square, X } from 'lucide-react';
-import { gsap, useGSAP, prefersReducedMotion } from '../../_components/motion';
+import { gsap, useGSAP, prefersReducedMotion, rubiconMotion } from '../../_components/motion';
 import { presenceNote, type PresenceContext } from '@/lib/socialtrading/presence';
 import { AGENT_LABEL, agentState, along, arc, bowAway, chooseRegion, dwellSeconds, keepToGutter, travelSeconds, type Candidate } from '@/lib/socialtrading/agent-state';
 import { agentAvatarTraits } from '@/lib/socialtrading/avatar';
@@ -19,9 +19,15 @@ import './ambient-agent.css';
 const BODY = 52;
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
+/** What counts as “being read”: anything a person interacts with, looks at, or
+ * reads, and the surfaces that carry them. Standing on any of it is not allowed. */
+const AVOID = 'button, a, input, textarea, select, img, svg, video, canvas, [role="img"], p, h1, h2, h3, h4, h5, h6, li, dt, dd, time, label, small, strong, em, b, i:not(:empty), article, form, table, dl, ol, ul, .hub-quiet-card, .hub-orbit, .hub-orbit-card, .hub-detail-why, .hub-trade, .hub-buy, .hub-disclosure, .hub-lens, .hub-orbs, .hub-composer, .hub-search, .hub-field-panel, .mem-field, .mem-belief, .mem-satellite, [data-agent-avoid]';
+
 export function AmbientAgent({ resolveHref = href => href }: { resolveHref?: (href: string) => string }) {
   const { state, messages, busy, send, stop, error, lastChange, account, agents } = useHub();
   const [open, setOpen] = useState(false);
+  /** The thought surface stays in the tree while it animates closed. */
+  const [shown, setShown] = useState(false);
   const [draft, setDraft] = useState('');
   const [note, setNote] = useState<string | null>(null);
   const [reflecting, setReflecting] = useState(false);
@@ -36,6 +42,14 @@ export function AmbientAgent({ resolveHref = href => href }: { resolveHref?: (hr
   const region = useRef<string | undefined>(undefined);
   const travelling = useRef<gsap.core.Tween | null>(null);
   const resting = useRef<gsap.core.Tween | null>(null);
+  /** The wander is one loop for the life of the component. It reads the mood
+   * through this ref rather than re-arming on every change: re-arming used to
+   * reset the body to its last seat, which is the “teleport” a person saw
+   * whenever their pointer drifted near enough to change the agent’s state. */
+  const modeNow = useRef<ReturnType<typeof agentState>>('idle');
+  const step = useRef<() => void>(() => {});
+  const parked = useRef(false);
+  const placed = useRef(false);
   const backgroundSeen = useRef(new Set(state.chats.flatMap(c => c.messages.filter(m => m.via === 'background').map(m => m.id))));
   const cooldown = useRef(0), seen = useRef(new Set<string>());
   const id = useId();
@@ -43,6 +57,7 @@ export function AmbientAgent({ resolveHref = href => href }: { resolveHref?: (hr
   const waiting = state.trades.some(t => t.status === 'approval_required');
   const streaming = messages.some(m => m.status === 'streaming');
   const mode = agentState({ open, busy, streaming, waiting, discovery: !!note, attending: !!attend, reflecting });
+  modeNow.current = mode;
   const label = AGENT_LABEL[mode];
   const close = useCallback(() => { setOpen(false); orb.current?.focus(); }, []);
 
@@ -110,7 +125,8 @@ export function AmbientAgent({ resolveHref = href => href }: { resolveHref?: (hr
     };
   }, [open, close]);
 
-  useEffect(() => { if (open) input.current?.focus(); }, [open]);
+  useEffect(() => { if (open) { setShown(true); window.dispatchEvent(new CustomEvent('rubicon:attend', { detail: null })); window.dispatchEvent(new Event('rubicon:gloss-hide')); } }, [open]);
+  useEffect(() => { if (open && shown) input.current?.focus(); }, [open, shown]);
   useEffect(() => { if (open && log.current) log.current.scrollTop = log.current.scrollHeight; }, [open, messages]);
 
   // Reaching for the agent stops it, and so does opening it: nothing that a
@@ -170,36 +186,67 @@ export function AmbientAgent({ resolveHref = href => href }: { resolveHref?: (hr
   /**
    * Whether a place is already taken. Layouts that run edge to edge leave no
    * margin to reason about, so rather than assume one, this asks the page what
-   * is actually drawn at the point the agent would stand on.
+   * is actually drawn where the agent would stand — at its centre and its four
+   * corners, so a body cannot half-cover a heading and still count as clear.
    */
   const occupied = useCallback((x: number, y: number) => {
-    const element = document.elementFromPoint(x + BODY / 2, y + BODY / 2);
-    if (!element || root.current?.contains(element)) return false;
-    if (!document.querySelector('main')?.contains(element)) return false;
-    if (element.closest('button, a, input, textarea, img, svg, [role="img"]')) return true;
-    return Array.from(element.childNodes).some(node => node.nodeType === Node.TEXT_NODE && !!node.textContent?.trim());
+    const main = document.querySelector('main');
+    const inset = 6;
+    const points = [[x + BODY / 2, y + BODY / 2], [x + inset, y + inset], [x + BODY - inset, y + inset], [x + inset, y + BODY - inset], [x + BODY - inset, y + BODY - inset]];
+    return points.some(([px, py]) => {
+      // The probe must look through the agent itself, which is what is drawn
+      // wherever it already stands.
+      const stack = typeof document.elementsFromPoint === 'function' ? document.elementsFromPoint(px, py) : [document.elementFromPoint(px, py)];
+      const element = stack.find(node => node && !root.current?.contains(node)) ?? null;
+      if (!element) return false;
+      // The header and anything floating above the page are never standing room.
+      if (element.closest('.site-header, .gloss, .rubicon-tooltip, [role="dialog"], .hub-account, .rubicon-portals')) return true;
+      if (!main?.contains(element)) return false;
+      if (element.closest(AVOID)) return true;
+      return Array.from(element.childNodes).some(node => node.nodeType === Node.TEXT_NODE && !!node.textContent?.trim());
+    });
+  }, []);
+
+  /** The band the agent may stand in: below the header, above the bottom edge. */
+  const bounds = useCallback(() => {
+    const header = document.querySelector('.site-header')?.getBoundingClientRect();
+    const top = Math.max(84, (header?.bottom ?? 72) + 12);
+    return { top, bottom: window.innerHeight - BODY - 24 };
   }, []);
 
   /** Places worth standing: the margins beside content that marks itself. */
   const places = useCallback((): Candidate[] => {
     const width = window.innerWidth, height = window.innerHeight;
+    const { top, bottom } = bounds();
+    // A phone has no margins at all. The agent keeps to the right edge there,
+    // as low as it can go without standing on the composer or a card, rather
+    // than crossing content.
+    if (width <= 760) {
+      const x = width - BODY - 16;
+      // Whatever else it overlaps on a crowded phone, never the thing being typed into.
+      const composer = document.querySelector('.hub-composer')?.getBoundingClientRect();
+      const floor = composer && composer.top < height ? clamp(composer.top - BODY - 10, top, bottom) : bottom;
+      for (let y = floor; y >= top; y -= 56) if (!occupied(x, y)) return [{ id: `dock-${Math.round(y)}`, x, y, weight: 1 }];
+      return [{ id: 'dock', x, y: floor, weight: 1 }];
+    }
     const active = document.activeElement as HTMLElement | null;
     const keepClear = composing.current && active ? active.getBoundingClientRect() : null;
     // The column a person is reading. The agent lives beside it, never on it.
     const column = document.querySelector('main .container')?.getBoundingClientRect()
       ?? document.querySelector('main')?.getBoundingClientRect()
       ?? { left: width / 2, right: width / 2 };
+    // While the person writes, the agent keeps out of arm's reach of the input.
+    const nearInput = (point: { x: number; y: number }) => !!keepClear && point.x < keepClear.right + 160 && point.x + BODY > keepClear.left - 160 && point.y < keepClear.bottom + 120 && point.y + BODY > keepClear.top - 120;
     const found = Array.from(document.querySelectorAll<HTMLElement>('[data-agent-region]')).flatMap((node, index) => {
       const rect = node.getBoundingClientRect();
-      if (rect.width === 0 || rect.bottom < 40 || rect.top > height - 40) return [];
+      if (rect.width === 0 || rect.bottom < top || rect.top > height - 40) return [];
       const right = rect.right + 22;
       const x = right + BODY < width - 16 ? right : rect.left - BODY - 22;
       const point = {
         x: keepToGutter(clamp(x, 16, width - BODY - 16), column, width, BODY),
-        y: clamp(rect.top + 12, 84, height - BODY - 24),
+        y: clamp(rect.top + 12, top, bottom),
       };
-      // While the person writes, the agent keeps out of arm's reach of the input.
-      if (keepClear && point.x < keepClear.right + 160 && point.x + BODY > keepClear.left - 160 && point.y < keepClear.bottom + 120 && point.y + BODY > keepClear.top - 120) return [];
+      if (nearInput(point)) return [];
       return [{ id: `${node.dataset.agentRegion ?? 'region'}-${index}`, ...point, weight: Number(node.dataset.agentWeight ?? 1) || 1 }];
     });
     // A place that is taken is tried again hard against the nearest edge, where
@@ -211,32 +258,77 @@ export function AmbientAgent({ resolveHref = href => href }: { resolveHref?: (hr
     });
     if (free.length) return free;
 
-    // Nothing has marked itself, or everything is taken: drift the quiet edges.
-    const edges = [
-      { id: 'edge-left', x: 28, y: height * .38, weight: 1 },
-      { id: 'edge-right', x: width - BODY - 28, y: height * .3, weight: 1 },
-      { id: 'edge-low', x: width - BODY - 60, y: height * .68, weight: 1 },
-    ].map(p => ({ ...p, x: keepToGutter(clamp(p.x, 16, width - BODY - 16), column, width, BODY), y: clamp(p.y, 84, height - BODY - 24) }));
-    const open = edges.filter(p => !occupied(p.x, p.y));
-    return open.length ? open : edges;
-  }, [occupied]);
+    // Nothing has marked itself, or everything is taken: look at what the page
+    // actually leaves empty. A coarse grid is sampled and every clear cell is a
+    // place to stand, the ones near the edges weighted heavier so the agent
+    // still prefers the margins when the margins exist.
+    const columns = [16, width * .22, width * .5, width * .78, width - BODY - 16];
+    const rows = 4;
+    const spots: Candidate[] = [];
+    columns.forEach((cx, ci) => {
+      for (let r = 0; r < rows; r++) {
+        const point = { x: clamp(cx, 16, width - BODY - 16), y: clamp(top + (bottom - top) * (r + .5) / rows, top, bottom) };
+        if (nearInput(point) || occupied(point.x, point.y)) continue;
+        const edge = Math.abs(ci - (columns.length - 1) / 2) / ((columns.length - 1) / 2);
+        spots.push({ id: `spot-${ci}-${r}`, ...point, weight: .4 + edge * 1.6 });
+      }
+    });
+    if (spots.length) return spots;
+
+    // Truly nowhere: drift the quiet edges anyway, which is at least predictable.
+    return [
+      { id: 'edge-left', x: 16, y: height * .38, weight: 1 },
+      { id: 'edge-right', x: width - BODY - 16, y: height * .3, weight: 1 },
+      { id: 'edge-low', x: width - BODY - 16, y: height * .68, weight: 1 },
+    ].map(p => ({ ...p, y: clamp(p.y, top, bottom) }));
+  }, [occupied, bounds]);
 
   // The wander. It chooses somewhere, curves there, rests, and chooses again.
+  // One loop for the component's life: the mood changes the pace of the next
+  // leg, never the position of the body.
   useGSAP(() => {
     const node = root.current;
     if (!node) return;
-    gsap.set(node, { x: seat.x, y: seat.y });
-    if (prefersReducedMotion()) return;
     let stopped = false;
+    let settling: number | undefined;
+    if (!placed.current) {
+      // The first seat is a real one: somewhere the page leaves empty right
+      // now, not a coordinate chosen before the page existed.
+      const sit = () => {
+        const first = chooseRegion(places(), Math.random());
+        const start = first ? { x: first.x, y: first.y } : seat;
+        gsap.set(node, start); setSeat(start); region.current = first?.id;
+      };
+      sit();
+      placed.current = true;
+      if (!prefersReducedMotion()) {
+        // The page is still settling when this runs, so the agent arrives
+        // under a fade and its seat is checked again once layout has landed.
+        gsap.set(node, { autoAlpha: 0 });
+        settling = requestAnimationFrame(() => { settling = requestAnimationFrame(() => {
+          if (stopped) return;
+          if (occupied(gsap.getProperty(node, 'x') as number, gsap.getProperty(node, 'y') as number)) sit();
+          gsap.to(node, { autoAlpha: 1, duration: .7, ease: 'power2.out', clearProps: 'opacity,visibility' });
+        }); });
+      }
+    }
+    if (prefersReducedMotion()) return;
     const hold = <T extends gsap.core.Tween>(tween: T) => { if (stillNow.current) tween.pause(); return tween; };
+    const rest = (seconds: number) => { parked.current = false; resting.current = hold(gsap.delayedCall(seconds, () => step.current())); };
 
-    const step = () => {
-      if (stopped || document.hidden) { resting.current = hold(gsap.delayedCall(2, step)); return; }
+    step.current = () => {
+      if (stopped) return;
+      resting.current = null;
+      if (document.hidden) { rest(2); return; }
+      const mode = modeNow.current;
+      // Company and a pending decision both mean: stay exactly where you are.
+      if (mode === 'interacting' || mode === 'wanting') { parked.current = true; return; }
       const from = { x: gsap.getProperty(node, 'x') as number, y: gsap.getProperty(node, 'y') as number };
       const target = chooseRegion(places(), Math.random(), region.current);
-      if (!target) { resting.current = hold(gsap.delayedCall(4, step)); return; }
+      if (!target) { rest(4); return; }
       region.current = target.id;
       const distance = Math.hypot(target.x - from.x, target.y - from.y);
+      if (distance < 8) { rest(dwellSeconds(mode, Math.random())); return; }
       const seconds = travelSeconds(distance, mode, composing.current);
       const lean = clamp((target.x - from.x) / 90, -7, 7);
       // Bowing away from the middle keeps the journey in the margins too, not
@@ -248,27 +340,55 @@ export function AmbientAgent({ resolveHref = href => href }: { resolveHref?: (hr
         at: 1, duration: seconds, ease: 'creature',
         onUpdate: () => gsap.set(node, along(path, progress.at)),
         onComplete: () => {
+          travelling.current = null;
           setSeat({ x: target.x, y: target.y });
-          const wait = dwellSeconds(mode, Math.random());
-          if (Number.isFinite(wait)) resting.current = hold(gsap.delayedCall(wait, step));
+          const wait = dwellSeconds(modeNow.current, Math.random());
+          if (Number.isFinite(wait)) rest(wait); else parked.current = true;
         },
       }));
-      gsap.to(node, { rotation: lean, duration: seconds * .3, ease: 'power2.inOut' });
+      gsap.to(node, { rotation: lean, duration: seconds * .3, ease: 'power2.inOut', overwrite: 'auto' });
       gsap.to(node, { rotation: 0, duration: seconds * .4, ease: 'power2.inOut', delay: seconds * .6 });
     };
 
-    resting.current = hold(gsap.delayedCall(1.2, step));
+    rest(1.2);
     const visibility = () => { if (document.hidden) travelling.current?.pause(); else if (!stillNow.current) travelling.current?.resume(); };
     document.addEventListener('visibilitychange', visibility);
     return () => {
       stopped = true; travelling.current?.kill(); resting.current?.kill();
       travelling.current = null; resting.current = null;
+      if (settling !== undefined) cancelAnimationFrame(settling);
       document.removeEventListener('visibilitychange', visibility);
       gsap.killTweensOf(node);
     };
-    // The loop re-arms on state change so urgency and pace follow the agent's mood.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, { dependencies: [mode, places] });
+  }, { dependencies: [] });
+
+  // A mood that had parked the agent lets it go again once it passes.
+  useEffect(() => {
+    if (mode === 'interacting' || mode === 'wanting' || !parked.current || prefersReducedMotion()) return;
+    parked.current = false;
+    resting.current?.kill();
+    resting.current = gsap.delayedCall(mode === 'discovering' ? .6 : 1.4, () => step.current());
+    if (stillNow.current) resting.current.pause();
+  }, [mode]);
+
+  // The page moves under a fixed body when it scrolls. If what it was standing
+  // beside has been replaced by something being read, it moves on at once.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const settle = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const node = root.current;
+        if (!node || stillNow.current || travelling.current || parked.current || prefersReducedMotion()) return;
+        const at = { x: gsap.getProperty(node, 'x') as number, y: gsap.getProperty(node, 'y') as number };
+        if (!occupied(at.x, at.y)) return;
+        resting.current?.kill();
+        step.current();
+      }, 160);
+    };
+    window.addEventListener('scroll', settle, { passive: true, capture: true });
+    return () => { clearTimeout(timer); window.removeEventListener('scroll', settle, { capture: true }); };
+  }, [occupied]);
 
   // Breathing, under everything else.
   useGSAP(() => {
@@ -282,18 +402,27 @@ export function AmbientAgent({ resolveHref = href => href }: { resolveHref?: (hr
     return () => { loop.kill(); document.removeEventListener('visibilitychange', visibility); };
   }, { scope: root, dependencies: [mode], revertOnUpdate: true });
 
+  // The thought surface unfolds from the body and folds back into it, so the
+  // close is a movement rather than a disappearance.
   useGSAP(() => {
-    if (!open || !panel.current) { summoned.current = false; return; }
-    const tween = gsap.fromTo(panel.current, { opacity: 0, y: -10, scale: .95 }, { opacity: 1, y: 0, scale: 1, duration: prefersReducedMotion() ? 0 : .5, ease: 'power3.out' });
+    const node = panel.current;
+    if (!shown || !node) { summoned.current = false; return; }
+    const reduced = prefersReducedMotion();
+    if (open) {
+      const tween = gsap.fromTo(node, { opacity: 0, y: -10, scale: .95 }, { opacity: 1, y: 0, scale: 1, duration: reduced ? 0 : .5, ease: 'power3.out', overwrite: 'auto' });
+      return () => { tween.kill(); };
+    }
+    if (reduced) { setShown(false); return; }
+    const tween = gsap.to(node, { opacity: 0, y: -6, scale: .96, duration: .22, ease: rubiconMotion.ease.exit, overwrite: 'auto', onComplete: () => setShown(false) });
     return () => { tween.kill(); };
-  }, { dependencies: [open], scope: root });
+  }, { dependencies: [open, shown], scope: root });
 
   const centre = { x: seat.x + BODY / 2, y: seat.y + BODY / 2 };
 
   return <div ref={root} className="ambient-agent" data-state={mode} data-open={open} data-held={held || undefined}
     onPointerEnter={() => setHeld(true)} onPointerLeave={() => setHeld(false)}
     onFocusCapture={() => setHeld(true)} onBlurCapture={event => { if (!root.current?.contains(event.relatedTarget as Node | null)) setHeld(false); }}>
-    {open && <section ref={panel} id={id} className="ambient-panel" role="dialog" aria-label="Ask your agent">
+    {shown && <section ref={panel} id={id} className="ambient-panel" role="dialog" aria-label="Ask your agent" aria-hidden={!open || undefined} style={open ? undefined : { pointerEvents: 'none' }}>
       <header><button aria-label="Close agent" onClick={close}><X size={17} /></button></header>
       <div ref={log} className="ambient-log">
         {note && <p className="ambient-thought">{note}</p>}

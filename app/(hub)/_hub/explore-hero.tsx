@@ -14,7 +14,7 @@ const MAX = 10;
 
 /** Roughly what one card occupies, as a share of the stage, so cards can be
  * pushed apart without measuring the DOM. */
-const CARD = { w: 19, h: 24 };
+const CARD = { w: 19, h: 22 };
 
 /** Stocks and coins in one field, best-ranked first. */
 export function constellation(list: Asset[]): Asset[] {
@@ -40,9 +40,9 @@ export type Placed = { asset: Asset; x: number; y: number; fit: number };
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-/** The usable field, as the top-left corner of a card. Leaves room for the
- * card itself plus the axis labels at the edges. */
-const X = { lo: 1, hi: 80 }, Y = { lo: 1, hi: 80 };
+/** The usable field, as the top-left corner of a card. A card placed at the
+ * upper bound still ends inside the stage, so nothing can run over the rails. */
+const X = { lo: 1, hi: 100 - CARD.w - 1 }, Y = { lo: 2, hi: 100 - CARD.h - 2 };
 
 /**
  * Two questions, two axes: how far it has moved today (left to right) and how
@@ -63,8 +63,8 @@ export function plot(assets: Asset[]): Placed[] {
   const acrossAt = spread(moves), upAt = spread(fits);
   const nodes: Placed[] = assets.map((asset, i) => ({
     asset, fit: fits[i],
-    x: 4 + acrossAt(moves[i], i) * 78,
-    y: 74 - upAt(fits[i], i) * 66,
+    x: X.lo + 2 + acrossAt(moves[i], i) * (X.hi - X.lo - 4),
+    y: Y.hi - upAt(fits[i], i) * (Y.hi - Y.lo),
   }));
 
   for (let pass = 0; pass < 200; pass++) {
@@ -127,33 +127,38 @@ export function Constellation({ assets }: { assets: Asset[] }) {
     return () => media.revert();
   }, { scope: root, dependencies: [key], revertOnUpdate: true });
 
-  return <div className="rubicon-xy-scroll"><div ref={root} className="hub-constellation rubicon-xy"
-    aria-label="Picked for you, placed by how far each has moved today and how closely it matches your thesis">
-    <span className="hub-constellation-glow is-one" data-orbit-glow aria-hidden="true" />
-    <span className="hub-constellation-glow is-two" data-orbit-glow aria-hidden="true" />
-    <div className="hub-field-axes" data-orbit-axis aria-hidden="true">
-      <span className="hub-field-rule is-vertical" /><span className="hub-field-rule is-horizontal" />
-      <span className="hub-field-tick is-top">More your thing</span>
-      <span className="hub-field-tick is-bottom">Something new</span>
-      <span className="hub-field-tick is-left">Down today</span>
-      <span className="hub-field-tick is-right">Up today</span>
+  return <section className="hub-field-panel" aria-label="Picked for you, placed by how far each has moved today and how closely it matches your thesis">
+    <span className="hub-field-corner is-tl" aria-hidden="true" /><span className="hub-field-corner is-tr" aria-hidden="true" />
+    <span className="hub-field-corner is-bl" aria-hidden="true" /><span className="hub-field-corner is-br" aria-hidden="true" />
+    <div ref={root} className="hub-constellation rubicon-xy">
+      <span className="hub-constellation-glow is-one" data-orbit-glow aria-hidden="true" />
+      <span className="hub-constellation-glow is-two" data-orbit-glow aria-hidden="true" />
+      <div className="hub-field-axes" data-orbit-axis aria-hidden="true">
+        <span className="hub-field-rule is-vertical" /><span className="hub-field-rule is-horizontal" />
+        <span className="hub-field-tick is-top">More your thing</span>
+        <span className="hub-field-tick is-bottom">Something new</span>
+        <span className="hub-field-tick is-left">Down today</span>
+        <span className="hub-field-tick is-right">Up today</span>
+      </div>
+      <div className="hub-field-stage">
+        {placed.map(({ asset, x, y, fit: strength }) => {
+          // Stronger matches sit further forward, so they move most and cast most light.
+          const depth = .7 + strength * .6;
+          const match = asset.labelTone === "match";
+          return <div key={`${asset.kind}:${asset.id}`} data-orbit data-depth={depth} className="hub-orbit" style={{ left: `${x}%`, top: `${y}%`, zIndex: Math.round(depth * 10) }}>
+            <div data-orbit-gather className="hub-orbit-gather">
+              <div data-orbit-float className="hub-orbit-float" style={{ "--depth": depth } as React.CSSProperties}>
+                <Link href={assetHref(asset)} className={`hub-orbit-card${match ? " is-match hub-priority-card" : ""}`} onClick={() => { void signal("opened", asset); }}
+                  aria-label={`Open ${asset.name}${match ? ", a strong match for your thesis" : ""}`}>
+                  <AssetLogo asset={asset} />
+                  <span className="hub-orbit-id"><strong>{asset.symbol}</strong><small>{usd(asset.price)}</small></span>
+                  <ChangeText value={asset.change} />
+                </Link>
+              </div>
+            </div>
+          </div>;
+        })}
+      </div>
     </div>
-    {placed.map(({ asset, x, y, fit: strength }) => {
-      // Stronger matches sit further forward, so they move most and cast most light.
-      const depth = .7 + strength * .6;
-      const match = asset.labelTone === "match";
-      return <div key={`${asset.kind}:${asset.id}`} data-orbit data-depth={depth} className="hub-orbit" style={{ left: `${x}%`, top: `${y}%`, zIndex: Math.round(depth * 10) }}>
-        <div data-orbit-gather className="hub-orbit-gather">
-          <div data-orbit-float className="hub-orbit-float" style={{ "--depth": depth } as React.CSSProperties}>
-            <Link href={assetHref(asset)} className={`hub-orbit-card${match ? " is-match hub-priority-card" : ""}`} onClick={() => { void signal("opened", asset); }}
-              aria-label={`Open ${asset.name}${match ? ", a strong match for your thesis" : ""}`}>
-              <AssetLogo asset={asset} />
-              <span className="hub-orbit-id"><strong>{asset.symbol}</strong><small>{usd(asset.price)}</small></span>
-              <ChangeText value={asset.change} />
-            </Link>
-          </div>
-        </div>
-      </div>;
-    })}
-  </div></div>;
+  </section>;
 }

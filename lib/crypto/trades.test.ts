@@ -6,11 +6,19 @@ const mocks = vi.hoisted(() => ({ ownedWallet: vi.fn(), quote: vi.fn(), value: v
 vi.mock("./wallet", () => ({ ownedWallet: mocks.ownedWallet }));
 vi.mock("./services", () => ({ cryptoServices: { execution: { quote: mocks.quote, approval: mocks.approval, swap: mocks.swap }, valuation: { value: mocks.value }, defi: { price: mocks.price }, metadata: { contract: mocks.contract } } }));
 vi.mock("./rpc", () => ({ rpc: mocks.rpc }));
-import { proposeSwap, prepareSwap, userSwap } from "./trades";
+import { proposeSwap, prepareSwap, authorizeSwap, userSwap } from "./trades";
 const req = { chainId: 1, wallet: "0x1111111111111111111111111111111111111111", tokenIn: "0x2222222222222222222222222222222222222222", tokenOut: "0x3333333333333333333333333333333333333333", amount: "1000000", slippageBps: 50 };
 function state(permission: "automatic" | "approve" | "notify" = "approve"): HubState { return { revision: 0, profile: { ...newProfile("alice"), permission, permissionConfigured: true, limits: { perTrade: "100", daily: "100", weekly: "100" } }, trades: [], messages: [], events: [], dislikes: [], preferences: [], inferred: [], signals: [] }; }
 beforeEach(() => {
-  vi.resetAllMocks(); mocks.ownedWallet.mockResolvedValue(req.wallet); mocks.value.mockResolvedValue(50); mocks.rpc.mockResolvedValue("0x1");
+  vi.resetAllMocks(); mocks.ownedWallet.mockResolvedValue(req.wallet); mocks.value.mockResolvedValue(50); mocks.rpc.mockImplementation(async (_chain, method, params) => {
+    if (method === "eth_chainId") return "0x1";
+    if (method === "eth_getTransactionCount") return "0x0";
+    if (method === "eth_getBalance") return "0xde0b6b3a7640000";
+    if (method === "eth_estimateGas") return "0x186a0";
+    if (method === "eth_gasPrice") return "0x1";
+    if (params?.[0]?.data === "0x313ce567") return `0x${(params[0].to === req.tokenIn ? 6 : 18).toString(16).padStart(64, "0")}`;
+    return `0x${(10n ** 25n).toString(16).padStart(64, "0")}`;
+  });
   mocks.quote.mockResolvedValue({ outputAmount: "200", minimumOutput: "199", expiresAt: Date.now() + 60_000, request: req, raw: {} });
   mocks.approval.mockResolvedValue(null); mocks.swap.mockResolvedValue({ chainId: 1, from: req.wallet, to: req.tokenOut, data: "0x1234", value: "0" });
   mocks.price.mockImplementation(async (t: { address: string }) => t.address === req.tokenIn ? { symbol: "USDC", decimals: 6, price: 1, timestamp: Date.now() / 1000 } : { symbol: "wxyz", decimals: 18, price: 2, timestamp: Date.now() / 1000 });
@@ -39,7 +47,7 @@ describe("agent swap proposals", () => {
   });
   it("reserves before signing and never reissues a transaction", async () => {
     const s = state(), t = await proposeSwap(s, "alice", req, "test");
-    await prepareSwap(s, "alice", t); expect(t.status).toBe("unknown"); expect(t.crypto?.phase).toBe("issued");
+    const prepared = await prepareSwap(s, "alice", t); await authorizeSwap(s, "alice", t, prepared.quoteId); expect(t.status).toBe("unknown"); expect(t.crypto?.phase).toBe("issued");
     await expect(prepareSwap(s, "alice", t)).rejects.toThrow(/already/); expect(mocks.swap).toHaveBeenCalledTimes(1);
   });
   it("requires a new proposal after adverse price or valuation changes, or after a day", async () => {
@@ -53,7 +61,7 @@ describe("agent swap proposals", () => {
   it("rechecks current policy and keeps issued reservations counted in every limit window", async () => {
     const s = state(), t = await proposeSwap(s, "alice", req, "test");
     s.profile.permission = "notify"; await expect(prepareSwap(s, "alice", t)).rejects.toThrow(/Notify/);
-    s.profile.permission = "approve"; await prepareSwap(s, "alice", t); t.createdAt = "2020-01-01T00:00:00Z";
+    s.profile.permission = "approve"; const prepared = await prepareSwap(s, "alice", t); await authorizeSwap(s, "alice", t, prepared.quoteId); t.createdAt = "2020-01-01T00:00:00Z";
     expect(tradePolicy(s.profile, 60, s.trades, true).allowed).toBe(false);
   });
   it("refuses to prepare an agent swap when the agent lost the trading capability", async () => {
@@ -78,12 +86,12 @@ describe("user-initiated swaps", () => {
     mocks.value.mockResolvedValue(100); expect((await proposeSwap(s, "alice", req, "agent")).status).toBe("reserved");
     mocks.value.mockResolvedValue(1); expect((await proposeSwap(s, "alice", req, "agent")).status).toBe("blocked");
   });
-  it("uses native decimals, falls back to CoinGecko decimals, and refuses unknown decimals", async () => {
+  it("uses native and onchain decimals and refuses an unverifiable token", async () => {
     const s = state();
     expect((await userSwap(s, "alice", { ...input, tokenIn: "0x0000000000000000000000000000000000000000", amount: "0.25" })).crypto?.request.amount).toBe("250000000000000000");
-    mocks.price.mockRejectedValue(new Error("down")); mocks.contract.mockResolvedValue({ detail_platforms: { ethereum: { decimal_place: 8 } } });
-    expect((await userSwap(s, "alice", { ...input, amount: "2" })).crypto?.request.amount).toBe("200000000");
-    mocks.contract.mockResolvedValue({});
+    mocks.price.mockRejectedValue(new Error("down"));
+    expect((await userSwap(s, "alice", { ...input, amount: "2" })).crypto?.request.amount).toBe("2000000");
+    mocks.rpc.mockResolvedValue("0x");
     await expect(userSwap(s, "alice", input)).rejects.toThrow(/decimals/);
   });
   it("rejects malformed amounts, chains, and wallets before quoting", async () => {
@@ -98,6 +106,6 @@ describe("user-initiated swaps", () => {
   it("lets the user prepare their swap even when the agent cannot trade", async () => {
     const s = state("notify"); s.agent = { id: "default", name: "A", description: "", capabilities: ["market"], createdAt: "" };
     const t = await userSwap(s, "alice", input);
-    await prepareSwap(s, "alice", t); expect(t.crypto?.phase).toBe("issued");
+    const prepared = await prepareSwap(s, "alice", t); await authorizeSwap(s, "alice", t, prepared.quoteId); expect(t.crypto?.phase).toBe("issued");
   });
 });

@@ -1,11 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
-import { decodeAccountCalls, PERMIT2 } from "./aa";
+import { validatePermit } from "./permit";
 
 /** Hits the real Uniswap gateway and real RPC nodes. Off by default; run with
  * `LIVE=1 npx vitest run lib/crypto/live.test.ts` after touching the quote,
- * batch, or routing code. Read-only: it quotes and builds, never signs. */
+ * or routing code. Read-only: it verifies RPC and quotes, never signs or sends. */
 const live = process.env.LIVE === "1";
 
 describe.skipIf(!live)("live swap pipeline", () => {
@@ -18,9 +18,10 @@ describe.skipIf(!live)("live swap pipeline", () => {
     }
   });
 
-  it("quotes and builds a signable batch for a $25 USDC buy on Base", async () => {
+  it("verifies Base RPC, onchain decimals, and a real Uniswap USDC quote", async () => {
     const { cryptoServices } = await import("./services");
-    const { buildSwapBatch } = await import("./batch");
+    const { tokenDecimals } = await import("./preflight");
+    const { rpc } = await import("./rpc");
     const request = {
       chainId: 8453, wallet: "0x0000000000000000000000000000000000000001",
       tokenIn: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
@@ -30,14 +31,12 @@ describe.skipIf(!live)("live swap pipeline", () => {
     const quote = await cryptoServices.execution.quote(request);
     expect(BigInt(quote.outputAmount)).toBeGreaterThan(0n);
 
-    const swap = await cryptoServices.execution.swap(quote);
-    const batch = await buildSwapBatch(request, swap);
-
-    // A wallet that has never traded needs both Permit2 layers, then the swap.
-    expect(batch.paymaster).toBe("circle-usdc");
-    expect(batch.calls.at(-1)!.to).toBe(swap.to.toLowerCase());
-    expect(batch.calls.some(c => c.to === PERMIT2)).toBe(true);
-    expect(decodeAccountCalls(batch.callData)).toEqual(batch.calls);
-    console.log(`routed ${batch.calls.length} calls -> ${swap.to}; min out ${quote.minimumOutput}`);
+    expect(BigInt(await rpc<string>(8453, "eth_chainId", []))).toBe(8453n);
+    expect(await tokenDecimals(8453, request.tokenIn)).toBe(6);
+    expect(await tokenDecimals(8453, request.tokenOut)).toBe(18);
+    if (quote.permitData) {
+      validatePermit(quote.permitData, request);
+      await expect(cryptoServices.execution.swap(quote)).rejects.toThrow(/signature required/);
+    }
   }, 60_000);
 });

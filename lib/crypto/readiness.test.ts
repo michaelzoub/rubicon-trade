@@ -13,12 +13,12 @@ describe('purchase readiness', () => {
   it('requires the exact selected wallet', async () => {
     await expect(readPurchaseBalance(provider('0x2105', []), wallet, 8453)).rejects.toThrow('Reconnect');
   });
-  it('uses the chain USDC contract and includes the entire fee cap', async () => {
+  it('uses the chain USDC contract and does not charge a fictitious USDC gas reserve', async () => {
     const p = provider(); const funds = await readPurchaseBalance(p, wallet, 8453);
     expect(funds.native).toBe(0n);
     expect(feeCap(8453)).toBe(500000n);
-    expect(purchaseShortfall({...funds, usdc: 50499999n}, '50')).toBe(true);
-    expect(purchaseShortfall({...funds, usdc: 50500000n}, '50')).toBe(false);
+    expect(purchaseShortfall({...funds, usdc: 49999999n}, '50')).toBe(true);
+    expect(purchaseShortfall({...funds, usdc: 50000000n}, '50')).toBe(false);
     expect(p.request).toHaveBeenCalledWith(expect.objectContaining({method:'eth_call', params:expect.arrayContaining([expect.objectContaining({to:'0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'})])}));
   });
   it('rejects chain changes during reads and malformed balances', async () => {

@@ -10,6 +10,7 @@ let hub: HubContextValue;
 vi.mock('./hub-provider', () => ({ useHub: () => hub }));
 vi.mock('./navigation', () => ({ HubLink: ({ children, ...props }: React.ComponentProps<'a'>) => <a {...props}>{children}</a> }));
 import { AmbientAgent } from './ambient-agent';
+import { gsap } from '../../_components/motion';
 
 let container: HTMLDivElement, root: Root;
 beforeEach(() => {
@@ -114,4 +115,28 @@ it('keeps the thought surface on screen wherever the agent happens to be', async
   const x = Number((agent.style.transform.match(/translate(?:3d)?\(([-\d.]+)px/) ?? [])[1] ?? 0);
   expect(x).toBeGreaterThanOrEqual(0);
   expect(x).toBeLessThanOrEqual(Math.max(16, window.innerWidth - Math.min(520, window.innerWidth - 32) - 16) + 1);
+});
+
+it('keeps travelling through a change of mood rather than snapping back to its last seat', async () => {
+  // Motion allowed: the wander actually runs, on GSAP’s own clock.
+  vi.stubGlobal('matchMedia', (query: string) => ({ matches: false, media: query, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+  Object.defineProperty(document, 'elementFromPoint', { value: () => null, configurable: true });
+  await render();
+  const agent = container.querySelector<HTMLElement>('.ambient-agent')!;
+  const at = () => ({ x: gsap.getProperty(agent, 'x') as number, y: gsap.getProperty(agent, 'y') as number });
+  const seat = at();
+  // Into the first journey: the rest is 1.2s, the shortest leg is several seconds.
+  const now = gsap.globalTimeline.time();
+  await act(async () => { gsap.globalTimeline.time(now + 3); });
+  const before = at();
+  expect(before).not.toEqual(seat);
+  // Something is being read nearby: the mood changes mid-flight.
+  await act(async () => { window.dispatchEvent(new CustomEvent('rubicon:attend', { detail: { x: 600, y: 300 } })); });
+  expect(state()).toBe('observing');
+  expect(at()).toEqual(before);
+  // And it carries on from there, not from the seat.
+  await act(async () => { gsap.globalTimeline.time(now + 3.5); });
+  const after = at();
+  const far = (p: { x: number; y: number }) => Math.hypot(p.x - seat.x, p.y - seat.y);
+  expect(far(after)).toBeGreaterThan(far(before));
 });

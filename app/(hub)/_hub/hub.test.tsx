@@ -33,7 +33,7 @@ vi.mock("./client", async importOriginal => {
       searchTokens: async (_t: unknown, q: string) => ({ tokens: PREVIEW_TOKENS.filter(t => t.symbol.toLowerCase().includes(q.toLowerCase())) }),
       crypto: async (_t: unknown, _r: number, body: Record<string, unknown>) => {
         events.posted.push(body);
-        if (body.action === "prepare") return { state: { ...PREVIEW_STATE, revision: 13 }, batch: BATCH, step: "swap", expiresAt: Date.now() + 60_000 };
+        if (body.action === "prepare") return { state: { ...PREVIEW_STATE, revision: 13 }, transaction: { chainId: 8453, from: BATCH.sender, ...BATCH.calls[0] }, step: "swap", expiresAt: Date.now() + 60_000 };
         if (body.action === "propose") return { state: { ...PREVIEW_STATE, revision: 14 }, tradeId: "t2" };
         return { state: { ...PREVIEW_STATE, revision: 15 } };
       },
@@ -159,6 +159,15 @@ it("adds the Rubicon-blue priority treatment only to high-importance cards", asy
 });
 
 it("shows an onchain swap in human units and walks prepare → sign → submitted → status", async () => {
+  privy.sendTransaction.mockImplementation(async ({ method }) => {
+    if (method === "eth_chainId") return "0x2105";
+    if (method === "eth_accounts") return [BATCH.sender];
+    if (method === "eth_call") return "0x3b9aca00";
+    if (method === "eth_estimateGas") return "0x186a0";
+    if (method === "eth_gasPrice") return "0x1";
+    if (method === "eth_sendTransaction") return `0x${"ab".repeat(32)}`;
+    return "0xde0b6b3a7640000";
+  });
   gasless.sendSwapBatch.mockResolvedValue({ userOpHash: `0x${"cd".repeat(32)}`, hash: `0x${"ab".repeat(32)}` });
   await render(PREVIEW_STATE);
   const card = Array.from(container.querySelectorAll(".hub-trade--crypto")).at(-1)!;
@@ -171,14 +180,11 @@ it("shows an onchain swap in human units and walks prepare → sign → submitte
   const sign = Array.from(card.querySelectorAll("button")).find(b => b.textContent === "Review & sign in wallet")!;
   await act(async () => sign.click());
   await act(async () => { await new Promise(r => setTimeout(r, 10)); });
-  expect(privy.switchChain).toHaveBeenCalledWith(8453);
-  // The batch goes to the bundler untouched, and no raw transaction is ever sent
-  // from the wallet — that path needed ETH the embedded wallet does not hold.
-  expect(gasless.sendSwapBatch).toHaveBeenCalledWith(expect.objectContaining({ batch: BATCH }));
-  expect(privy.sendTransaction).not.toHaveBeenCalledWith(expect.objectContaining({ method: "eth_sendTransaction" }));
+  expect(privy.switchChain).not.toHaveBeenCalled();
+  expect(privy.sendTransaction).toHaveBeenCalledWith(expect.objectContaining({ method: "eth_sendTransaction" }));
   const actions = events.posted.filter((p): p is { action: string } => typeof (p as { action?: unknown }).action === "string").map(p => p.action);
   expect(actions).toEqual(["prepare", "submitted", "status"]);
-  expect(events.posted).toContainEqual(expect.objectContaining({ action: "submitted", tradeId: "t2", hash: `0x${"ab".repeat(32)}`, userOpHash: `0x${"cd".repeat(32)}` }));
+  expect(events.posted).toContainEqual(expect.objectContaining({ action: "submitted", tradeId: "t2", hash: `0x${"ab".repeat(32)}` }));
 });
 
 it("tells the buyer what is missing instead of letting a short balance reach the wallet", async () => {

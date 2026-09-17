@@ -40,8 +40,9 @@ export type StateAction =
 export type CryptoAction =
   | { action: "propose"; chainId: number; wallet: string; tokenIn: string; tokenOut: string; amount: string; slippageBps?: number; note?: string }
   | { action: "prepare" | "reject" | "status"; tradeId: string }
+  | { action: "authorize"; tradeId: string; quoteId: string; signature?: string }
   | { action: "submitted"; tradeId: string; hash: string; userOpHash?: string };
-export type CryptoResult = { state: HubState; tradeId?: string; batch?: SwapBatch; transaction?: Transaction; step?: "approval" | "swap"; expiresAt?: number };
+export type CryptoResult = { state: HubState; tradeId?: string; quoteId?: string; permitData?: import("@/lib/crypto/types").PermitData; batch?: SwapBatch; transaction?: Transaction; step?: "approval" | "swap"; expiresAt?: number };
 
 export const hubApi = {
   wallets: (token: Token) => request<{ wallets: string[] }>(token, "/api/trade/crypto", { cache: "no-store" }),
