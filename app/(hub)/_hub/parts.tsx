@@ -247,8 +247,8 @@ export function TradeCard({ tradeId, expanded = false }: { tradeId: string; expa
 export function PartView({ part }: { part: MessagePart }) {
   switch (part.type) {
     case "text": return <p className="hub-text">{part.text}</p>;
-    case "assets": return <AssetGrid assets={part.assets} title={part.title} dense={part.assets.length > 2} />;
-    case "asset": return <AssetGrid assets={[part.asset]} />;
+    case "assets": return <AssetGrid assets={part.assets} title={part.title} quiet />;
+    case "asset": return <AssetGrid assets={[part.asset]} quiet />;
     case "profile_update": return <ProfileUpdateCard changes={part.changes} />;
     case "explanation": return <ExplanationCard reasons={part.reasons} target={part.target} />;
     case "trade": return <TradeCard tradeId={part.tradeId} />;

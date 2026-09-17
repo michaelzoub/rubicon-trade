@@ -14,3 +14,10 @@ tsconfig.tsbuildinfo
 
 .next-build/
 .next-redesign/
+
+# Isolated purchase-flow validation outputs
+.next-purchase-dev/
+.next-purchase-build/
+
+# Next.js verification builds
+.next-verify/

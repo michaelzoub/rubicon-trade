@@ -15,7 +15,6 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: (href: string) => 
 import { HubProvider } from "./hub-provider";
 import { ExploreView, mergeKinds } from "./explore-view";
 import { GlossProvider, GLOSS_ID } from "./gloss";
-import { THEME_BEARING } from "@/lib/socialtrading/worldview";
 import { constellation } from "./explore-hero";
 
 let container: HTMLDivElement, root: Root;
@@ -37,54 +36,24 @@ afterEach(async () => { await act(async () => root.unmount()); container.remove(
 const render = async () => { await act(async () => root.render(<HubProvider userId="preview-user" name="Michael" initial={PREVIEW_STATE} initialAccount={PREVIEW_ACCOUNT} api={api}><GlossProvider><ExploreView /></GlossProvider></HubProvider>)); await act(async () => { await new Promise(r => setTimeout(r, 10)); }); };
 const tab = (label: string) => Array.from(container.querySelectorAll<HTMLButtonElement>(".hub-lens-item")).find(b => b.textContent === label)!;
 
-it("places the market by belief, without a word of explanation", async () => {
+it("restores the two-axis field and keeps every asset accessible below it", async () => {
   await render();
   expect(Array.from(container.querySelectorAll(".hub-lens-item")).map(b => b.textContent)).toEqual(["For you", "Themes", "New", "Moving"]);
   expect(tab("For you").getAttribute("aria-selected")).toBe("true");
-
-  // The page explains itself by arrangement: no eyebrow, no headline, no legend.
-  expect(container.querySelector(".eyebrow")).toBeNull();
-  expect(container.textContent).not.toContain("Distance = thesis relevance");
-  expect(container.textContent).not.toContain("The market, through your eyes");
-
-  const objects = Array.from(container.querySelectorAll<HTMLElement>(".wv-object"));
-  const symbols = objects.map(o => o.querySelector("b")?.textContent);
-  expect(symbols).toContain("DOGE");
-  expect(symbols).toContain("VRT");
-
-  // Distance is relevance, so what connects to the thesis sits nearer the centre.
-  const distance = (symbol: string) => {
-    const node = objects.find(o => o.querySelector("b")?.textContent === symbol)!;
-    return Math.hypot(parseFloat(node.style.left) - 50, parseFloat(node.style.top) - 50);
-  };
-  expect(distance("VRT")).toBeLessThan(distance("DOGE"));
-
-  // Direction is the theme, and it is the same direction every time.
-  const bearing = (symbol: string) => objects.find(o => o.querySelector("b")?.textContent === symbol)!.dataset.bearing;
-  expect(bearing("DOGE")).toBe(String(THEME_BEARING.crypto));
-
-  // Choosing an instrument opens the instrument, chart and all.
-  const card = container.querySelector<HTMLButtonElement>(".wv-object-card")!;
-  const symbol = card.querySelector("b")!.textContent;
-  const opened = objects.find(o => o.querySelector("b")?.textContent === symbol)!;
-  await act(async () => card.click());
-  expect(pushed.at(-1)).toBe(`/explore/${opened.dataset.flipId!.split(":")[0]}/${encodeURIComponent(opened.dataset.flipId!.split(":").slice(1).join(":"))}`);
-
-  const grid = Array.from(container.querySelectorAll(".gravity-all .hub-asset")).map(c => c.getAttribute("data-asset"));
+  expect(container.querySelector(".rubicon-xy")).not.toBeNull();
+  expect(container.textContent).toContain("More your thing");
+  const objects = container.querySelectorAll(".hub-orbit-card");
+  expect(objects.length).toBeGreaterThan(0);
+  expect(objects.length).toBeLessThanOrEqual(10);
+  expect(objects[0].getAttribute("href")).toMatch(/^\/explore\/(stock|crypto)\//);
+  expect(container.querySelector("details")).toBeNull();
+  const grid = Array.from(container.querySelectorAll(".hub-explore-results [data-asset]")).map(c => c.getAttribute("data-asset"));
   expect(grid).toContain("DOGE");
   expect(grid).toContain("VRT");
   expect(calls.map(c => c.kind).sort()).toEqual(["crypto", "stock"]);
 });
 
-it("reveals what it knows about an object beside it, on hover and on focus alike", async () => {
-  await render();
-  const card = container.querySelector<HTMLButtonElement>(".wv-object-card")!;
-  // The reveal is described to assistive technology, not only drawn.
-  expect(card.getAttribute("aria-describedby")).toBe(GLOSS_ID);
-  expect(card.getAttribute("aria-label")).toMatch(/thesis|connected|set aside/i);
-});
-
-it("turns the field toward a theme instead of listing it", async () => {
+it("filters the field and continuous grid through a selected theme", async () => {
   await render();
   await act(async () => tab("Themes").click());
   const orbs = container.querySelectorAll<HTMLButtonElement>(".hub-orb");
@@ -101,7 +70,7 @@ it("turns the field toward a theme instead of listing it", async () => {
   expect(calls.at(-1)).toEqual(expect.objectContaining({ kind: "stock", q: "energy" }));
 
   // Everything off-theme recedes rather than disappearing.
-  const objects = Array.from(container.querySelectorAll<HTMLElement>(".wv-object"));
+  const objects = Array.from(container.querySelectorAll<HTMLElement>(".hub-orbit"));
   expect(objects.length).toBeGreaterThan(0);
   expect(container.textContent).not.toContain("becoming more interested in energy");
 });

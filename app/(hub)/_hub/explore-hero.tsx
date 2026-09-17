@@ -14,7 +14,7 @@ const MAX = 10;
 
 /** Roughly what one card occupies, as a share of the stage, so cards can be
  * pushed apart without measuring the DOM. */
-const CARD = { w: 16, h: 17 };
+const CARD = { w: 19, h: 24 };
 
 /** Stocks and coins in one field, best-ranked first. */
 export function constellation(list: Asset[]): Asset[] {
@@ -91,8 +91,8 @@ export function plot(assets: Asset[]): Placed[] {
 
 /**
  * The Explore hero: opportunities laid out as a field, brightest and highest
- * being the ones that match what you believe. They breathe, follow the pointer
- * by depth, and on scroll draw together and fade so the ordered grid takes over.
+ * being the ones that match what you believe. A little pointer depth and
+ * breathing motion keep the field tactile without hiding it on scroll.
  */
 export function Constellation({ assets }: { assets: Asset[] }) {
   const root = useRef<HTMLDivElement>(null);

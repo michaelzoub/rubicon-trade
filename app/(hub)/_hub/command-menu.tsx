@@ -10,13 +10,14 @@ export function CommandMenu({ resolveHref }: { resolveHref: (href: string) => st
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
+  const pinned = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancel = () => { if (timer.current) clearTimeout(timer.current); };
-  const close = () => { cancel(); setOpen(false); };
+  const close = () => { cancel(); pinned.current = false; setOpen(false); };
   useEffect(() => {
-    const outside = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
+    const outside = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) close(); };
     const key = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { setOpen(false); if (root.current?.contains(document.activeElement)) trigger.current?.focus(); }
+      if (event.key === "Escape") { close(); if (root.current?.contains(document.activeElement)) trigger.current?.focus(); }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setOpen(value => !value); trigger.current?.focus(); }
     };
     document.addEventListener("pointerdown", outside); document.addEventListener("keydown", key);
@@ -27,8 +28,8 @@ export function CommandMenu({ resolveHref }: { resolveHref: (href: string) => st
     gsap.fromTo(".rubicon-portals", { opacity: 0, y: -8, scale: .97 }, { opacity: 1, y: 0, scale: 1, duration: .3, ease: "power3.out", clearProps: "all" });
     gsap.fromTo(".rubicon-portal", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: .4, stagger: .055, clearProps: "all" });
   }, { scope: root, dependencies: [open], revertOnUpdate: true });
-  return <div ref={root} className="rubicon-more" onPointerEnter={event => { cancel(); if (event.pointerType === "mouse") setOpen(true); }} onPointerLeave={() => { cancel(); timer.current = setTimeout(() => { if (!root.current?.contains(document.activeElement)) setOpen(false); }, 180); }} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) close(); }}>
-    <button ref={trigger} type="button" className="rubicon-more-trigger" aria-label="Discover more of Rubicon" aria-expanded={open} aria-controls="rubicon-destinations" onClick={() => { cancel(); setOpen(value => !value); }}><Plus size={19} /></button>
+  return <div ref={root} className="rubicon-more" onPointerEnter={event => { cancel(); if (event.pointerType === "mouse") setOpen(true); }} onPointerLeave={() => { cancel(); timer.current = setTimeout(() => { if (!pinned.current && !root.current?.contains(document.activeElement)) close(); }, 180); }} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) close(); }}>
+    <button ref={trigger} type="button" className="rubicon-more-trigger" aria-label="Discover more of Rubicon" aria-expanded={open} aria-controls="rubicon-destinations" aria-keyshortcuts="Meta+k Control+k" onClick={() => { cancel(); if (pinned.current) close(); else { pinned.current = true; setOpen(true); } }}><Plus size={19} /></button>
     {open && <nav id="rubicon-destinations" className="rubicon-portals" aria-label="More of Rubicon">
       <HubLink href={resolveHref("/thesis")} className="rubicon-portal is-thesis" onClick={close}>
         <span className="portal-heading"><strong>Your thesis</strong><ArrowUpRight size={15}/></span><span className="portal-note">What you believe.</span>

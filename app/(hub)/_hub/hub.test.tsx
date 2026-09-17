@@ -141,9 +141,12 @@ it("streams a reply with rich parts and animates the profile card from the persi
 
 it("records learning signals when the user acts on an asset card", async () => {
   await render(PREVIEW_STATE);
-  const dismiss = Array.from(container.querySelectorAll("button")).find(b => b.getAttribute("aria-label") === "Not interested in OKLO")!;
-  await act(async () => dismiss.click());
-  expect(events.posted).toContainEqual(expect.objectContaining({ action: "signal", signal: "dismissed", target: "OKLO", themes: ["energy"] }));
+  const card = container.querySelector<HTMLElement>('.hub-quiet-card[data-asset="OKLO"]')!;
+  expect(card.querySelector("button")).toBeNull();
+  const open = card.querySelector<HTMLAnchorElement>("a")!;
+  expect(open.getAttribute("href")).toBe("/explore/stock/OKLO");
+  await act(async () => open.click());
+  expect(events.posted).toContainEqual(expect.objectContaining({ action: "signal", signal: "opened", target: "OKLO", themes: ["energy"] }));
   const approve = Array.from(container.querySelectorAll(".hub-trade button")).find(b => b.textContent === "Approve")!;
   await act(async () => approve.click());
   expect(events.posted).toContainEqual(expect.objectContaining({ action: "trade", tradeId: "t1", decision: "approved" }));
@@ -429,15 +432,16 @@ it("opens a contextual purchase from chat with the requested amount and restores
   expect(document.activeElement).toBe(container.querySelector('.hub-composer textarea'));
 });
 
-it("opens command navigation by shortcut and filters destinations", async () => {
+it("opens additional destinations by shortcut without duplicating the permanent navigation", async () => {
   await render(PREVIEW_STATE);
-  await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true })));
-  const dialog = container.querySelector<HTMLDialogElement>('.rubicon-command')!;
-  expect(dialog.open).toBe(true);
-  await setValue(dialog.querySelector('input')!, 'memory');
-  expect(Array.from(dialog.querySelectorAll('[data-command]')).map(n => n.textContent)).toEqual(['Memory']);
-  await act(async () => dialog.dispatchEvent(new Event('cancel', { cancelable: true })));
-  expect(dialog.open).toBe(false);
+  await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true })));
+  const panel = container.querySelector<HTMLElement>('.rubicon-portals')!;
+  expect(panel).not.toBeNull();
+  expect(Array.from(panel.querySelectorAll('a')).map(n => n.getAttribute('href'))).toEqual(['/thesis', '/agents']);
+  expect(panel.textContent).not.toMatch(/Home|Explore|Memory/);
+  await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
+  expect(container.querySelector('.rubicon-portals')).toBeNull();
+  expect(document.activeElement).toBe(container.querySelector('.rubicon-more-trigger'));
 });
 
 it("leaves Home calm, and keeps the thesis in what reaching for something reveals", async () => {
@@ -491,7 +495,7 @@ it("keeps distinct account borders without labels covering the actions", async (
 
 it("keeps the shortcut without printing it on the page", async () => {
   await render(PREVIEW_STATE);
-  const trigger = container.querySelector<HTMLButtonElement>(".rubicon-command-trigger")!;
+  const trigger = container.querySelector<HTMLButtonElement>(".rubicon-more-trigger")!;
   expect(trigger.querySelector("kbd")).toBeNull();
   expect(trigger.getAttribute("aria-keyshortcuts")).toBe("Meta+k Control+k");
   expect(container.querySelector(".rubicon-command footer")).toBeNull();
