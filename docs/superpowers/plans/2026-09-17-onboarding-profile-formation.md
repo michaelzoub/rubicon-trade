@@ -698,22 +698,16 @@ export type InstrumentProps = {
 
 Move the entire `scene === SCENE.deck` JSX block out of `onboarding-flow.tsx` into a `Deck({ deck, responses, onAnswer, onUndo }: InstrumentProps)` component, together with the state it owns: `drag`, `pointer`, `swipeCard`, `swipeLocked`, `swipeAnimation`, `swipeExiting`, the `vote` function, the `SWIPE` constant and the `ICONS` array. The one behavioural substitution: where `vote` did `update({ responses: [...a.responses, { ...prediction, direction }], scene: ... })`, it now calls `onAnswer({ ...prediction, direction })` and nothing else — scene advancement moves to the flow. The `Undo last swipe` button calls `onUndo()`.
 
-Then export the switch. `belief` and `onBelief` are optional because only the thesis instrument uses them (Task 9):
+Then export the entry point. It takes `instrument` now because the flow already passes it, but only the deck exists yet — Tasks 7, 8 and 9 each add their own `case` above the fallback as they land. Do not write dead `case` arms that return the deck, and do not add `belief`/`onBelief` yet; Task 9 introduces them when the thesis instrument needs them.
 
 ```tsx
-export function Instruments({ instrument, belief = "", onBelief = () => {}, ...rest }: InstrumentProps & {
-  instrument: Instrument; belief?: string; onBelief?: (value: string) => void;
-}) {
-  switch (instrument) {
-    case "field": return <Deck {...rest} />;
-    case "sorter": return <Deck {...rest} />;
-    case "thesis": return <Deck {...rest} />;
-    default: return <Deck {...rest} />;
-  }
+export function Instruments({ instrument, ...rest }: InstrumentProps & { instrument: Instrument }) {
+  // Tasks 7-9 add "field", "sorter" and "thesis" here. Until then every
+  // confidence stop answers the same seven domains through the deck.
+  void instrument;
+  return <Deck {...rest} />;
 }
 ```
-
-The unused `belief`/`onBelief` destructure is deliberate scaffolding for Task 9; if the lint rule for unused variables rejects it, leave them in the type and destructure them only in Task 9.
 
 - [ ] **Step 3: Wire the flow to it**
 
@@ -1184,15 +1178,31 @@ it("answers all seven domains whichever instrument the confidence chose", async 
   }
 });
 
-it("keeps the answers already given when the confidence stop changes", async () => {
+it("shows an answer already given whichever instrument the confidence moved to", async () => {
   const deck = predictions(2);
-  const responses: PredictionResponse[] = [{ ...deck[0], direction: "yes", note: "Already said." }];
-  for (const instrument of ["deck", "field", "sorter", "thesis"] as const) {
-    await act(async () => root.render(<Instruments instrument={instrument} deck={deck} responses={responses} belief="" onBelief={() => {}} onAnswer={() => {}} onUndo={() => {}} />));
-    // Re-rendering under a different instrument must not ask React to drop them.
-    expect(responses, instrument).toHaveLength(1);
-    expect(responses[0].note, instrument).toBe("Already said.");
-  }
+  const answered: PredictionResponse[] = [{ ...deck[0], direction: "yes", note: "Already said." }];
+  const render = (instrument: "deck" | "field" | "sorter" | "thesis") =>
+    act(async () => root.render(<Instruments instrument={instrument} deck={deck} responses={answered} belief="" onBelief={() => {}} onAnswer={() => {}} onUndo={() => {}} />));
+
+  // The deck has moved past the domain that was answered.
+  await render("deck");
+  expect(container.textContent).toContain(deck[1].text);
+  expect(container.querySelector(".onb-prediction h2")!.textContent).not.toBe(deck[0].text);
+
+  // The field shows that tile leaning toward, and keeps the reason typed into it.
+  await render("field");
+  expect(container.querySelector(".onb-tile[data-direction='yes']")).toBeTruthy();
+  expect((container.querySelector(".onb-tile input[type='text']") as HTMLInputElement).value).toBe("Already said.");
+
+  // The sorter has it placed, not sitting in the tray.
+  await render("sorter");
+  expect(container.querySelector(".onb-column[data-direction='yes']")!.textContent).toContain(deck[0].text);
+  expect(container.querySelectorAll(".onb-sorter-unplaced .onb-chip")).toHaveLength(6);
+
+  // The thesis confirm row shows it already answered.
+  await render("thesis");
+  const domain = container.querySelector(`.onb-domain[data-domain="${deck[0].category}"]`)!;
+  expect(domain.querySelector("button[aria-pressed='true']")!.textContent).toBe("Yes");
 });
 ```
 
