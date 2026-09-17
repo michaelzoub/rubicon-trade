@@ -35,6 +35,7 @@ export function MemoryView() {
   const gloss = useGloss();
   const frames = useMemo(() => buildGraph(state), [state]);
   const [index, setIndex] = useState(frames.length - 1);
+  const [selected, setSelected] = useState<string | null>(null);
   const field = useRef<HTMLDivElement>(null);
   const travel = useRef(0);
   const at = Math.min(Math.max(index, 0), frames.length - 1);
@@ -78,6 +79,7 @@ export function MemoryView() {
     gsap.fromTo(gsap.utils.toArray<HTMLElement>(".mem-satellite", field.current), { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: .6, stagger: .05, delay: .25, ease: "creature" });
   }, { scope: field, dependencies: [frame.id], revertOnUpdate: true });
 
+  const selectedNode = frame.nodes.find(node => node.id === selected);
   const nodeAt = (id: string) => frame.nodes.find(n => n.id === id);
 
   /** The complete sequence: everything recorded, plus any order that never
@@ -94,6 +96,13 @@ export function MemoryView() {
 
   return (
     <div className="mem">
+      <header className="mem-heading">
+        <div><p className="mem-eyebrow">YOUR AGENT’S MEMORY</p><h1 className="landing-section-title">A little more connected, every day.</h1><p>Ideas become interests. Interests shape decisions. Follow how your perspective evolves.</p></div>
+        <div className="mem-count"><strong>{frame.nodes.filter(n => n.change !== "released").length}</strong><span>ideas in this chapter</span></div>
+      </header>
+      <div className="mem-journey" aria-label="Memory progression">
+        <span><b>01</b> What you believe</span><i aria-hidden="true" /><span><b>02</b> Connections you build</span><i aria-hidden="true" /><span><b>03</b> Decisions you make</span>
+      </div>
       <div
         ref={field}
         className="mem-field"
@@ -107,7 +116,9 @@ export function MemoryView() {
           if (event.key === "ArrowRight") { event.preventDefault(); step(1); }
         }}
       >
+        <div className="mem-orbit" aria-hidden="true" />
         <svg className="mem-edges" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          {frame.nodes.filter(node => node.change !== "released").map(node => <line key={`root:${node.id}`} data-kind="root" x1="50" y1="50" x2={node.x} y2={node.y} vectorEffect="non-scaling-stroke" />)}
           {frame.edges.map(edge => {
             const from = nodeAt(edge.from), to = nodeAt(edge.to);
             if (!from || !to) return null;
@@ -120,12 +131,15 @@ export function MemoryView() {
           })}
         </svg>
 
+        {frame.nodes.length > 0 && <div className="mem-center"><span>Your perspective</span><small>{frame.edges.length} shared connection{frame.edges.length === 1 ? "" : "s"}</small></div>}
         {frame.nodes.map(node => (
           <button
             key={node.id}
             type="button"
             className="mem-belief"
             data-change={node.change}
+            aria-pressed={selected === node.id}
+            onClick={() => setSelected(selected === node.id ? null : node.id)}
             style={{ left: `${node.x}%`, top: `${node.y}%`, "--strength": node.strength } as CSSProperties}
             aria-label={`${node.text}. ${VERB[node.change]}. ${Math.round(node.strength * 100)} per cent conviction.`}
             {...gloss({
@@ -162,6 +176,16 @@ export function MemoryView() {
         {!frame.nodes.length && <p className="mem-empty">Your worldview starts the first time something you believe changes. Nothing before that was recorded, so nothing before that is drawn.</p>}
       </div>
 
+      {selectedNode && <section className="mem-insight" aria-label="Selected memory">
+        <div><p className="mem-eyebrow">{VERB[selectedNode.change]}</p><h2>{selectedNode.text}</h2><p>{selectedNode.origin}</p></div>
+        <div><strong>{Math.round(selectedNode.strength * 100)}%</strong><span>conviction</span></div>
+        <button type="button" className="hub-chip-button" onClick={() => setSelected(null)}>Close</button>
+      </section>}
+      <div className="mem-navigation">
+        <button type="button" className="hub-chip-button" disabled={at === 0} onClick={() => step(-1)}>← Earlier</button>
+        <div><span>Chapter {at + 1} of {frames.length}</span><strong>{frame.title}</strong></div>
+        <button type="button" className="hub-chip-button" disabled={at === frames.length - 1} onClick={() => step(1)}>Later →</button>
+      </div>
       <div className="mem-ticks" role="group" aria-label="States of mind, oldest first">
         {frames.map((f, i) => (
           <button

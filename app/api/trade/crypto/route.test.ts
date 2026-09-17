@@ -46,26 +46,31 @@ beforeEach(() => {
     if (method === 'eth_gasPrice') return '0x1';
     if (params[0].data === '0x313ce567') return word(6);
     if (params[0].data.startsWith('0xdd62ed3e')) return word(allowance);
-    return word(25000000);
+    // The purchase, plus the USDC Circle's Paymaster takes as the network fee.
+    return word(30000000);
   });
 });
-it('approval → receipt → fresh quote → creation → broadcast → confirmed swap, with no early success', async () => {
+it('batches approval with the swap, and never reports success before the chain does', async () => {
   allowance = 0n;
-  const approval = await action('prepare');
-  expect(approval.body.step).toBe('approval'); expect(approval.body.transaction).toBeDefined();
-  expect(db.quote).not.toHaveBeenCalled(); expect(db.swap).not.toHaveBeenCalled();
-  await action('submitted', { hash });
+  const fresh = await action('prepare');
+  // One signature, not two: prepare goes straight to the swap, with no separate
+  // approval transaction for the wallet to fund and confirm first.
+  expect(fresh.body.step).toBe('swap'); expect(fresh.body.transaction).toBeUndefined();
+  expect(fresh.body.quoteId).toBeTruthy();
+  const swap = await action('authorize', { quoteId: fresh.body.quoteId });
+  expect(swap.body.step).toBe('swap');
+  expect(swap.body.transaction).toBeUndefined();
+  // The missing allowance is granted inside the operation, immediately before the swap consumes it.
+  expect(swap.body.batch.paymaster).toBe('circle-usdc');
+  expect(swap.body.batch.calls).toHaveLength(3);
+  expect(swap.body.batch.calls.at(-1)).toMatchObject({ to: ROUTERS[8453], data: '0x1234' });
+  expect(db.state!.trades[0].status).toBe('unknown');
+  await action('submitted', { hash, userOpHash: `0x${'cd'.repeat(32)}` });
+  expect(db.state!.trades[0].crypto?.userOpHash).toBe(`0x${'cd'.repeat(32)}`);
   await action('status'); expect(db.state!.trades[0].status).toBe('unknown');
   db.verify.mockResolvedValue('confirmed'); await action('status');
-  expect(db.state!.trades[0].status).toBe('reserved');
-  expect(db.state!.trades[0].crypto?.history).toEqual([{ step: 'approval', hash, result: 'confirmed' }]);
-  allowance = 25000000n;
-  const fresh = await action('prepare'); expect(fresh.body.quoteId).toBeTruthy();
-  const swap = await action('authorize', { quoteId: fresh.body.quoteId }); expect(swap.body.step).toBe('swap');
-  expect(db.state!.trades[0].status).toBe('unknown');
-  await action('submitted', { hash: `0x${'cd'.repeat(32)}` });
-  db.verify.mockResolvedValue('pending'); await action('status'); expect(db.state!.trades[0].status).toBe('unknown');
-  db.verify.mockResolvedValue('confirmed'); await action('status'); expect(db.state!.trades[0].status).toBe('confirmed');
+  expect(db.state!.trades[0].status).toBe('confirmed');
+  expect(db.state!.trades[0].crypto?.history).toEqual([{ step: 'swap', hash, result: 'confirmed' }]);
 });
 it('verifies a real Permit2 signature against the stored fresh quote before swap creation', async () => {
   permit = true; const fresh = await action('prepare');
@@ -93,8 +98,20 @@ it('does not reissue an uncertain transaction, and a reverted swap never succeed
 it('preserves pending state on RPC verification failure, refuses wallet ownership changes and persists before handing out calldata', async () => {
   const fresh = await action('prepare'); db.saveFail = true;
   const unsaved = await action('authorize', { quoteId: fresh.body.quoteId });
-  expect(unsaved.status).toBe(502); expect(unsaved.body.transaction).toBeUndefined();
+  expect(unsaved.status).toBe(502); expect(unsaved.body.transaction).toBeUndefined(); expect(unsaved.body.batch).toBeUndefined();
   db.saveFail = false; await action('authorize', { quoteId: fresh.body.quoteId }); await action('submitted', { hash });
   db.verify.mockRejectedValueOnce(new Error('RPC failed')); expect((await action('status')).status).toBe(502);
   expect(db.state!.trades[0].status).toBe('unknown');
+});
+it('offers no blind retry for a sponsored batch, which has no nonce to hold', async () => {
+  const fresh = await action('prepare'); const issued = await action('authorize', { quoteId: fresh.body.quoteId });
+  expect(issued.body.batch).toBeDefined();
+  // Resending would risk a second purchase; the operation hash is the only way back.
+  expect((await action('resume')).status).toBe(502);
+  expect(db.swap).toHaveBeenCalledTimes(1);
+  await action('submitted', { hash }); expect((await action('resume')).status).toBe(502);
+});
+it('refuses a changed Privy wallet owner before issuing anything', async () => {
+  db.owns.mockRejectedValueOnce(new Error('Wallet no longer linked'));
+  expect((await action('prepare')).status).toBe(502); expect(db.quote).not.toHaveBeenCalled();
 });

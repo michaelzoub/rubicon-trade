@@ -32,6 +32,7 @@ import "./hub.css";
 import "./hub-consumer.css";
 import "./quiet-refinement.css";
 import "./instruments.css";
+import "./experience.css";
 
 export const NAV = [
   { href: "/", label: "Home", icon: MessageCircle, exact: true },

@@ -102,3 +102,10 @@ describe("recovering a batch from a transaction hash alone", () => {
     await expect(verifyUserOperation(batch, undefined, txHash)).rejects.toThrow(/does not match/);
   });
 });
+
+it("does not mistake a different operation from the SAME wallet for the authorized purchase", async () => {
+  const otherHash = `0x${"ef".repeat(32)}`;
+  node({ input: bundle([op(), op({ callData: "0xdeadbeef" })]), logs: [event(false, userOpHash), event(true, otherHash)] });
+  await expect(verifyUserOperation(batch, otherHash, txHash)).rejects.toThrow(/does not match/);
+  await expect(verifyUserOperation(batch, userOpHash, txHash)).resolves.toBe("reverted");
+});

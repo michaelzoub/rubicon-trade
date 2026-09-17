@@ -95,12 +95,15 @@ reservation) and one card:
 - **The user** trades from `/trade` or a crypto asset page. Their swaps carry
   `initiator: "user"`, skip the agent mode gate, and never consume the agent's
   allowance. Amounts are entered in human units and converted exactly with
-  provider decimals on the server.
+  onchain token decimals on the server.
 
 Every onchain swap settles from a wallet the user controls: the server issues
 calldata once per step, the user signs in their wallet, and the trade is
 `confirmed` only after a verified receipt. No delegated signer exists. Crypto
-requires a wallet signature even in automatic mode.
+requires a wallet signature even in automatic mode. Purchases confirm any token
+approvals before fetching the quote used for Permit2 signing and swap creation.
+Native gas is required; Privy sponsorship and Dynamic delegation are not enabled.
+See [purchase deployment and recovery](docs/purchase-experience.md).
 
 ## Routes
 
@@ -116,7 +119,7 @@ requires a wallet signature even in automatic mode.
   `lib/socialtrading/providers/*` and `lib/crypto/providers/*`.
 - `/api/trade/crypto` — onchain swaps: `GET` lists the user's Privy-verified EVM
   wallets; `POST` with `action: propose` sets up the user's own swap, and
-  `prepare` / `submitted` / `status` / `reject` drive any swap proposal through
+  `prepare` / `authorize` / `resume` / `submitted` / `status` / `reject` drive any swap proposal through
   wallet signing and receipt verification.
 
 ## Preview onboarding and the hub

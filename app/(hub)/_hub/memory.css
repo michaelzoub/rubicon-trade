@@ -121,3 +121,49 @@
   .mem-field { cursor: default; }
   .mem-belief-body, .mem-satellite, .mem-tick { transition: none; }
 }
+
+/* A legible constellation, anchored in the recorded progression. */
+.mem-heading { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 6px 0 25px; }
+.mem-eyebrow { font-size: 10px; letter-spacing: .13em; color: #778491; margin-bottom: 10px; text-transform: uppercase; }
+.mem-heading h1 { font-size: clamp(24px, 3vw, 36px); letter-spacing: -.035em; }
+.mem-heading p:not(.mem-eyebrow) { color: #778491; font-size: 13px; margin-top: 10px; }
+.mem-count { display: grid; text-align: right; flex-shrink: 0; gap: 3px; }
+.mem-count strong { font-size: 32px; font-weight: 450; color: #384f65; }
+.mem-count span { font-size: 10px; color: #778491; }
+.mem-journey { display: flex; align-items: center; gap: 20px; padding: 18px 22px; border-block: 1px solid #e8edf1; }
+.mem-journey span { display: flex; align-items: center; gap: 9px; font-size: 12px; color: #516274; }
+.mem-journey b { font: 10px monospace; color: #839cae; }
+.mem-journey i { flex: 1; height: 1px; background: linear-gradient(90deg, #d0dae3, #eaf0f5); }
+.mem-field { height: min(510px, 54vh); min-height: 360px; }
+.mem-orbit { position: absolute; left: 18%; top: 14%; width: 64%; height: 72%; border: 1px dashed #c7d5e13d; border-radius: 50%; pointer-events: none; }
+.mem-center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: grid; gap: 5px; text-align: center; padding: 14px 18px; border: 1px solid #e0e8ef; border-radius: 18px; background: #ffffffed; box-shadow: 0 8px 30px #44627a09; pointer-events: none; }
+.mem-center span { font-size: 12px; color: #42576b; }
+.mem-center small { font-size: 9px; color: #81909d; }
+.mem-edges line { stroke: #8babc1; stroke-width: 1.3; }
+.mem-edges line[data-kind="root"] { stroke: #c3d1dd; stroke-dasharray: 3 5; stroke-width: 1; }
+.mem-belief-name { opacity: 1; color: #52616b; font-size: 11px; background: #ffffffc9; padding: 2px 6px; border-radius: 6px; }
+.mem-belief[aria-pressed="true"] .mem-belief-body { outline: 2px solid #729dc3; outline-offset: 5px; }
+.mem-navigation { display: flex; align-items: center; justify-content: space-between; max-width: 720px; margin: 10px auto 0; padding-top: 20px; border-top: 1px solid #e7edf2; gap: 16px; }
+.mem-navigation > div { display: grid; text-align: center; gap: 5px; }
+.mem-navigation span { font-size: 10px; color: #7c8b98; }
+.mem-navigation strong { font-size: 13px; font-weight: 500; color: #3b5063; }
+.mem-navigation button:disabled { opacity: .35; cursor: default; }
+.mem-ticks { max-width: 720px; margin-inline: auto; overflow-x: auto; justify-content: flex-start; height: 32px; gap: 2px; }
+.mem-tick { flex: 1 0 10px; height: 22px; background: linear-gradient(#c7d6df, #c7d6df) center bottom / 2px 10px no-repeat; }
+.mem-tick[aria-current="true"] { height: 28px; background: linear-gradient(#527f9f, #527f9f) center bottom / 3px 22px no-repeat; }
+.mem-insight { display: flex; align-items: center; gap: 24px; max-width: 720px; margin: 0 auto 20px; border: 1px solid #dfe8ef; border-radius: 18px; padding: 20px; background: #f8fbfd; }
+.mem-insight > div:first-child { flex: 1; }
+.mem-insight h2 { font-size: 15px; margin-bottom: 6px; }
+.mem-insight p:not(.mem-eyebrow) { font-size: 12px; color: #72808a; }
+.mem-insight > div:nth-child(2) { display: grid; gap: 4px; text-align: center; }
+.mem-insight strong { font-size: 24px; color: #44647e; }
+.mem-insight span { font-size: 10px; color: #72808a; }
+@media (max-width: 600px) {
+  .mem-count { display: none; }
+  .mem-journey { padding: 14px 0; gap: 8px; }
+  .mem-journey span { font-size: 10px; gap: 5px; }
+  .mem-center { padding: 10px; }
+  .mem-center span { font-size: 10px; }
+  .mem-belief-name { max-width: 90px; font-size: 9px; }
+  .mem-insight { flex-wrap: wrap; gap: 14px; }
+}

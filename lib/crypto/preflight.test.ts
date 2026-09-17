@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-import { chain } from './chains';
+import { chain, feeCap } from './chains';
 import { erc20ApproveData, PERMIT2 } from './aa';
 const mock = vi.hoisted(() => ({ rpc: vi.fn() }));
 vi.mock('./rpc', () => ({ rpc: mock.rpc }));
@@ -29,6 +29,21 @@ it('blocks insufficient USDC even when the wallet has funds elsewhere', async ()
 });
 it('blocks zero native gas before approval or signing', async () => {
   native = 0n; await expect(preflight(r)).rejects.toThrow(/Add ETH.*Base/);
+});
+it('asks for USDC rather than ETH when Circle\u2019s Paymaster is paying the fee', async () => {
+  // The whole point: a wallet holding only USDC can still buy.
+  native = 0n; usdc = 25000000n + feeCap(8453);
+  expect(await preflight(r, true)).toMatchObject({ inputDecimals: 6 });
+  // But the USDC that pays the fee cannot be the USDC being spent, so a wallet
+  // holding exactly the purchase amount is short by the whole fee.
+  usdc = 25000000n;
+  await expect(preflight(r, true)).rejects.toThrow(/cover the network fee/);
+  usdc = 25000000n + feeCap(8453) - 1n;
+  await expect(preflight(r, true)).rejects.toThrow(/cover the network fee/);
+});
+it('names the network honestly when no paymaster is paying', async () => {
+  native = 0n;
+  await expect(preflight(r, false)).rejects.toThrow(/gas sponsorship is not available on this network/);
 });
 it('fails closed on RPC failures, wrong RPC chain, and USDC decimal mismatch', async () => {
   mock.rpc.mockRejectedValueOnce(new Error('RPC failure')); await expect(preflight(r)).rejects.toThrow('RPC failure');

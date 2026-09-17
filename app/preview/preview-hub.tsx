@@ -34,6 +34,9 @@ export function PreviewExperience({ view, kind, id }: { view: string; kind?: str
       <span className="socialtrading-caption">Preview · sample data</span>
       <button className="hub-inline-link" onClick={() => { setProfile(undefined); setAttempt(n => n + 1); setOnboarding(true); }}>Restart onboarding</button>
       <button className="hub-inline-link" onClick={() => setOnboarding(false)}>View hub</button>
+      <a className="hub-inline-link" href="/preview?view=onboarding&onboarding=tree">Tree arm</a>
+      <a className="hub-inline-link" href="/preview?view=onboarding&onboarding=inference">Inference arm</a>
+      <a className="hub-inline-link" href="/preview/onboarding-compare">Compare A/B</a>
     </div>
     {onboarding ? <div className="landing-page socialtrading-page"><SiteHeader session={false} /><main className="container socialtrading-main"><div className="dashboard-theme socialtrading-flow"><ProfileFlow key={attempt} userId={PREVIEW_USER} name="Michael" persist={false} onComplete={value => { setProfile(value); setOnboarding(false); }} /></div></main></div>
       : <PreviewHub key={attempt} view={view === "onboarding" ? "home" : view} profile={profile} kind={kind} id={id} />}

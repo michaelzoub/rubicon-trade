@@ -16,6 +16,25 @@ export const NATIVE = "0x0000000000000000000000000000000000000000";
  * Unspent allowance is refunded, so this only has to be generous enough to let
  * the operation validate. */
 export const feeReserveUsd = (chainId: number) => chainId === 1 ? 8 : chainId === 137 ? 0.1 : 0.25;
+/** Circle's Paymaster is deployed at the same address on every chain here, so
+ * the only question is whether the user is paying with the USDC it accepts.
+ * Read by the server when authorizing and by the browser when signing. */
+export const gaslessChain = (chainId: number) => [1, 10, 137, 8453, 42161].includes(chainId);
+/** Ceiling on what Circle's Paymaster may pull for one swap, in USDC base units.
+ * A permit is an allowance, not a charge — the unspent part is refunded — so this
+ * only has to clear the real fee. Lives here because the server checks it before
+ * authorizing and the browser signs the permit for it. */
+export const feeCap = (chainId: number) => BigInt(Math.ceil(feeReserveUsd(chainId) * 2 * 1e6));
+/** The supported chains whose network fee is cheapest, for pointing someone at
+ * somewhere their balance can actually afford. Mainnet gas is worth real money;
+ * the rollups are worth cents, and that difference decides whether a small
+ * purchase is possible at all. */
+export function cheaperChains(thanChainId: number) {
+  const here = feeReserveUsd(thanChainId);
+  return CHAIN_IDS.filter(id => gaslessChain(id) && feeReserveUsd(id) < here)
+    .sort((a, b) => feeReserveUsd(a) - feeReserveUsd(b))
+    .map(id => ({ id, name: CHAINS[id].name, feeUsd: feeReserveUsd(id) * 2 }));
+}
 export function chain(id: number) { const c = CHAINS[id as ChainId]; if (!c) throw new Error("Unsupported EVM chain. Choose Ethereum, Base, Arbitrum, Optimism, or Polygon."); return c; }
 export function address(value: unknown): string { if (typeof value !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(value)) throw new Error("Use an exact EVM token or wallet address."); return value.toLowerCase(); }
 export function tokenRef(value: TokenRef): TokenRef { chain(value.chainId); return { chainId: value.chainId, address: address(value.address) }; }

@@ -1,15 +1,15 @@
 // @vitest-environment happy-dom
-import { EYES } from "@/lib/socialtrading/face";
 import * as React from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { profileKey } from "../../lib/socialtrading/profile";
+import { DECK_SIZE, basePrediction, newOnboarding, nextPrediction } from "../../lib/socialtrading/onboarding";
 
 const session = vi.hoisted(() => ({ ready: true, authenticated: true, user: { id: "alice" } as { id: string } | null, login: vi.fn() }));
 const config = vi.hoisted(() => ({ configured: true }));
 const push = vi.hoisted(() => vi.fn());
-vi.mock("@privy-io/react-auth", () => ({ useSign7702Authorization: () => ({ signAuthorization: vi.fn() }), usePrivy: () => session, useLoginWithEmail: () => ({ sendCode: vi.fn(), loginWithCode: vi.fn(), state: { status: "initial" } }) }));
+vi.mock("@privy-io/react-auth", () => ({ useSign7702Authorization: () => ({ signAuthorization: vi.fn() }), usePrivy: () => session, getAccessToken: vi.fn(async () => null), useLoginWithEmail: () => ({ sendCode: vi.fn(), loginWithCode: vi.fn(), state: { status: "initial" } }) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }), usePathname: () => "/" }));
 vi.mock("../providers", () => ({ usePrivyConfigured: () => config.configured }));
 import { SocialTrading, ProfileFlow } from "./social-trading";
@@ -23,6 +23,7 @@ beforeEach(() => {
     addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn(),
   }));
   localStorage.clear();
+  window.history.replaceState({}, "", "/?onboarding=tree");
   config.configured = true;
   Object.assign(session, { ready: true, authenticated: true, user: { id: "alice" } });
   push.mockClear();
@@ -68,136 +69,126 @@ it("keeps profile fields hidden until an authenticated session is ready", async 
   expect(container.textContent).toContain("Sign-in is unavailable");
 });
 
-it("completes the compact flow with explicit automatic limits, then saves before exploring", async () => {
-  await render();
-  expect(container.querySelector("#interest-search")).toBeNull();
-  expect(container.querySelector('input[type="radio"]')).toBeNull();
-  expect(container.querySelector("[aria-label='Step 1 of 3']")).not.toBeNull();
-  expect(container.textContent).toContain("Your agent is learning you");
-  expect(container.textContent).toContain("Badge attributes");
-  await click("Continue");
-  expect(container.textContent).toContain("Choose how much you know");
-  await setRange("Investment knowledge", "4");
-  await click("Continue");
-  await type("textarea", "AI infrastructure will grow.");
-  await click("Continue");
-  expect(container.querySelector("[aria-label='Step 3 of 3']")).not.toBeNull();
-  expect(container.querySelector("#interest-search")).toBeNull();
-  expect(container.textContent).toContain("Eyes · Spectacles");
-  // Spectacles are one path now, so the creature can morph the badge's own eyes.
-  expect(container.querySelector(`svg path[d="${EYES[3]}"]`)).not.toBeNull();
-  await act(async () => (container.querySelector('input[value="automatic"]') as HTMLInputElement).click());
+/** The two shared foundations, then the opening AI chart and the map. Everyone
+ * lands on the same base questions before the deck starts branching. */
+async function foundation(level = "Experienced", confidence = "I know what I believe") {
+  await click(confidence); await click("Continue"); await click(level); await click("Continue");
+  await place("Society and work", "84", "6"); await click("Continue");
+  await click("Continue");   // Past the map, which nobody has to fill in.
+}
+/** Places the dot on whichever chart is asking about `category`. */
+async function place(category: string, sure: string, years: string) {
+  await setRange(`How sure you are: ${category}`, sure);
+  await setRange(`How far ahead you are looking: ${category}`, years);
+}
+/** Throws every branching card the run offers, all the same way. */
+async function sweep(label = "Not sure") {
+  for (let i = 0; i < DECK_SIZE; i++) await click(label);
+}
+/** The first card the deck picks after a given opening answer. */
+const branch = (...priors: { id: string; category: string; text: string; direction: "yes" | "no" | "unsure" }[]) =>
+  nextPrediction({ ...newOnboarding(), responses: priors }, 3)!;
+const opening = (direction: "yes" | "no" = "yes") => ({ ...basePrediction(3), direction });
+async function uncertain() {
+  await sweep();
+  // The opening AI view is the only decided one left to carry the thesis.
+  await click("AI"); await click("Continue");
+  await click("I’m open to everything"); await click("Continue");
+}
+it("requires explicit foundation answers and carries only the views that were actually taken", async () => {
+  await render(); await click("Continue");
+  expect(container.textContent).toContain("Choose how clear");
+  await foundation("Unknown grounds", "I’m here to explore");
+  await uncertain();
+  expect(container.textContent).toContain("Your outlook. Your rules.");
   await click("Meet my agent");
-  expect(container.textContent).toContain("Enter a positive USD amount");
-  const inputs = container.querySelectorAll('input[type="number"]');
-  for (const [index, value] of ["25", "100", "500"].entries()) {
-    inputs[index].id = `limit-${index}`;
-    await type(`#limit-${index}`, value);
-  }
+  expect(container.textContent).toContain("Choose how your agent should act");
+  await act(async () => (container.querySelector('input[value="notify"]') as HTMLInputElement).click());
   await click("Meet my agent");
-  expect(push).toHaveBeenCalledWith("/");
   const saved = JSON.parse(localStorage.getItem(profileKey("alice"))!);
   expect(saved.completedAt).toBeTruthy();
-  expect(saved.step).toBe(6);
-  expect(saved.themes).toContain("ai");
-  session.user = { id: "bob" };
-  await render();
-  expect(container.textContent).toContain("How much do you know about investing?");
+  // Every card after the opening chart was answered "not sure", so the opening
+  // view is the only one allowed to shape the thesis or the themes.
+  expect(saved.themes).toEqual(["ai"]);
+  expect(saved.thesis).toContain(basePrediction(0).text);
+  expect(saved.thesis.split("\n")).toHaveLength(1);
+  expect(saved.investorAnswers.onboarding.responses).toHaveLength(DECK_SIZE + 1);
+  expect(push).toHaveBeenCalledWith("/");
 });
-
-
-it("lets experienced users write a thesis and restores their notification-only summary", async () => {
-  await render();
-  await setRange("Investment knowledge", "4");
+it("saves disagreement, confidence, horizon, own beliefs and reversible dislikes", async () => {
+  const complete = vi.fn();
+  await act(async () => root.render(<ProfileFlow userId="alice" persist={false} onComplete={complete} />));
+  await foundation();
+  // The first branching card is chosen from the AI answer, not read off a list.
+  const first = branch(opening());
+  await click("I don’t see it");
+  for (let i = 1; i < DECK_SIZE; i++) await click("Not sure");
+  await click(first.text); await type("textarea", "Healthcare can improve."); await click("Continue");
+  expect(container.textContent).toContain("Draw your prediction");
+  await place(first.category, "90", "11"); await click("Continue");
+  await click("Tobacco"); await click("Memecoins"); await click("Tobacco");
   await click("Continue");
-  await type("textarea", "Long-term energy demand.");
-  await click("Continue");
-  expect(container.querySelector('input[type="number"]')).toBeNull();
   await act(async () => (container.querySelector('input[value="notify"]') as HTMLInputElement).click());
   await click("Meet my agent");
-  await act(async () => root.unmount());
-  root = createRoot(container);
-  await render();
-  expect(container.textContent).toContain("Long-term energy demand.");
-  expect(container.textContent).toContain("Meet your agent");
+  const p = complete.mock.calls[0][0];
+  expect(p.thesis).toContain("I do not expect"); expect(p.thesis).toContain("90%");
+  expect(p.investorAnswers.onboarding.dislikes).toEqual(["Memecoins"]);
+  expect(p.investorAnswers.onboarding.responses.find((r: { id: string }) => r.id === first.id)).toMatchObject({ direction: "no", confidence: 90, years: 11 });
+  // The opening chart's own answer keeps the conviction it was given.
+  expect(p.investorAnswers.onboarding.responses[0]).toMatchObject({ id: basePrediction(3).id, direction: "yes", confidence: 84, years: 6 });
+  expect(localStorage.getItem(profileKey("alice"))).toBeNull();
 });
-
+it("puts the world map in front of everyone and keeps the countries", async () => {
+  const complete = vi.fn();
+  await act(async () => root.render(<ProfileFlow userId="alice" persist={false} onComplete={complete} />));
+  await click("I know what I believe"); await click("Continue");
+  await click("Experienced"); await click("Continue");
+  await place("Society and work", "70", "4"); await click("Continue");
+  expect(container.textContent).toContain("Where could conflict reshape markets?");
+  await click("Russia");
+  expect(container.textContent).toContain("1 country selected");
+  await type("textarea", "Energy security decides the decade."); await click("Continue");
+  await sweep(); await click("AI"); await click("Continue");
+  await click("I’m open to everything"); await click("Continue");
+  expect(container.textContent).toContain("Watching Russia");
+  await act(async () => (container.querySelector('input[value="notify"]') as HTMLInputElement).click());
+  await click("Meet my agent");
+  const p = complete.mock.calls[0][0];
+  expect(p.investorAnswers.conflictCountries).toEqual(["Russia"]);
+  expect(p.investorAnswers.geopoliticalThesis).toBe("Energy security decides the decade.");
+});
+it("skips the conviction chart when the opening chart already answered it", async () => {
+  await render(); await foundation();
+  await sweep();
+  // The AI view is the only decided one, and it already carries its conviction.
+  await click("AI"); await click("Continue");
+  expect(container.textContent).not.toContain("Draw your prediction");
+  expect(container.textContent).toContain("What doesn’t belong in your future?");
+});
+it("validates automatic limits and handles failed completion", async () => {
+  const complete = vi.fn().mockRejectedValue(new Error("network"));
+  await act(async () => root.render(<ProfileFlow userId="alice" persist={false} agentCreation onComplete={complete} />));
+  await foundation(); await uncertain();
+  await act(async () => (container.querySelector('input[value="automatic"]') as HTMLInputElement).click());
+  await click("Create agent"); expect(container.textContent).toContain("Enter a positive USD amount");
+  const inputs = container.querySelectorAll('input[type="number"]');
+  for (const [i, value] of ["25", "100", "500"].entries()) { inputs[i].id = `limit-${i}`; await type(`#limit-${i}`, value); }
+  await click("Create agent"); expect(complete).toHaveBeenCalledTimes(1); expect(container.textContent).toContain("Please try again");
+});
+it("restores a partial swipe deck and allows undo", async () => {
+  await render(); await foundation();
+  const first = branch(opening());
+  expect(container.textContent).toContain(first.text);
+  await click("I see it");
+  const second = branch(opening(), { ...first, direction: "yes" });
+  await act(async () => root.unmount()); root = createRoot(container); await render();
+  expect(container.textContent).toContain(second.text);
+  await click("Undo last swipe");
+  expect(container.textContent).toContain(first.text);
+});
 it("keeps users on their profile when browser storage fails", async () => {
-  await render();
-  await setRange("Investment knowledge", "4");
-  await click("Continue");
-  await type("textarea", "Infrastructure.");
-  await click("Continue");
+  await render(); await foundation(); await uncertain();
   await act(async () => (container.querySelector('input[value="notify"]') as HTMLInputElement).click());
   const save = vi.spyOn(localStorage, "setItem").mockImplementation(() => { throw new Error("Quota exceeded"); });
-  await click("Meet my agent");
-  expect(push).not.toHaveBeenCalled();
-  expect(container.textContent).toContain("Your profile could not be saved");
-  expect(container.textContent).not.toContain("Saved in this browser");
-  save.mockRestore();
-});
-
-it("creates a fresh agent from onboarding alone, without a name field, and without overwriting the existing profile", async () => {
-  localStorage.setItem(profileKey("alice"), "existing-profile");
-  const complete = vi.fn();
-  await act(async () => root.render(<ProfileFlow userId="alice" persist={false} agentCreation onComplete={complete} />));
-  expect(container.textContent).toContain("How much do you know about investing?");
-  await setRange("Investment knowledge", "4");
-  await click("Continue");
-  await type("textarea", "AI and healthcare will change the world");
-  await click("Continue");
-  await act(async () => (container.querySelector('input[value="notify"]') as HTMLInputElement).click());
-  await click("Create agent");
-  expect(complete).toHaveBeenCalledWith(expect.objectContaining({ thesis: "AI and healthcare will change the world", themes: ["ai", "healthcare"], permission: "notify", step: 6 }));
-  expect(localStorage.getItem(profileKey("alice"))).toBe("existing-profile");
-});
-
-it("guides newer investors through the short test and saves the answers for the agent", async () => {
-  await render();
-  await setRange("Investment knowledge", "1");
-  await click("Continue");
-  expect(container.textContent).toContain("What kind of change creates opportunity?");
-  await click("Human progress");
-  await click("Continue");
-  expect(container.textContent).toContain("How much should ethics and impact shape your investments?");
-  expect(container.textContent).not.toContain("responsible AI");
-  await setRange("How much should ethics and impact shape your investments?", "4");
-  expect(container.textContent).not.toContain("responsible AI");
-  await click("Continue");
-  expect(container.textContent).toContain("How important is responsible AI");
-  expect(container.textContent).toContain("Your 2031 prediction");
-  await setRange("How important is responsible AI to your outlook?", "3");
-  expect(container.textContent).not.toContain("AI safety");
-  await click("Continue");
-  expect(container.textContent).toContain("AI safety");
-  await click("AI safety");
-  await click("Continue");
-  await click("Precision medicine and AI");
-  await click("Continue");
-  const stored = JSON.parse(localStorage.getItem(profileKey("alice"))!);
-  expect(stored.investorAnswers).toMatchObject({ knowledge: 1, opportunityDrivers: ["Human progress"], esgPriority: 4, aiPriority: 3, technologies: ["AI safety"] });
-  expect(stored.thesis).toContain("Precision medicine and AI");
-  expect(container.textContent).toContain("How should your agent act?");
-});
-
-it("changes the novice path toward defense when impact is a low priority", async () => {
-  await render();
-  await setRange("Investment knowledge", "0");
-  await click("Continue");
-  await click("Resilience & security");
-  await click("Continue");
-  await setRange("How much should ethics and impact shape your investments?", "0");
-  expect(container.textContent).not.toContain("AI as a competitive advantage");
-  await click("Continue");
-  expect(container.textContent).toContain("AI as a strategic advantage");
-  await setRange("How important is AI as a strategic advantage?", "4");
-  await click("Continue");
-  expect(container.textContent).toContain("Defense technology");
-  await click("Defense technology");
-  await click("Continue");
-  expect(container.textContent).toContain("Where could conflict reshape markets?");
-  await click("Ukraine");
-  expect(JSON.parse(localStorage.getItem(profileKey("alice"))!).investorAnswers.conflictCountries).toContain("Ukraine");
-  await click("Continue");
-  expect(container.textContent).toContain("AI-enabled defense and cybersecurity");
+  await click("Meet my agent"); expect(push).not.toHaveBeenCalled(); expect(container.textContent).toContain("Your profile could not be saved"); save.mockRestore();
 });

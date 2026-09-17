@@ -1,14 +1,15 @@
 import "server-only";
 import { cryptoServices } from "./services";
 import { ownedWallet } from "./wallet";
-import { address, chain, CHAINS, NATIVE, parseUnits, swapRequest } from "./chains";
+import { address, chain, NATIVE, parseUnits, swapRequest } from "./chains";
 import { preflight, tokenDecimals, approvalTransaction, checkTransactionGas } from "./preflight";
+import { buildSwapBatch, gaslessChain } from "./batch";
 import { validatePermit, permitPayload } from "./permit";
 import { verifyTypedData } from "viem";
 import { tradePolicy } from "@/lib/socialtrading/policy";
 import { recordEvent } from "@/lib/socialtrading/personalization";
 import type { HubState, TradeInitiator, TradeIntent } from "@/lib/socialtrading/types";
-import type { SwapRequest, TokenDisplay } from "./types";
+import type { SwapBatch, SwapRequest, TokenDisplay, Transaction } from "./types";
 
 /** A proposal that was never signed goes stale: quotes, prices, and the user's intent all move. */
 export const PROPOSAL_TTL = 24 * 3600_000;
@@ -41,8 +42,8 @@ export async function proposeSwap(state: HubState, userId: string, input: SwapRe
   return trade;
 }
 
-/** User-initiated swap from human units. Decimals come from the valuation
- * provider, never from the client, and the amount is converted exactly. */
+/** User-initiated swap from human units. Decimals come from the chain
+ * contract, never from the client, and the amount is converted exactly. */
 export async function userSwap(state: HubState, userId: string, input: Record<string, unknown>, services = cryptoServices) {
   const chainId = Number(input.chainId); chain(chainId);
   const tokenIn = address(input.tokenIn), tokenOut = address(input.tokenOut), wallet = address(input.wallet);
@@ -61,7 +62,10 @@ export async function prepareSwap(state: HubState, userId: string, trade: TradeI
   if (Date.parse(trade.createdAt) < Date.now() - PROPOSAL_TTL) throw new Error("This proposal is more than a day old. Ask for a fresh one so the quote and limits are current.");
   if (trade.initiator !== "user" && state.agent && !state.agent.capabilities.includes("trading")) throw new Error("Trading is disabled for this agent.");
   await ownedWallet(userId, c.request.wallet);
-  const funds = await preflight(c.request);
+  // Circle's Paymaster covers the fee on every chain it is deployed to, so the
+  // wallet is never asked for native gas there.
+  const sponsored = gaslessChain(c.request.chainId);
+  const funds = await preflight(c.request, sponsored);
   if (c.display) {
     if (c.display.tokenIn.decimals !== null && c.display.tokenIn.decimals !== funds.inputDecimals) throw new Error("Token decimals changed. Request a new proposal.");
     c.display.tokenIn.decimals = funds.inputDecimals; c.display.tokenOut.decimals = funds.outputDecimals;
@@ -70,12 +74,14 @@ export async function prepareSwap(state: HubState, userId: string, trade: TradeI
   if (value > trade.value) throw new Error("The USD input value increased. Ask for a new swap proposal.");
   const policy = tradePolicy(state.profile, trade.value, state.trades.filter(t => t.id !== trade.id), true, Date.now(), trade.initiator ?? "agent");
   if (!policy.allowed) throw new Error(policy.reason);
-  const approval = await approvalTransaction(c.request);
+  // A sponsored swap carries its own approvals inside the batch, so there is no
+  // separate approval transaction to pay for, sign, or wait on.
+  const approval = sponsored ? null : await approvalTransaction(c.request);
   const at = new Date().toISOString();
   trade.approval = { decision: "approved", at }; trade.policy = { ...policy, at };
   if (approval) {
     await checkTransactionGas(approval);
-    await issue(trade, approval, "approval");
+    await issue(trade, { transaction: approval }, "approval");
     return { transaction: approval, step: c.step, expiresAt: c.expiresAt };
   }
   // Only quote after every required approval is confirmed.
@@ -87,23 +93,34 @@ export async function prepareSwap(state: HubState, userId: string, trade: TradeI
   return { permitData: quote.permitData, quoteId: c.quoteId, expiresAt: c.expiresAt, step: c.step };
 }
 
-async function issue(trade: TradeIntent, transaction: import('./types').Transaction, step: "approval" | "swap") {
+/** Hands the client exactly one thing to sign, and records exactly what was
+ * authorized. A batch settles as a user operation and has no transaction nonce
+ * of its own — the bundler owns ordering — so only the EOA path reserves one. */
+async function issue(trade: TradeIntent, payload: { transaction: Transaction } | { batch: SwapBatch }, step: "approval" | "swap") {
   const c = trade.crypto!;
-  const { rpc } = await import("./rpc");
-  transaction.nonce = await rpc<string>(transaction.chainId, "eth_getTransactionCount", [transaction.from, "pending"]);
-  if (!/^0x[0-9a-f]+$/i.test(transaction.nonce)) throw new Error("RPC returned an invalid transaction nonce.");
+  if ("transaction" in payload) {
+    const { rpc } = await import("./rpc");
+    payload.transaction.nonce = await rpc<string>(payload.transaction.chainId, "eth_getTransactionCount", [payload.transaction.from, "pending"]);
+    if (!/^0x[0-9a-f]+$/i.test(payload.transaction.nonce)) throw new Error("RPC returned an invalid transaction nonce.");
+  }
+  if (step === "swap" && c.expiresAt <= Date.now()) throw new Error("Quote expired. Request a fresh quote.");
   trade.status = "unknown";
-  c.phase = "issued"; c.step = step; c.transaction = transaction; c.batch = undefined; c.hash = undefined; c.userOpHash = undefined;
+  c.phase = "issued"; c.step = step; c.hash = undefined; c.userOpHash = undefined;
+  c.transaction = "transaction" in payload ? payload.transaction : undefined;
+  c.batch = "batch" in payload ? payload.batch : undefined;
   // An approval does not depend on a swap quote's lifetime.
   if (step === "approval") c.expiresAt = Date.now() + 300_000;
-  c.detail = step === "approval" ? "Token approval awaiting your wallet signature and onchain confirmation. This is not a purchase." : "Swap awaiting your wallet signature. Success requires onchain confirmation.";
+  c.detail = step === "approval" ? "Token approval awaiting your wallet signature and onchain confirmation. This is not a purchase."
+    : c.batch ? "Swap awaiting your wallet signature. The network fee comes out of your USDC. Success requires onchain confirmation."
+    : "Swap awaiting your wallet signature. Success requires onchain confirmation.";
 }
 
 export async function authorizeSwap(state: HubState, userId: string, trade: TradeIntent, quoteId: unknown, signature?: unknown) {
   const c = trade.crypto!;
   if (c.phase !== "authorizing" || !c.quote || c.quoteId !== quoteId || c.quote.expiresAt <= Date.now()) throw new Error("Quote expired or changed. Request a fresh quote.");
   await ownedWallet(userId, c.request.wallet);
-  await preflight(c.request);
+  const sponsored = gaslessChain(c.request.chainId);
+  await preflight(c.request, sponsored);
   const policy = tradePolicy(state.profile, trade.value, state.trades.filter(t => t.id !== trade.id), true, Date.now(), trade.initiator ?? "agent");
   if (!policy.allowed || (trade.initiator !== "user" && state.agent && !state.agent.capabilities.includes("trading"))) throw new Error("Trading authorization changed. Request a new proposal.");
   if (c.quote.permitData) {
@@ -111,10 +128,30 @@ export async function authorizeSwap(state: HubState, userId: string, trade: Trad
     if (typeof signature !== "string" || !/^0x[0-9a-f]{130}$/i.test(signature) || !await verifyTypedData({ ...permitPayload(c.quote.permitData), types: c.quote.permitData.types, address: c.request.wallet as `0x${string}`, signature: signature as `0x${string}` })) throw new Error("Invalid Permit2 signature for the selected wallet and quote.");
   }
   const transaction = await cryptoServices.execution.swap(c.quote, typeof signature === "string" ? signature : undefined);
-  await checkTransactionGas(transaction);
+  // The batch is built from the router call the quote produced, so the calldata
+  // the chain is later held to is the calldata authorized here and nothing else.
+  const batch = sponsored ? await buildSwapBatch(c.request, transaction) : null;
+  if (!batch) await checkTransactionGas(transaction);
   if (c.quote.expiresAt <= Date.now()) throw new Error("Quote expired. Request a fresh quote.");
-  await issue(trade, transaction, "swap");
+  await issue(trade, batch ? { batch } : { transaction }, "swap");
   c.quote = undefined;
   recordEvent(state, "trade", "Uniswap swap sent to your wallet for confirmation", undefined, trade.id);
-  return { transaction, step: c.step, expiresAt: c.expiresAt };
+  return { ...(batch ? { batch } : { transaction }), step: c.step, expiresAt: c.expiresAt };
+}
+
+/** A retry reuses the exact issued calldata AND nonce; it can never execute twice.
+ * No new quote or transaction is issued while a broadcast outcome is uncertain. */
+export async function resumeSwap(state: HubState, userId: string, trade: TradeIntent) {
+  const c = trade.crypto!;
+  if (c.phase !== "issued" || c.hash || c.batch || !c.transaction?.nonce) throw new Error("Recover the transaction hash from your wallet and check its status.");
+  if (c.expiresAt <= Date.now()) throw new Error("Quote expired. Recover the transaction status; do not resend this transaction.");
+  await ownedWallet(userId, c.request.wallet);
+  await preflight(c.request, gaslessChain(c.request.chainId));
+  const policy = tradePolicy(state.profile, trade.value, state.trades.filter(t => t.id !== trade.id), true, Date.now(), trade.initiator ?? "agent");
+  if (!policy.allowed || (trade.initiator !== "user" && state.agent && !state.agent.capabilities.includes("trading"))) throw new Error("Trading authorization changed.");
+  const { rpc } = await import("./rpc");
+  const nonce = await rpc<string>(c.request.chainId, "eth_getTransactionCount", [c.request.wallet, "pending"]);
+  if (BigInt(nonce) !== BigInt(c.transaction.nonce)) throw new Error("A wallet transaction is already pending or confirmed. Recover its hash before continuing.");
+  await checkTransactionGas(c.transaction);
+  return { transaction: c.transaction, step: c.step, expiresAt: c.expiresAt };
 }

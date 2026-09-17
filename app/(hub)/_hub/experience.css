@@ -1,0 +1,39 @@
+/* Clear actions and a conversation that uses the available viewport. */
+.hub-buy-primary { display: inline-flex; align-items: center; justify-content: center; gap: 24px; padding: 14px 25px; min-height: 48px; border: 1px solid #165bd4; border-radius: 14px; background: #2168eb; color: #fff; font-size: 15px; font-weight: 650; box-shadow: 0 5px 16px #2168eb30, inset 0 1px #ffffff30; cursor: pointer; transition: background .2s, box-shadow .2s; }
+.hub-buy-primary:hover { background: #1555ce; box-shadow: 0 7px 22px #2168eb40; }
+.hub-buy-primary:focus-visible { outline: 3px solid #8cb8ff; outline-offset: 4px; }
+.hub-detail-price .hub-buy-primary { margin-top: 14px; min-width: 180px; }
+.hub-asset-actions .hub-buy-primary { min-height: 36px; padding: 8px 18px; font-size: 12px; }
+.socialtrading-main.is-hub:has(.hub-home) { padding-block: 14px 12px; }
+.hub-home .hub-conversation { height: var(--conversation-height, calc(100dvh - 102px)); min-height: 280px; max-height: none; }
+.hub-conversation .hub-messages:has(.hub-welcome) { display: flex; align-items: center; }
+.hub-conversation .hub-welcome { width: min(100%, 820px); margin: auto; justify-items: center; text-align: center; padding: 30px 12px; gap: 14px; }
+.hub-welcome .landing-section-title { font-size: clamp(25px, 3vw, 38px); letter-spacing: -.035em; }
+.hub-agent-ready { display: flex; align-items: center; gap: 7px; color: #526456; font-size: 11px; }
+.hub-agent-ready > span { width: 6px; height: 6px; border-radius: 50%; background: #3e9660; box-shadow: 0 0 0 4px #3e966010; }
+.hub-welcome-presence { position: relative; display: grid; place-items: center; width: 104px; height: 100px; border-radius: 30px; background: radial-gradient(ellipse, var(--id-accent-soft, #e5efff), transparent 70%); }
+.hub-welcome-presence .hub-welcome-badge { margin: 0; }
+.hub-welcome-presence:hover { filter: brightness(1.05); }
+.hub-query-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; text-align: left; margin-top: 12px; }
+.hub-query-grid button { border: 1px solid #e2e9f2; text-align: left; border-radius: 16px; padding: 17px 19px; background: #ffffffcf; cursor: pointer; transition: border-color .2s, background .2s; }
+.hub-query-grid button:hover { background: #f5f9ff; border-color: #a9c8f5; }
+.hub-query-grid button:disabled { opacity: .5; cursor: default; }
+.hub-query-grid strong { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; font-weight: 550; color: #263c58; }
+.hub-query-grid strong > span { color: #5682bb; }
+.hub-query-grid button > span { display: block; font-size: 11px; line-height: 1.6; color: #758195; margin-top: 6px; }
+.hub-why-trigger { display: inline-flex; width: fit-content; background: transparent; border: 0; padding: 6px 0; color: #798596; font-size: 11px; cursor: help; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 4px; }
+.hub-why-trigger:hover, .hub-why-trigger:focus-visible { color: #326fbb; }
+@media (prefers-reduced-motion: no-preference) {
+  .hub-welcome-presence { animation: agent-welcome 600ms ease-out both; }
+  .hub-welcome-presence .hub-welcome-badge { animation: agent-breathe 5s ease-in-out infinite; }
+  @keyframes agent-breathe { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-5px) rotate(2deg); } }
+  @keyframes agent-welcome { from { opacity: 0; transform: translateY(8px) scale(.9); } to { opacity: 1; transform: none; } }
+}
+@media (max-width: 600px) {
+  .hub-home .hub-conversation { height: var(--conversation-height, calc(100dvh - 140px)); min-height: 280px; }
+  .hub-conversation .hub-welcome { padding: 18px 0; }
+  .hub-query-grid { gap: 8px; }
+  .hub-query-grid button { padding: 12px; }
+  .hub-query-grid button > span { display: none; }
+  .hub-detail-price .hub-buy-primary { min-width: 135px; padding: 12px 18px; }
+}

@@ -48,8 +48,9 @@ export function profileSummary(state: HubState) {
       technologies: p.investorAnswers.technologies,
       geopoliticalOutlook: { countries: p.investorAnswers.conflictCountries, thesis: p.investorAnswers.geopoliticalThesis },
       fiveToTenYearView: p.investorAnswers.futureVision,
+      ...(p.investorAnswers.onboarding ? { futureOutlook: p.investorAnswers.onboarding } : {}),
     },
-    preferences: state.preferences, showLess: state.dislikes, mode: PERMISSIONS[p.permission], permissions: describeLimits(p),
+    preferences: state.preferences, showLess: [...new Set([...state.dislikes, ...(p.investorAnswers.onboarding?.dislikes ?? [])])], mode: PERMISSIONS[p.permission], permissions: describeLimits(p),
     inferred: state.inferred.filter(i => i.confidence >= .25).sort((a, b) => Math.abs(b.weight * b.confidence) - Math.abs(a.weight * a.confidence)).slice(0, 12)
       .map(i => ({ id: isThemeId(i.id) ? themeName(i.id) : i.id, interest: `${Math.round(i.weight * 100)}%`, confidence: `${Math.round(i.confidence * 100)}%`, signals: i.count })),
     inferredThemes: inferredThemes(state).map(themeName),

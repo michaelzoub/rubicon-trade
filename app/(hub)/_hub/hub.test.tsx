@@ -12,6 +12,9 @@ const privy = vi.hoisted(() => ({ sendTransaction: vi.fn(), linkWallet: vi.fn(),
 // Signing is exercised against viem in lib/crypto/aa.test.ts; here we only care
 // that the card hands the bundler exactly the batch the server authorized.
 const gasless = vi.hoisted(() => ({ sendSwapBatch: vi.fn() }));
+/** Which shape the server authorizes for the next prepare: a sponsored batch or
+ * a transaction the wallet funds itself. */
+const authorized = vi.hoisted(() => ({ sponsored: false }));
 vi.mock("@/lib/crypto/gasless", () => ({ sendSwapBatch: gasless.sendSwapBatch }));
 const BATCH = { chainId: 8453, sender: "0x1111111111111111111111111111111111111111", paymaster: "circle-usdc",
   calls: [{ to: "0x2222222222222222222222222222222222222222", value: "0", data: "0xabcdef" }], callData: "0xb61d27f6" };
@@ -33,7 +36,9 @@ vi.mock("./client", async importOriginal => {
       searchTokens: async (_t: unknown, q: string) => ({ tokens: PREVIEW_TOKENS.filter(t => t.symbol.toLowerCase().includes(q.toLowerCase())) }),
       crypto: async (_t: unknown, _r: number, body: Record<string, unknown>) => {
         events.posted.push(body);
-        if (body.action === "prepare") return { state: { ...PREVIEW_STATE, revision: 13 }, transaction: { chainId: 8453, from: BATCH.sender, ...BATCH.calls[0] }, step: "swap", expiresAt: Date.now() + 60_000 };
+        if (body.action === "prepare") return authorized.sponsored
+          ? { state: { ...PREVIEW_STATE, revision: 13 }, batch: BATCH, step: "swap", expiresAt: Date.now() + 60_000 }
+          : { state: { ...PREVIEW_STATE, revision: 13 }, transaction: { chainId: 8453, from: BATCH.sender, ...BATCH.calls[0] }, step: "swap", expiresAt: Date.now() + 60_000 };
         if (body.action === "propose") return { state: { ...PREVIEW_STATE, revision: 14 }, tradeId: "t2" };
         return { state: { ...PREVIEW_STATE, revision: 15 } };
       },
@@ -128,7 +133,7 @@ it("streams a reply with rich parts and animates the profile card from the persi
     { type: "state", state: persisted }, { type: "done" },
   ];
   await render(fresh);
-  expect(container.textContent).toContain("I’ve read your thesis");
+  expect(container.textContent).toContain("what’s on your mind?");
   await type("I’m becoming more interested in nuclear");
   await act(async () => { container.querySelector("form.hub-composer")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
   await act(async () => { await new Promise(r => setTimeout(r, 10)); });
@@ -158,11 +163,30 @@ it("adds the Rubicon-blue priority treatment only to high-importance cards", asy
   expect(container.querySelector('[data-asset="OKLO"]')?.classList.contains("hub-priority-card")).toBe(false);
 });
 
+it("sends a sponsored batch to the bundler instead of asking the wallet for gas", async () => {
+  authorized.sponsored = true;
+  privy.sendTransaction.mockImplementation(async ({ method }: { method: string }) =>
+    method === "eth_chainId" ? "0x2105" : method === "eth_accounts" ? [BATCH.sender] : method === "eth_call" ? `0x${"3b9aca00".padStart(64, "0")}` : "0x0"); // USDC, and no ETH at all
+  gasless.sendSwapBatch.mockResolvedValue({ userOpHash: `0x${"cd".repeat(32)}`, hash: `0x${"ab".repeat(32)}` });
+  await render(PREVIEW_STATE);
+  const card = Array.from(container.querySelectorAll(".hub-trade--crypto")).at(-1)!;
+  expect(card.textContent).toContain("network fee paid in USDC");
+  const sign = Array.from(card.querySelectorAll("button")).find(b => b.textContent === "Review & sign in wallet")!;
+  await act(async () => sign.click());
+  await act(async () => { await new Promise(r => setTimeout(r, 10)); });
+  // The batch the server authorized, byte for byte, and nothing the wallet pays for.
+  expect(gasless.sendSwapBatch).toHaveBeenCalledWith(expect.objectContaining({ batch: BATCH }));
+  expect(privy.sendTransaction).not.toHaveBeenCalledWith(expect.objectContaining({ method: "eth_sendTransaction" }));
+  // Both references are recorded: the operation identifies it inside the bundler's transaction.
+  expect(events.posted).toContainEqual(expect.objectContaining({ action: "submitted", tradeId: "t2", hash: `0x${"ab".repeat(32)}`, userOpHash: `0x${"cd".repeat(32)}` }));
+  authorized.sponsored = false;
+});
+
 it("shows an onchain swap in human units and walks prepare → sign → submitted → status", async () => {
   privy.sendTransaction.mockImplementation(async ({ method }) => {
     if (method === "eth_chainId") return "0x2105";
     if (method === "eth_accounts") return [BATCH.sender];
-    if (method === "eth_call") return "0x3b9aca00";
+    if (method === "eth_call") return `0x${"3b9aca00".padStart(64, "0")}`;
     if (method === "eth_estimateGas") return "0x186a0";
     if (method === "eth_gasPrice") return "0x1";
     if (method === "eth_sendTransaction") return `0x${"ab".repeat(32)}`;
@@ -185,6 +209,26 @@ it("shows an onchain swap in human units and walks prepare → sign → submitte
   const actions = events.posted.filter((p): p is { action: string } => typeof (p as { action?: unknown }).action === "string").map(p => p.action);
   expect(actions).toEqual(["prepare", "submitted", "status"]);
   expect(events.posted).toContainEqual(expect.objectContaining({ action: "submitted", tradeId: "t2", hash: `0x${"ab".repeat(32)}` }));
+});
+
+it("explains that a small mainnet buy is blocked by the fee, not by the price", async () => {
+  // The exact case from the field: plenty of USDC for the purchase, nowhere near
+  // enough for Ethereum gas, and the panel used to quote Base's fee at them.
+  privy.sendTransaction.mockImplementation(async ({ method }: { method: string }) =>
+    method === "eth_chainId" ? "0x1" : method === "eth_accounts" ? [PREVIEW_WALLET] : method === "eth_call" ? `0x${(3340000).toString(16)}` : "0x0"); // 3.34 USDC, no ETH
+  await render(PREVIEW_STATE, <TradeView />);
+  await setValue(container.querySelector("#buy-search") as HTMLInputElement, "pepe");
+  await act(async () => { await new Promise(r => setTimeout(r, 350)); });
+  await act(async () => (Array.from(container.querySelectorAll(".hub-buy-result")).find(b => b.textContent?.includes("PEPE")) as HTMLElement).click());
+  await setValue(container.querySelector("#buy-amount") as HTMLInputElement, "0.2");
+  await act(async () => { await new Promise(r => setTimeout(r, 10)); });
+  // The fee quoted is Ethereum's, never the default chain's.
+  expect(container.textContent).toContain("up to $16");
+  expect(container.textContent).not.toContain("$0.5 is held back");
+  expect(container.textContent).toContain("the network fee on Ethereum is up to $16");
+  // And it points somewhere the same money would actually work.
+  expect(container.textContent).toMatch(/on (Base|Arbitrum|Optimism|Polygon) costs about \$/);
+  expect((container.querySelector(".hub-buy-submit") as HTMLButtonElement).disabled).toBe(true);
 });
 
 it("tells the buyer what is missing instead of letting a short balance reach the wallet", async () => {
@@ -457,8 +501,9 @@ it("leaves Home calm, and keeps the thesis in what reaching for something reveal
   expect(container.querySelector(".wv-thesis")).toBeNull();
   expect(container.querySelector(".hub-home")?.children.length).toBeLessThanOrEqual(2);
 
-  // It is still here: what the agent said reveals the belief behind it.
-  const said = Array.from(container.querySelectorAll<HTMLElement>(".hub-row.is-assistant .hub-row-content"));
+  // Explanations are attached to a deliberate control, not the whole message.
+  expect(container.querySelector(".hub-row-content[aria-describedby]")).toBeNull();
+  const said = Array.from(container.querySelectorAll<HTMLElement>(".hub-row.is-assistant .hub-why-trigger"));
   expect(said.length).toBeGreaterThan(0);
   expect(said.some(node => node.getAttribute("aria-describedby") === GLOSS_ID)).toBe(true);
   // And it is reachable without a pointer.

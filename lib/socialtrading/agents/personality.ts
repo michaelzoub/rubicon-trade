@@ -54,6 +54,8 @@ export function agentVoice(state: HubState): string {
     a.technologies.length ? `Be fluent in ${list(a.technologies)}.` : "",
     a.geopoliticalThesis ? `Their geopolitical read: “${a.geopoliticalThesis.slice(0, 240)}”.` : a.conflictCountries.length ? `They watch ${list(a.conflictCountries, 8)} geopolitically.` : "",
     a.futureVision && a.futureVision !== p.thesis ? `Their five to ten year view: “${a.futureVision.slice(0, 240)}”.` : "",
+    a.onboarding ? `Their confidence in their beliefs is ${["exploratory", "a few hunches", "some clear views", "strong convictions"][a.onboarding.confidence ?? 0]}. ${ (a.onboarding.confidence ?? 0) < 2 ? "Offer possibilities without presenting them as established beliefs." : "Start from their stated views and test the assumptions behind them." }` : "",
+    a.onboarding?.dislikes.length ? `Strong dislikes (preferences, not hard trading restrictions): ${a.onboarding.dislikes.join(", ")}.` : "",
     STANCE[p.permission],
     state.preferences.length ? `Lean into what they have said they care about: ${list(state.preferences)}.` : "",
     state.dislikes.length ? `Go easy on what they asked to see less of: ${list(state.dislikes)}.` : "",

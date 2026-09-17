@@ -91,5 +91,8 @@ export type ModelToolCall = { id: string; type: "function"; function: { name: st
 
 /** One non-streaming chat completion with tool calling. `usage` is what the provider reported, for the credits ledger. */
 export interface ModelClient {
-  complete(input: { messages: ModelMessage[]; tools: ToolSchema[]; toolChoice: "auto" | "none"; signal?: AbortSignal }): Promise<{ content: string; toolCalls: ModelToolCall[]; usage?: import("../credits").ModelUsage }>;
+  complete(input: { messages: ModelMessage[]; tools: ToolSchema[]; toolChoice: "auto" | "none"; signal?: AbortSignal;
+    /** Output budget. Defaults to the agent loop's; a caller that returns one
+     * small object should ask for less, so a thin balance still affords it. */
+    maxTokens?: number }): Promise<{ content: string; toolCalls: ModelToolCall[]; usage?: import("../credits").ModelUsage }>;
 }

@@ -1,12 +1,10 @@
 import "server-only";
-import { address, NATIVE } from "./chains";
+import { address, gaslessChain, NATIVE } from "./chains";
 import { rpc } from "./rpc";
 import { CIRCLE_PAYMASTER, encodeAccountCalls, erc20AllowanceData, erc20ApproveData, PERMIT2, permit2AllowanceData, permit2ApproveData } from "./aa";
 import type { Call, SwapBatch, SwapRequest, Transaction } from "./types";
 
-/** Circle's Paymaster is deployed at the same address on every chain we support,
- * so the only question is whether the user is paying with the USDC it accepts. */
-export const gaslessChain = (chainId: number) => [1, 10, 137, 8453, 42161].includes(chainId);
+export { gaslessChain };
 
 /** Permit2 allowances carry their own expiry. Long enough that a user can read the
  * card and sign, short enough that an abandoned approval lapses on its own. */

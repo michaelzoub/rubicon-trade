@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { PersonStanding } from "lucide-react";
-import { CONFIDENCE, EXPERIENCE, EXPERIENCE_NOTES } from "@/lib/socialtrading/onboarding";
+import { CONFIDENCE, EXPERIENCE } from "@/lib/socialtrading/onboarding";
 
 export const clamp = (value: number, min = 0, max = 1) => Math.max(min, Math.min(max, value));
 export const intervalAt = (position: number) => Math.min(3, Math.floor(clamp(position) * 4));
@@ -92,7 +92,8 @@ export function SmoothRange({ value, min = 0, max = 1, label, valueText, onChang
 }
 
 /** Continuous position on a four-stop scale. The traveler follows the pointer
- * exactly; the stop it currently falls in is what gets highlighted and saved. */
+ * exactly; the stop it falls in is what gets highlighted and saved. The four
+ * stops sit on the track itself, so tapping and dragging are the same control. */
 export function FoundationScale({ kind, value, onChange }: { kind: "clarity" | "knowledge"; value: number | null; onChange: (value: number) => void }) {
   const [position, setPosition] = useState(value === null ? 0 : intervalCenter(Math.min(3, value)));
   const labels = kind === "clarity" ? CONFIDENCE : EXPERIENCE;
@@ -102,13 +103,13 @@ export function FoundationScale({ kind, value, onChange }: { kind: "clarity" | "
   const scene = useDrag<HTMLDivElement>({ min: 0, max: 1, value: position, onChange: change }, null, { pad: 24 });
   const { dragging, ...sceneHandlers } = scene;
   const trailY = (p: number) => 96 - 38 * Math.sin(p * 4 * Math.PI);
-  return <>
-    <div className={`onb-scene is-${kind}`} data-dragging={dragging || undefined} style={{ "--position": position, "--clarity": position * 3 } as CSSProperties} {...sceneHandlers} aria-hidden="true">
+  return <div className={`onb-scale is-${kind}`} data-set={selected === null ? undefined : ""}>
+    <div className="onb-scene" data-dragging={dragging || undefined} style={{ "--position": position, "--clarity": position * 3 } as CSSProperties} {...sceneHandlers} aria-hidden="true">
       {kind === "clarity" ? <>
         <div className="onb-focus-field">
-          <span className="onb-focus-line" style={{ "--i": 0 } as CSSProperties}>The future is a place you already have opinions about.</span>
-          <span className="onb-focus-line" style={{ "--i": 1 } as CSSProperties}>Some of it is still a blur. Some of it is already sharp.</span>
-          <span className="onb-focus-line" style={{ "--i": 2 } as CSSProperties}>Your agent starts from wherever you stand.</span>
+          <span className="onb-focus-line" style={{ "--i": 0 } as CSSProperties}>Some of the future is still a blur.</span>
+          <span className="onb-focus-line" style={{ "--i": 1 } as CSSProperties}>Some of it is already sharp.</span>
+          <span className="onb-focus-line" style={{ "--i": 2 } as CSSProperties}>Drag the lens to where you stand.</span>
         </div>
         <div className="onb-lens"><span /></div>
       </> : <>
@@ -116,48 +117,14 @@ export function FoundationScale({ kind, value, onChange }: { kind: "clarity" | "
           <path className="onb-trail-path" d="M40 96 Q135 20 230 96 T420 96 T610 96 T800 96" />
           {[.125, .375, .625, .875].map(p => <circle key={p} className={`onb-trail-stop${selected !== null && intervalAt(p) <= selected ? " is-passed" : ""}`} cx={40 + p * 760} cy={trailY(p)} r="4" />)}
         </svg>
-        <div className="onb-traveler" style={{ left: `${5 + position * 95}%`, top: `${trailY(position) / 160 * 100}%` }}><PersonStanding size={26} strokeWidth={1.6} /></div>
+        <div className="onb-traveler" style={{ left: `${7 + position * 86}%`, top: `${trailY(position) / 160 * 100}%` }}><PersonStanding size={26} strokeWidth={1.6} /></div>
       </>}
+      <span className="onb-scene-readout" aria-hidden="true">{current}</span>
     </div>
-    <SmoothRange className="onb-scale-control" label={kind === "clarity" ? "Clarity of your beliefs" : "Investment knowledge"} value={position} valueText={current} onChange={change} />
-    <div className="onb-state" role="status" aria-live="polite"><span className="mono">{selected === null ? "— / 04" : `0${selected + 1} / 04`}</span><strong>{current}</strong></div>
-    <div className={`onb-choices${kind === "knowledge" ? " has-notes" : ""}`}>{labels.map((label, i) => <button key={label} type="button" aria-pressed={selected === i} onClick={() => { setPosition(intervalCenter(i)); onChange(i); }}><span className="mono">0{i + 1}</span><strong>{label}</strong>{kind === "knowledge" && <small>{EXPERIENCE_NOTES[i]}</small>}</button>)}</div>
-  </>;
-}
-
-/** Each chip owns its pointer, so a drag never leaks into another chip's click. */
-export function DraggableDislike({ children, target, onRemove }: { children: ReactNode; target: React.RefObject<HTMLDivElement | null>; onRemove: () => void }) {
-  const [dragging, setDragging] = useState(false);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [over, setOver] = useState(false);
-  const gesture = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null);
-  const suppressClick = useRef(false);
-  function reset() { gesture.current = null; setDragging(false); setOver(false); setPosition({ x: 0, y: 0 }); target.current?.classList.remove("is-receiving"); }
-  return <button type="button" className={`${dragging ? "is-dragging" : ""}${over ? " is-over-hole" : ""}`} style={{ transform: `translate3d(${position.x}px, ${position.y}px, 0)` }}
-    onClick={event => { if (suppressClick.current) { event.preventDefault(); suppressClick.current = false; return; } onRemove(); }}
-    onPointerDown={event => {
-      if (event.button !== 0 || gesture.current) return;
-      suppressClick.current = false;
-      gesture.current = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
-      event.currentTarget.setPointerCapture(event.pointerId); setDragging(true);
-    }}
-    onPointerMove={event => {
-      const g = gesture.current; if (!g || g.id !== event.pointerId) return;
-      const x = event.clientX - g.x, y = event.clientY - g.y;
-      if (Math.hypot(x, y) > 4) g.moved = true;
-      setPosition({ x, y });
-      const r = target.current?.getBoundingClientRect();
-      const inside = !!r && event.clientX >= r.left && event.clientX <= r.right && event.clientY >= r.top && event.clientY <= r.bottom;
-      setOver(inside); target.current?.classList.toggle("is-receiving", inside);
-    }}
-    onPointerUp={event => {
-      const g = gesture.current; if (!g || g.id !== event.pointerId) return;
-      suppressClick.current = g.moved;
-      const r = target.current?.getBoundingClientRect();
-      const inside = g.moved && r && event.clientX >= r.left && event.clientX <= r.right && event.clientY >= r.top && event.clientY <= r.bottom;
-      reset(); if (inside) onRemove();
-    }}
-    onPointerCancel={() => { suppressClick.current = true; reset(); }}
-    onLostPointerCapture={() => { if (gesture.current) { suppressClick.current = true; reset(); } }}
-  >{children}</button>;
+    <div className="onb-track">
+      <SmoothRange label={kind === "clarity" ? "Clarity of your beliefs" : "Investment knowledge"} value={position} valueText={current} onChange={change} />
+      <div className="onb-stops">{labels.map((label, i) => <button key={label} type="button" aria-pressed={selected === i} onClick={() => { setPosition(intervalCenter(i)); onChange(i); }}><i aria-hidden="true" /><span>{label}</span></button>)}</div>
+    </div>
+    <p className="sr-only" role="status" aria-live="polite">{current}</p>
+  </div>;
 }

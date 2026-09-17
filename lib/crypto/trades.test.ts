@@ -7,6 +7,8 @@ vi.mock("./wallet", () => ({ ownedWallet: mocks.ownedWallet }));
 vi.mock("./services", () => ({ cryptoServices: { execution: { quote: mocks.quote, approval: mocks.approval, swap: mocks.swap }, valuation: { value: mocks.value }, defi: { price: mocks.price }, metadata: { contract: mocks.contract } } }));
 vi.mock("./rpc", () => ({ rpc: mocks.rpc }));
 import { proposeSwap, prepareSwap, authorizeSwap, userSwap } from "./trades";
+import { encodeAccountCalls } from "./aa";
+import { gaslessChain } from "./chains";
 const req = { chainId: 1, wallet: "0x1111111111111111111111111111111111111111", tokenIn: "0x2222222222222222222222222222222222222222", tokenOut: "0x3333333333333333333333333333333333333333", amount: "1000000", slippageBps: 50 };
 function state(permission: "automatic" | "approve" | "notify" = "approve"): HubState { return { revision: 0, profile: { ...newProfile("alice"), permission, permissionConfigured: true, limits: { perTrade: "100", daily: "100", weekly: "100" } }, trades: [], messages: [], events: [], dislikes: [], preferences: [], inferred: [], signals: [] }; }
 beforeEach(() => {
@@ -107,5 +109,40 @@ describe("user-initiated swaps", () => {
     const s = state("notify"); s.agent = { id: "default", name: "A", description: "", capabilities: ["market"], createdAt: "" };
     const t = await userSwap(s, "alice", input);
     const prepared = await prepareSwap(s, "alice", t); await authorizeSwap(s, "alice", t, prepared.quoteId); expect(t.crypto?.phase).toBe("issued");
+  });
+});
+
+describe("gas sponsorship", () => {
+  it("issues one sponsored batch instead of a transaction the wallet must fund", async () => {
+    expect(gaslessChain(req.chainId)).toBe(true);
+    const s = state(), t = await proposeSwap(s, "alice", req, "test");
+    const prepared = await prepareSwap(s, "alice", t);
+    // No separate approval to fund and sign first: it rides inside the batch.
+    expect(prepared.transaction).toBeUndefined();
+    expect(mocks.approval).not.toHaveBeenCalled();
+    const authorized = await authorizeSwap(s, "alice", t, prepared.quoteId);
+    const batch = authorized.batch!;
+    expect(batch.paymaster).toBe("circle-usdc");
+    expect(batch.sender).toBe(req.wallet);
+    expect(authorized.transaction).toBeUndefined();
+    // What the chain is later held to is what was authorized here.
+    expect(batch.callData).toBe(encodeAccountCalls(batch.calls));
+    expect(batch.calls.at(-1)).toMatchObject({ to: req.tokenOut, data: "0x1234" });
+    expect(t.crypto?.batch).toEqual(batch);
+    expect(t.crypto?.transaction).toBeUndefined();
+    expect(t.crypto?.userOpHash).toBeUndefined();
+  });
+  it("never asks a sponsored wallet for native gas", async () => {
+    const s = state(), t = await proposeSwap(s, "alice", req, "test");
+    // An empty ETH balance is exactly the case sponsorship exists for.
+    mocks.rpc.mockImplementation(async (_chain: number, method: string, params?: [{ to: string; data: string }]) => {
+      if (method === "eth_chainId") return "0x1";
+      if (method === "eth_getBalance") return "0x0";
+      if (params?.[0]?.data === "0x313ce567") return `0x${(params[0].to === req.tokenIn ? 6 : 18).toString(16).padStart(64, "0")}`;
+      return `0x${(10n ** 25n).toString(16).padStart(64, "0")}`;
+    });
+    const prepared = await prepareSwap(s, "alice", t);
+    await expect(authorizeSwap(s, "alice", t, prepared.quoteId)).resolves.toMatchObject({ step: "swap" });
+    expect(t.crypto?.batch?.paymaster).toBe("circle-usdc");
   });
 });

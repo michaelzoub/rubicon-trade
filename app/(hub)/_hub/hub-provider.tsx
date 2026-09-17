@@ -238,7 +238,7 @@ export function HubProvider({ userId, name, initial, initialAccount = null, api:
   const mutate = useCallback(async (action: StateAction) => (await post(action))?.state ?? null, [post]);
 
   const selectChat = useCallback((id: string) => {
-    setActiveChatId(id); setPending(null); setLastChange(null);
+    setActiveChatId(id); setPending(null); setLastChange(null); setDraft("");
     try { localStorage.setItem(chatKey(userId, activeId.current), id); } catch { /* storage unavailable */ }
   }, [userId]);
   const newChat = useCallback(async () => {

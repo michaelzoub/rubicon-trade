@@ -18,9 +18,8 @@ const GlossContext = createContext<{
   hide: () => void;
 } | null>(null);
 
-/** How long a pointer must rest before anything appears. Short enough to feel
- * immediate, long enough that crossing a card does not flash a surface. */
-const INTENT = 90;
+/** A deliberate pause prevents explanations flashing while crossing controls. */
+const INTENT = 550;
 
 export const GLOSS_ID = "rubicon-gloss";
 
@@ -50,7 +49,6 @@ export function GlossProvider({ children }: { children: ReactNode }) {
   // A reveal belongs to a resting pointer. Anything that moves the page under
   // it, opens something over it, or asks for it to go, takes it away at once.
   useEffect(() => {
-    if (!active) return;
     const away = () => { clearTimeout(timer.current); setActive(null); window.dispatchEvent(new CustomEvent("rubicon:attend", { detail: null })); };
     const dismiss = (event: KeyboardEvent) => { if (event.key === "Escape") away(); };
     window.addEventListener("keydown", dismiss);
@@ -63,7 +61,7 @@ export function GlossProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("scroll", away, { capture: true });
       window.removeEventListener("resize", away);
     };
-  }, [active]);
+  }, []);
 
   const value = useMemo(() => ({ show, hide }), [show, hide]);
   return <GlossContext.Provider value={value}>{children}<GlossLayer active={active} /></GlossContext.Provider>;

@@ -15,10 +15,10 @@ import { LimitHint, UsagePill } from "./limits-ui";
 import { PartView } from "./parts";
 
 const STARTERS = [
-  "What happened in my world today?",
-  "Find me something related to my thesis",
-  "What new IPOs fit what I care about?",
-  "Why do you think I’d like this?",
+  { title: "Turn an idea into a plan", text: "I believe AI will change how we work. Help me explore investments connected to that idea and explain the risks in plain English." },
+  { title: "Give my agent a mission", text: "Help me set up an agent to watch the companies I care about. What should it look for, and when should it tell me?" },
+  { title: "Start small, understand first", text: "Walk me through how I could start investing with $100, what I could lose, and what I should understand before buying." },
+  { title: "Decide what I delegate", text: "What can a trading agent do for me, what needs my approval, and how do I stay in control?" },
 ];
 
 function Row({ message, name, agentName, seed, themes, learned, profile }: { profile: Parameters<typeof ProfileAvatar>[0]["profile"]; message: Message; name?: string; agentName?: string; seed: string; themes: Parameters<typeof ProfileAvatar>[0]["themes"]; learned: Parameters<typeof ProfileAvatar>[0]["inferred"] }) {
@@ -35,11 +35,12 @@ function Row({ message, name, agentName, seed, themes, learned, profile }: { pro
       {!user && <span className="hub-row-avatar" aria-hidden="true"><ProfileAvatar profile={profile} seed={seed} themes={themes} inferred={learned} className="hub-row-badge" /></span>}
       <div className="hub-row-body">
         <p className="hub-row-meta"><span>{user ? "You" : agentName ?? (name ? `${name}’s agent` : "Your agent")}</span><time dateTime={message.at}>{clock(message.at)}</time>{message.via === "background" && <em className="hub-row-via">Reached out</em>}</p>
-        <div className="hub-row-content" tabIndex={why ? 0 : undefined} {...gloss(why)}>
+        <div className="hub-row-content">
           {message.parts.map((part, i) => <PartView key={i} part={part} />)}
           {streaming && empty && <p className="hub-thinking" role="status" aria-live="polite"><span /><span /><span /></p>}
           {streaming && !empty && <span className="hub-caret" aria-hidden="true" />}
         </div>
+        {why && <button type="button" className="hub-why-trigger" {...gloss(why)}>Why you’re seeing this</button>}
       </div>
     </li>
   );
@@ -92,7 +93,8 @@ function ChatHead() {
 }
 
 export function Conversation() {
-  const { messages, send, stop, busy, draft, setDraft, userId, name, state, account, chats } = useHub();
+  const { messages, send, stop, busy, draft, setDraft, userId, name, state, account, chats, chat } = useHub();
+  const section = useRef<HTMLElement>(null);
   const list = useRef<HTMLOListElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const [stick, setStick] = useState(true);
@@ -101,8 +103,24 @@ export function Conversation() {
   const outOfCredits = !!account && account.credits.balanceMicros < account.credits.holdMicros;
 
   useLayoutEffect(() => {
+    const fit = () => {
+      const node = section.current;
+      if (!node) return;
+      const available = (window.visualViewport?.height ?? window.innerHeight) - node.getBoundingClientRect().top - 16;
+      node.style.setProperty("--conversation-height", `${Math.max(280, available)}px`);
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    window.visualViewport?.addEventListener("resize", fit);
+    return () => {
+      window.removeEventListener("resize", fit);
+      window.visualViewport?.removeEventListener("resize", fit);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
     if (!stick || !list.current) return;
-    list.current.scrollTop = list.current.scrollHeight;
+    list.current.scrollTop = messages.length ? list.current.scrollHeight : 0;
   }, [messages, stick]);
 
   useEffect(() => {
@@ -114,6 +132,8 @@ export function Conversation() {
     const frame = requestAnimationFrame(fit);
     return () => cancelAnimationFrame(frame);
   }, [draft]);
+
+  useEffect(() => { setDecision(null); setStick(true); }, [chat.id]);
 
   useEffect(() => { if (draft && input.current) input.current.focus(); }, [draft]);
 
@@ -128,16 +148,19 @@ export function Conversation() {
   }
 
   return (
-    <section className="hub-conversation" aria-label="Conversation with your agent">
+    <section ref={section} className="hub-conversation" aria-label="Conversation with your agent">
       {(chats.length > 1 || messages.length > 0 || account) && <ChatHead />}
       {decision && <DecisionSurface question={decision} onClose={() => setDecision(null)} />}
       <ol hidden={!!decision} ref={list} className="hub-messages" data-agent-region="conversation" data-agent-weight="3" onScroll={e => { const el = e.currentTarget; setStick(el.scrollHeight - el.scrollTop - el.clientHeight < 48); }}>
         {messages.length === 0 && (
-          <li className="hub-welcome">
+          <li key={chat.id} className="hub-welcome">
+            <div className="hub-agent-ready"><span />{state.agent?.name ?? "Your agent"} · Ready to explore</div>
+            <div className="hub-welcome-presence">
             <ProfileAvatar profile={state.profile} seed={state.agent?.id ?? userId} themes={state.profile.themes} inferred={learned} className="hub-welcome-badge" />
-            <h1 className="landing-section-title">{name ? `Hi ${name}.` : "Hi."} I’ve read your thesis.</h1>
-            <p>Ask me what’s moving, tell me what you’re curious about, or change anything about how I work. I’ll keep learning as we go.</p>
-            <div className="hub-starters">{STARTERS.map(s => <button key={s} type="button" className="hub-chip-button" disabled={outOfCredits} onClick={() => { setStick(true); void send(s); }}>{s}</button>)}</div>
+            </div>
+            <h1 className="landing-section-title">{name ? `${name}, what’s on your mind?` : "Big ideas. A small first step."}</h1>
+            <p>Bring your curiosity. We’ll connect it to the markets, unpack the risks, and decide what your agent should do next.</p>
+            <div className="hub-starters hub-query-grid">{STARTERS.map(s => <button key={s.title} type="button" disabled={busy || outOfCredits} onClick={() => { setStick(true); void send(s.text); }}><strong>{s.title}<span aria-hidden="true">↗</span></strong><span>{s.text}</span></button>)}</div>
           </li>
         )}
         {messages.map(message => <Row profile={state.profile} key={message.id} message={message} name={name} agentName={state.agent?.name} seed={state.agent?.id ?? userId} themes={state.profile.themes} learned={learned} />)}

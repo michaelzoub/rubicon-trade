@@ -1,3 +1,4 @@
+import { readOnboarding, type OnboardingAnswers } from "./onboarding";
 import { isThemeId, type ThemeId } from "./themes";
 
 export const ASSETS = [
@@ -17,6 +18,7 @@ export const PERMISSIONS = {
 export type Permission = keyof typeof PERMISSIONS;
 export type Limits = { perTrade: string; daily: string; weekly: string };
 export type InvestorAnswers = {
+  onboarding?: OnboardingAnswers;
   knowledge: number | null;
   guidedTest: boolean;
   opportunityDrivers: string[];
@@ -103,6 +105,7 @@ export function readProfile(raw: string | null, userId: string): InvestingProfil
     const rawAnswers = p.investorAnswers;
     const investorAnswers: InvestorAnswers = legacy ? { ...fresh.investorAnswers, knowledge: 4, futureVision: p.thesis }
       : rawAnswers && typeof rawAnswers === "object" ? {
+        onboarding: readOnboarding(rawAnswers.onboarding),
         knowledge: Number.isInteger(rawAnswers.knowledge) && rawAnswers.knowledge >= 0 && rawAnswers.knowledge <= 4 ? rawAnswers.knowledge : null,
         guidedTest: !!rawAnswers.guidedTest,
         opportunityDrivers: Array.isArray(rawAnswers.opportunityDrivers) ? rawAnswers.opportunityDrivers.filter((v: unknown): v is string => typeof v === "string").slice(0, 4) : [],

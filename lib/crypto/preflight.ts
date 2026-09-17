@@ -1,5 +1,6 @@
 import 'server-only';
-import { chain, NATIVE } from './chains';
+import { extraNetworkFee } from './network-fee';
+import { chain, feeCap, feeReserveUsd, NATIVE } from './chains';
 import { rpc } from './rpc';
 import { erc20AllowanceData, erc20ApproveData, PERMIT2 } from './aa';
 import type { SwapRequest, Transaction } from './types';
@@ -14,7 +15,10 @@ export async function tokenDecimals(chainId: number, token: string): Promise<num
   return decimals;
 }
 
-export async function preflight(r: SwapRequest) {
+/** `sponsored` means Circle's Paymaster will pay the network fee out of the
+ * wallet's USDC, so no native balance is needed — but the USDC that pays it
+ * still has to exist, and must not be the same USDC the swap is spending. */
+export async function preflight(r: SwapRequest, sponsored = false) {
   const net = chain(r.chainId);
   if (BigInt(await rpc<string>(r.chainId, 'eth_chainId', [])) !== BigInt(r.chainId)) throw new Error('RPC network mismatch.');
   const [inputDecimals, outputDecimals, native, balance, usdc] = await Promise.all([
@@ -25,7 +29,12 @@ export async function preflight(r: SwapRequest) {
   ]);
   for (const value of [native, balance, usdc]) if (!/^0x[0-9a-f]+$/i.test(value)) throw new Error('RPC returned an invalid balance.');
   if (BigInt(balance) < BigInt(r.amount)) throw new Error(`Insufficient ${r.tokenIn === net.usdc ? 'USDC' : 'input token'} on ${net.name} for ${r.wallet}. Funds on another chain cannot pay for this purchase.`);
-  if (BigInt(native) <= (r.tokenIn === NATIVE ? BigInt(r.amount) : 0n)) throw new Error(`Insufficient native gas. Add ${net.nativeSymbol} to ${r.wallet} on ${net.name}; gas sponsorship is not enabled.`);
+  if (sponsored) {
+    const spent = r.tokenIn === net.usdc ? BigInt(r.amount) : 0n;
+    if (BigInt(usdc) < spent + feeCap(r.chainId)) throw new Error(`Keep about $${feeReserveUsd(r.chainId) * 2} of USDC in ${r.wallet} on ${net.name} to cover the network fee. Unspent fee allowance is refunded.`);
+  } else if (BigInt(native) <= (r.tokenIn === NATIVE ? BigInt(r.amount) : 0n)) {
+    throw new Error(`Insufficient native gas. Add ${net.nativeSymbol} to ${r.wallet} on ${net.name}; gas sponsorship is not available on this network.`);
+  }
   return { inputDecimals, outputDecimals, native, usdc };
 }
 
@@ -48,5 +57,6 @@ export async function checkTransactionGas(tx: Transaction): Promise<void> {
     rpc<string>(tx.chainId, 'eth_getBalance', [tx.from, 'latest']),
   ]);
   if (BigInt(gas) <= 0n || BigInt(price) <= 0n) throw new Error('RPC gas estimate unavailable.');
-  if (BigInt(balance) < BigInt(tx.value) + BigInt(gas) * BigInt(price) * 2n) throw new Error(`Insufficient native gas. Add ${chain(tx.chainId).nativeSymbol} to ${tx.from} on ${chain(tx.chainId).name} before signing.`);
+  const extra = await extraNetworkFee(tx, BigInt(gas), (method, params) => rpc(tx.chainId, method, params));
+  if (BigInt(balance) < BigInt(tx.value) + (BigInt(gas) * BigInt(price) + extra) * 2n) throw new Error(`Insufficient native gas. Add ${chain(tx.chainId).nativeSymbol} to ${tx.from} on ${chain(tx.chainId).name} before signing.`);
 }

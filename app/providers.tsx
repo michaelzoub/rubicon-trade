@@ -1,5 +1,6 @@
 "use client";
 
+import { mainnet, base, arbitrum, optimism, polygon } from "viem/chains";
 import { PrivyProvider } from "@privy-io/react-auth";
 import { Provider as JotaiProvider } from "jotai";
 import { createContext, useContext, type ReactNode } from "react";
@@ -19,6 +20,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
           appId={appId}
           clientId={clientId}
           config={{
+            supportedChains: [mainnet, base, arbitrum, optimism, polygon],
             loginMethods: ["twitter", "email", "wallet"],
             appearance: { theme: "light", accentColor: "#18181b" },
           }}

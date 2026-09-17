@@ -1,3 +1,4 @@
+import { extraNetworkFee } from './network-fee';
 import { chain } from './chains';
 import type { SwapRequest, Transaction, PermitData } from './types';
 import type { WalletProvider } from './gasless';
@@ -29,8 +30,14 @@ export async function sendPurchaseTransaction(provider: WalletProvider, r: SwapR
   ]);
   if (![gas, price, balance].every(v => typeof v === 'string' && /^0x[0-9a-f]+$/i.test(v))) throw new Error('RPC gas estimate unavailable.');
   if (BigInt(gas as string) <= 0n || BigInt(price as string) <= 0n) throw new Error('RPC gas estimate unavailable.');
-  if (BigInt(balance as string) < BigInt(tx.value) + BigInt(gas as string) * BigInt(price as string) * 2n) throw new Error(`Insufficient native gas. Add ${chain(r.chainId).nativeSymbol} to ${r.wallet} on ${chain(r.chainId).name}.`);
+  const extra = await extraNetworkFee(tx, BigInt(gas as string), (method, params) => provider.request({ method, params }));
+  if (BigInt(balance as string) < BigInt(tx.value) + (BigInt(gas as string) * BigInt(price as string) + extra) * 2n) throw new Error(`Insufficient native gas. Add ${chain(r.chainId).nativeSymbol} to ${r.wallet} on ${chain(r.chainId).name}.`);
   await assertWallet(provider, r, expiresAt);
+  if (tx.nonce !== undefined) {
+    const nonce = await provider.request({ method: 'eth_getTransactionCount', params: [r.wallet, 'pending'] });
+    if (typeof nonce !== 'string' || BigInt(nonce) !== BigInt(tx.nonce)) throw new Error('A wallet transaction is pending or confirmed. Recover its hash before continuing.');
+    await assertWallet(provider, r, expiresAt);
+  }
   // Explicit chainId binds the wallet request even if its network changes while the prompt is open.
   const hash = await provider.request({ method: 'eth_sendTransaction', params: [{ ...call, chainId: `0x${r.chainId.toString(16)}`, ...(tx.nonce !== undefined ? { nonce: tx.nonce } : {}) }] });
   if (typeof hash !== 'string' || !/^0x[0-9a-f]{64}$/i.test(hash)) throw new Error('Wallet returned no transaction hash. Check the wallet before retrying.');

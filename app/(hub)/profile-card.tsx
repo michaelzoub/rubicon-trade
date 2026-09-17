@@ -7,7 +7,7 @@ import type { LearnedInterest } from "@/lib/socialtrading/types";
 import { Card } from "../_components/ui";
 import { gsap, useGSAP, rubiconMotion } from "../_components/motion";
 import { badgePalette, isThemeId, THEMES, type ThemeId } from "@/lib/socialtrading/themes";
-import { agentAvatarTraits, avatarTraits } from "@/lib/socialtrading/avatar";
+import { avatarTraits } from "@/lib/socialtrading/avatar";
 import { ProfileAvatar } from "./profile-avatar";
 
 export const money = (value: string) => value && Number.isFinite(Number(value))
@@ -49,12 +49,6 @@ export function ProfileCard({ profile, name, agentName, avatarSeed, inferred = [
 }) {
   const root = useRef<HTMLElement>(null);
   const final = profile.step === 6;
-  const traits = agentAvatarTraits(avatarSeed ?? profile.userId, profile);
-  const attributes = [
-    ["Pattern", ["Stripes", "Prism", "Orbit", "Circuit"][traits.pattern]],
-    ["Eyes", ["Bright", "Upturned", "Wink", "Spectacles"][traits.eyes]],
-    ["Emblem", ["Diamond", "Halo"][traits.accessory]],
-  ];
   const themes = THEMES.filter(t => profile.themes.includes(t.id));
   const learned = learnedThemes(inferred, profile.themes);
   const palette = badgePalette(profile.themes, avatarTraits(profile.avatarSeed ?? avatarSeed ?? profile.userId).color, learned);
@@ -84,9 +78,6 @@ export function ProfileCard({ profile, name, agentName, avatarSeed, inferred = [
           <p key={identity}>{identity}</p>
         </div>
         <dl className="socialtrading-profile-details" data-profile-reveal>
-          <ProfileDetail label="Badge attributes" value={JSON.stringify(traits)}>
-            <div className="socialtrading-profile-interests">{attributes.map(([label, value]) => <span key={label}>{label} · {value}</span>)}</div>
-          </ProfileDetail>
           <ProfileDetail label="Your point of view" value={profile.thesis}>
             <p className={`socialtrading-profile-thesis${!profile.thesis.trim() ? " is-empty" : ""}`}>
               {profile.thesis.trim() || "No thesis yet"}

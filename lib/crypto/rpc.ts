@@ -88,6 +88,11 @@ export async function verifyUserOperation(batch: SwapBatch, userOpHash: string |
   // guess rather than report the wrong outcome.
   const mine = userOpHash ? events.filter(e => e.hash === userOpHash.toLowerCase()) : events.filter(e => e.sender === batch.sender);
   if (mine.length !== 1) return "pending";
-  if (mine[0].sender !== batch.sender) throw new Error("Transaction hash does not match the authorized transaction.");
+  // EntryPoint emits one UserOperationEvent per operation in execution order.
+  // A hash for another operation from the same wallet is not evidence that OUR
+  // authorized calldata succeeded.
+  if (events.length !== ops.length) return "pending";
+  const matched = ops[events.indexOf(mine[0])];
+  if (mine[0].sender !== batch.sender || matched.sender.toLowerCase() !== batch.sender || matched.callData.toLowerCase() !== batch.callData.toLowerCase()) throw new Error("Transaction hash does not match the authorized transaction.");
   return mine[0].success ? "confirmed" : "reverted";
 }

@@ -6,7 +6,8 @@ import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { ArrowUpRight, Search, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { CHAINS, DEFAULT_CHAIN, explorerAddress, shortAddress, type ChainId } from "@/lib/crypto/chains";
-import { readPurchaseBalance, purchaseShortfall, purchaseError, type PurchaseBalance } from "@/lib/crypto/readiness";
+import { readPurchaseBalance, purchaseShortfall, purchaseTotal, purchaseError, type PurchaseBalance } from "@/lib/crypto/readiness";
+import { cheaperChains, feeReserveUsd, gaslessChain } from "@/lib/crypto/chains";
 import type { TokenMatch } from "@/lib/crypto/search";
 import { useCelebration } from "../../_components/celebration";
 import { gsap, useGSAP, rubiconMotion } from "../../_components/motion";
@@ -91,9 +92,19 @@ export function BuyPanel({ preselected, title = "Buy", initialQuery = "", initia
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallet, target?.chainId, selectedWallet?.chainId, refresh]);
 
-  const shortfall = balance && USD.test(amount) && Number(amount) > 0 && purchaseShortfall(balance, amount)
-    ? `You have ${(Number(balance.usdc) / 1e6).toFixed(2)} USDC. This buy needs ${Number(amount).toFixed(2)} USDC on this network.`
-    : "";
+  const shortfall = (() => {
+    if (!balance || !net || !USD.test(amount) || Number(amount) <= 0 || !purchaseShortfall(balance, amount)) return "";
+    const have = (Number(balance.usdc) / 1e6).toFixed(2);
+    const spend = Number(amount).toFixed(2);
+    // Short on the purchase itself is a different problem from short on the fee,
+    // and only one of them is solved by adding USDC to this chain.
+    if (balance.usdc < BigInt(Math.round(Number(amount) * 1e6)))
+      return `You have ${have} USDC. This buy needs ${spend} USDC on ${net.name}.`;
+    const fee = feeReserveUsd(balance.chainId) * 2;
+    const elsewhere = cheaperChains(balance.chainId);
+    return `You have ${have} USDC, but the network fee on ${net.name} is up to $${fee}, so this buy needs about ${(Number(purchaseTotal(balance.chainId, amount)) / 1e6).toFixed(2)} USDC here.`
+      + (elsewhere.length ? ` The same purchase on ${elsewhere[0].name} costs about $${elsewhere[0].feeUsd} in fees.` : "");
+  })();
   const valid = ready && !!selectedWallet && !!balance && balance.wallet === wallet && balance.chainId === target?.chainId && !shortfall && !!target && !!net && USD.test(amount) && Number(amount) > 0 && /^0x[0-9a-fA-F]{40}$/.test(wallet);
   const estimate = picked?.priceUsd && USD.test(amount) ? Number(amount) / picked.priceUsd : null;
 
@@ -184,9 +195,9 @@ export function BuyPanel({ preselected, title = "Buy", initialQuery = "", initia
       <p className="purchase-requirements" role="status">{balance ? `Available: ${(Number(balance.usdc) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 })} USDC on ${net.name}` : balanceNote}</p>
       <div className="purchase-readiness">
         <strong>{net.name} only <span>· {shortAddress(wallet)}</span></strong>
-        <p>Spend {USD.test(amount) ? amount : "…"} USDC. Network fees are paid separately in {net.nativeSymbol}.</p>
-        {balance && <p>Native gas balance: {(Number(balance.native) / 1e18).toLocaleString(undefined, { maximumFractionDigits: 6 })} {net.nativeSymbol}. You need native tokens on this network to pay gas.</p>}
-        <p>USDC on Ethereum cannot pay for a Base purchase. Funds must be on {net.name}.</p>
+        <p>Spend {USD.test(amount) ? amount : "…"} USDC. {gaslessChain(target.chainId) ? `The network fee comes out of your USDC — up to $${feeReserveUsd(target.chainId) * 2} is held back and the unused part is refunded.` : `Network fees are paid separately in ${net.nativeSymbol}.`}</p>
+        {balance && !gaslessChain(target.chainId) && <p>Native gas balance: {(Number(balance.native) / 1e18).toLocaleString(undefined, { maximumFractionDigits: 6 })} {net.nativeSymbol}. You need native tokens on this network to pay gas.</p>}
+        <p>Only USDC already on {net.name} can pay for this purchase. Funds on other networks cannot.</p>
         <button type="button" className="hub-chip-button" disabled={switching || busy} onClick={async () => {
           if (!selectedWallet) return;
           setSwitching(true); setBalance(null);

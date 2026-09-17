@@ -73,15 +73,16 @@ export function AssetCard({ asset, dense = false }: { asset: Asset; dense?: bool
   function open() { signal("opened", asset); router.push(assetHref(asset)); }
   return (
     <article className={`hub-asset${dense ? " is-dense" : ""}${important ? " hub-priority-card" : ""}`} data-asset={asset.symbol}>
-      <button type="button" className="hub-asset-main" onClick={open} aria-label={`Open ${asset.name}`} {...gloss(assetGloss(asset, state))}>
+      <button type="button" className="hub-asset-main" onClick={open} aria-label={`Open ${asset.name}`}>
         <span className="hub-asset-id"><strong>{asset.symbol}</strong><span>{asset.name}</span></span>
         <Sparkline points={asset.chart.slice(-40)} />
         <span className="hub-asset-price"><span>{usd(asset.price)}</span><ChangeText value={asset.change} /></span>
       </button>
       <div className="hub-asset-foot">
+        <button type="button" className="hub-why-trigger" {...gloss(assetGloss(asset, state))}>Why you’re seeing this</button>
         <RelevanceLabel asset={asset} />
         {!dense && asset.reason && <p className="hub-asset-reason">{asset.reason}</p>}
-        <div className="hub-asset-actions"><button type="button" className="hub-chip-button" onClick={() => openPurchase({ asset })}>Buy</button>
+        <div className="hub-asset-actions"><button type="button" className="hub-buy-primary" onClick={() => openPurchase({ asset })}>Buy</button>
           <button type="button" className="hub-chip-button" onClick={() => signal(watched ? "removed" : "watched", asset)} aria-pressed={watched} data-tooltip={watched ? undefined : follow.title} aria-disabled={!watched && !follow.room}>
             {watched ? <><EyeOff size={12} aria-hidden="true" />Watching</> : <><Eye size={12} aria-hidden="true" />Watch</>}
           </button>
@@ -136,7 +137,7 @@ function DiscoveryCard({ asset }: { asset: Asset }) {
       <span className="hub-discovery-name"><strong>{asset.name}</strong><small>{asset.symbol} <ChangeText value={asset.change} /></small></span>
       {asset.description && <p className="hub-discovery-description">{asset.description}</p>}
     </Link>
-    <div className="hub-discovery-actions"><button type="button" className="hub-chip-button" onClick={() => openPurchase({ asset })}>Buy</button>
+    <div className="hub-discovery-actions"><button type="button" className="hub-buy-primary" onClick={() => openPurchase({ asset })}>Buy</button>
       <button type="button" className="hub-chip-button" disabled={pending || busy || (!watched && !follow.room)} data-tooltip={follow.title} aria-pressed={watched} onClick={() => void act(watched ? "removed" : "watched")}>{watched ? <Check size={14} /> : <Eye size={14} />}{watched ? "Watching" : "Watch"}</button>
       <button type="button" className="hub-chip-button" disabled={busy || pending} onClick={() => { router.push("/"); void send(`Tell me about ${asset.name} (${asset.symbol}) and why it might interest me.`); }}>Ask agent</button>
       <button type="button" className="hub-discovery-dismiss" disabled={pending || busy} data-tooltip="Not for me" aria-label={`Not interested in ${asset.symbol}`} onClick={() => void act("dismissed")}><X size={15} /></button>

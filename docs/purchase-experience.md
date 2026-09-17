@@ -1,34 +1,68 @@
-# Consumer purchase flow
+# Purchase correctness and deployment
 
-## Root cause and flow audit
+## Audit and architecture
 
-The selected asset determines the transaction network (Base by default); USDC on Ethereum cannot fund a Base purchase. Previously BuyPanel switched networks during balance reads, allowed an unknown balance to pass validation, and displayed a USDC fee reserve half the size of the signed paymaster allowance.
+The previous purchase path discarded Uniswap's `permitData`, built `/swap` without a required Permit2 signature, disabled simulation, and tried to compensate with ERC20/Permit2 approvals inside an EIP-7702 batch. The signing action silently called `switchChain`. Every purchase depended on a public bundler and Circle paymaster even though neither compatibility nor available sponsorship was established. Server balance checks covered USDC only, and execution decimals came from market metadata. Existing receipt verification and optimistic state persistence were worth keeping.
 
-Discovery: Privy `useWallets` supplies connected wallets; the selected address is passed through proposal, ownership verification, quote recipient/swapper, prepared batch sender, and signing. Missing/disconnected addresses are not replaced when signing. Reads now check both `eth_accounts` and `eth_chainId`, before and after balances. Reads never switch networks. A labeled user action requests switching; the review action also clearly names the target network and wallet.
+The production path now uses **Privy authentication and the selected Privy wallet provider for signing/submission**, and **Uniswap CLASSIC V2/V3 exact-input execution**. Dynamic is not installed: there is no second delegated wallet, duplicated auth flow, or claimed autonomous execution. Agent proposals still require the user's signature, with deterministic server policy checks outside the LLM.
 
-Amounts: exact decimal conversion on the server; chain-specific Circle USDC addresses. The client fails closed on unknown funds, checks spend plus the complete USDC fee cap, shows native balance, and refreshes before quoting. The server rechecks chain and USDC funds before issuing calldata. Each signature checks wallet/network and quote expiry again.
+Source of truth: Privy user → verified linked wallet → explicit chain/token contracts → onchain decimals and balances → stored fresh quote → bounded authorization → nonce-bound transaction → verified receipt.
 
-Quotes: Uniswap EXACT_INPUT, validated chain, sender, recipient, input/output contracts, amount and slippage. Prepare requotes and refuses worse minimum output. Approvals: exact-size ERC20/Permit2 allowances, clearing nonzero allowance where required, then swap, in a single atomic operation. Permit2 expires after 30 minutes. Existing ERC20 allowances can outlive the transaction; do not promise every allowance disappears after a trade.
+## Lifecycle
 
-Execution: existing EIP-7702 Simple7702Account + EntryPoint v0.8 + Circle USDC paymaster. This is **user-paid USDC gas**, not Privy sponsorship. Multiple wallet requests can occur (network change, delegation authorization, fee permit, operation signature). UI no longer promises one signature. The fee cap displayed and the fee permit now agree.
+1. **Proposal:** exact decimal input conversion using `decimals()` on the selected chain. A read-only Uniswap estimate captures the reviewed minimum output. Symbols and market metadata are display information, not execution identifiers.
+2. **Preflight:** verify Privy wallet ownership, configured RPC chain ID, exact input/output decimals, input balance, that chain's native USDC balance, native gas, current policy, and proposal age. Ethereum USDC never contributes to a Base balance. Client checks the selected account and network before and after reads. No execution action switches either.
+3. **Approval:** read the input token's allowance to canonical Permit2. Skip sufficient allowance; otherwise issue an exact-amount ERC20 approval (zero-reset first when necessary). Simulate and check native gas before issuance. Each approval is signed through Privy's EIP-1193 provider, broadcast, journaled with its real hash, and independently confirmed. An approval receipt returns the purchase to **Continue**; it never marks the purchase successful.
+4. **Fresh quote:** after confirmed approvals, request a new Uniswap quote with `permitAmount: EXACT`. Check chain, swapper, recipient, token addresses, exact input, slippage, and minimum output. Refuse a quote below the user's reviewed minimum. Store an expiring quote and unique quote ID. A refresh invalidates earlier authorizations.
+5. **Permit2:** if required, validate the signing schema, chain/domain, canonical Permit2 address, pinned Uniswap UniversalRouterV2 spender, exact amount/token, and expiry. Sign the API's values through the selected Privy provider. The server verifies the signature against that wallet and the stored quote. It passes both `permitData` and `signature` to `/swap`. Missing, changed, expired, or mismatched signatures cannot create a swap.
+6. **Swap creation:** Uniswap simulation is enabled; verify the returned chain/from/router/value/calldata. Independently estimate gas against the configured RPC. Base and Optimism additionally read L1 data and operator fees. Use a conservative 2× fee estimate buffer; estimates are not guaranteed future network prices. Native-input swaps must retain gas after their input amount.
+7. **Wallet signature and broadcast:** persist the issued transaction and its pending account nonce before handing calldata to the client. Recheck account/network/expiry/gas and nonce before `eth_sendTransaction`, passing explicit from, chain ID and nonce. Never infer broadcast success from a wallet prompt. Keep the actual returned hash locally immediately and persist it server-side. No automatic resubmission.
+8. **Confirmation:** server RPC verifies transaction sender, recipient, calldata, native value, and nonce, then checks a successful receipt, canonical block hash, and two subsequent blocks. Only then set `confirmed`. Pending receipts remain pending; RPC errors preserve uncertainty; reverts become failed. Approval and swap hashes remain in the history. The UI polls every eight seconds while mounted and provides manual status/hash recovery.
 
-Submission: synchronous client lock plus server optimistic revision claim. Persist the user-operation hash as soon as the bundler accepts it, before waiting for a receipt. Recovery reads the operation receipt without resubmitting and then sends the resulting transaction hash through server verification. Transaction hash recovery remains available. Pending transactions poll server verification; success requires matching calldata/sender and the operation's success event, a canonical block hash, and two subsequent blocks.
+Required approvals are separate wallet transactions. After an approval confirms, the user continues the purchase; another approval may be needed after a zero-reset. This is intentional: quoting before approvals settle can produce stale or unexecutable authorization.
 
-Unknown submission outcomes remain reserved. A disconnected wallet, rejected signature after preparation, or missing local recovery storage must not silently unlock a potentially signed operation. Check the wallet/bundler and recover its hash. No automatic retry sends another operation. A future server-side operation journal would improve recovery across devices; local storage alone is not durable cross-device recovery.
+## Recovery and limits
 
-## Product decision
+A rejected Permit2 request can be retried with a fresh quote. For an issued wallet transaction with no recorded hash, **Retry same wallet request** returns only its original calldata and nonce, while still valid, and only if the RPC reports that nonce unused. The chain can execute that nonce at most once. If a transaction is pending, its nonce changed, or the quote expired, recover its hash from the wallet and use **Verify**. The server will not issue a new transaction for an uncertain attempt. An expired swap must not be resubmitted; create a fresh purchase only after checking the old attempt. Unknown agent reservations remain held rather than incorrectly freeing possibly spent funds.
 
-Keep acquisition contextual in Explore and asset details. Existing `openPurchase`/PurchaseDialog provides one shared flow; Home, Explore and Memory remain primary navigation. `/trade` already redirects to `/explore`; retain it. No additional top-level Buy destination is needed. Asset selection, amount and review progression now sits above a light-blue acquisition surface, with tactile presets and visible network/wallet readiness. Routing/contracts and approval explanations remain under disclosure. Keyboard buttons replace incorrect listbox semantics; reduced-motion behavior is retained.
+A hash lost between wallet broadcast and server persistence can be recovered from local storage or the wallet. Cross-device recovery requires the wallet hash. A replacement/cancellation with different calldata is not a successful purchase and is not automatically reconciled. No transaction is sent in the background merely because a user returns to the app.
 
-## Sponsorship and deployment
+New purchases do not upgrade wallets or use the old Circle paymaster/bundler path. Legacy batch verification and user-operation receipt recovery remain available for previously issued purchases. Contract-wallet-specific ERC-1271 signatures and sponsored-operation receipts need a separately tested adapter; the new path supports standard EVM wallet transaction signatures and 65-byte EOA Permit2 signatures.
 
-Installed `@privy-io/react-auth` exposes `sponsor?: boolean` on `useSendTransaction`. This app does not use that transaction path, and dashboard state/TEE execution cannot be established from repository configuration. Do not add `sponsor: true` to the custom bundler path: it has no effect there.
+## Environment and dashboard setup
 
-To adopt Privy native sponsorship, enable sponsorship in the Privy dashboard, configure supported chains and spending controls, enable client-originated transactions, confirm TEE execution/migration, and implement and test the Privy sendTransaction path with explicit selected address. Sequential approvals would need individual lifecycle and receipt verification, or a supported atomic batch path. No sponsorship was enabled by this change.
+Copy `.env.example` and configure:
 
-Current deployment still requires `CRYPTO_RPC_URL_<chainId>` for server verification, `UNISWAP_API_KEY`, valid Privy credentials, and a reliable EIP-7702/EntryPoint v0.8 bundler (`NEXT_PUBLIC_BUNDLER_URL`, optionally containing `{chainId}`). The public fallback is rate-limited. External wallet compatibility and live paymaster simulation must be tested before release; automated fixtures do not establish funded mainnet execution.
+- `NEXT_PUBLIC_PRIVY_APP_ID`, optional `NEXT_PUBLIC_PRIVY_CLIENT_ID`, and server-only `PRIVY_APP_SECRET`. In the Privy dashboard, register the deployed/local origins and desired login methods, enable Ethereum embedded wallets if users need them, and configure the matching app/client. The app explicitly supports Ethereum, Base, Arbitrum, Optimism and Polygon. Connect/create remains the existing Privy flow.
+- `NEXT_PUBLIC_SUPABASE_URL` and server-only `SUPABASE_SERVICE_ROLE_KEY`; apply the existing database migrations, including optimistic `socialtrading_agent_save` revision handling. A persistence failure must prevent returning newly issued calldata.
+- Server-only `UNISWAP_API_KEY` with Trading API access. Router header is pinned to `2.0`; `lib/crypto/permit.ts` pins the corresponding chain-specific router addresses. Update and test the header/address map together. No API keys reach the browser.
+- Server-only `CRYPTO_RPC_URL_1`, `_8453`, `_42161`, `_10`, `_137` for the chains used. The RPC must support balances, contract calls, gas estimation, account nonces, transaction/receipt lookup and block lookup. An absent or wrong-chain endpoint blocks that chain.
+- Keep existing market-data/valuation configuration. It cannot substitute for onchain token metadata or funds.
+- `NEXT_PUBLIC_BUNDLER_URL` is now **legacy recovery only**, not required for new purchases. Keep the old endpoint if prior operations still need recovery. Never place a private credential in a `NEXT_PUBLIC` variable.
 
-Sources checked:
-- https://docs.privy.io/wallets/gas-and-asset-management/gas/setup
-- https://developers.circle.com/paymaster/addresses-and-events
-- https://developers.circle.com/paymaster
+Users need the input asset and native ETH on Ethereum/Base/Arbitrum/Optimism, or POL on Polygon, in the **selected wallet on the selected chain**. Zero or insufficient estimated gas produces an actionable funding error before sending.
+
+### Privy sponsorship
+
+Sponsorship is **not enabled** and is never inferred from a chain list or environment flag. Privy's documented native sponsorship requires TEE execution/migration, funded billing, enabled sponsored chains, permission for client-originated transactions, and `useSendTransaction({…}, {sponsor: true})`. Dashboard access/configuration and compatible sponsored receipt semantics have not been established here. Simply adding `sponsor: true` to the EIP-1193 provider or old custom bundler would not enable it.
+
+To add sponsorship, configure those dashboard prerequisites, implement a Privy sponsored-send adapter with explicit selected wallet/chain, and test authorization, approval sponsorship and receipt verification (including operation-based settlement) before relaxing native-gas checks. This release deliberately uses the supported native-gas fallback rather than reporting fictitious gasless execution.
+
+### Dynamic
+
+Not added. A future addition must be an actual opportunity → user delegation/approval → external policy check → Dynamic delegated execution → verified receipt workflow alongside Privy. It needs revocable wallet permissions and enforced chain/asset/type/transaction/daily/weekly limits outside the LLM. No environment keys or fake delegation controls have been added for an absent workflow.
+
+## Validation
+
+`npm test` covers lifecycle transitions, exact approvals and already-approved paths, Permit2 signing and quote binding, insufficient chain-specific USDC, wrong network, native gas, onchain decimals, rejected wallet signatures, stale quotes, RPC outages, reverts, account/network changes, nonce-bound retry, persistence failure, and exact transaction/receipt verification. Provider and RPC fixtures are test-only; no production success is mocked.
+
+`LIVE=1 npm test -- lib/crypto/live.test.ts` makes read-only requests to the actual Uniswap gateway and configured Base RPC. It checks a $25 USDC→WETH quote, Permit2 validation, chain ID and decimals. This passed on September 17, 2026. It does **not** prove a funded swap, wallet-popup behavior, or mainnet settlement.
+
+Before deploying broadly, use a funded Privy wallet for a small real purchase on each enabled chain: confirm each approval, sign the fresh permit and swap, then compare the recorded hash/receipt with the explorer. Exercise rejection and refresh/recovery as well. Do not report this live acceptance check as passed until its real receipt exists.
+
+References:
+
+- [Uniswap Permit2 workflow](https://developers.uniswap.org/docs/trading/swapping-api/concepts/permit2)
+- [Uniswap integration guide](https://developers.uniswap.org/docs/trading/swapping-api/start-building/integration-guide)
+- [Pinned Universal Router deployment sources](https://github.com/Uniswap/universal-router/tree/main/deploy-addresses)
+- [Privy sponsorship setup](https://docs.privy.io/wallets/gas-and-asset-management/gas/setup)

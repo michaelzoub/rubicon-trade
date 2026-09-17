@@ -1,5 +1,5 @@
 import { authenticate, bodyOf, failure, HubError, loadState, requestedAgent, saveState } from "@/lib/socialtrading/server";
-import { authorizeSwap, prepareSwap, userSwap } from "@/lib/crypto/trades";
+import { authorizeSwap, prepareSwap, resumeSwap, userSwap } from "@/lib/crypto/trades";
 import { verifyTransaction, verifyUserOperation } from "@/lib/crypto/rpc";
 import { userWallets } from "@/lib/crypto/wallet";
 import { cryptoServices } from "@/lib/crypto/services";
@@ -43,6 +43,9 @@ export async function POST(request: Request) {
       await saveState(userId, state);
       return Response.json({ state, ...result });
     }
+    if (body.action === "resume") {
+      return Response.json({ state, ...await resumeSwap(state, userId, trade) });
+    }
     if (body.action === "authorize") {
       const result = await authorizeSwap(state, userId, trade, body.quoteId, body.signature);
       await saveState(userId, state);
@@ -51,12 +54,13 @@ export async function POST(request: Request) {
     if (body.action === "reject") {
       if (trade.status !== "rejected") {
         if (!["ready", "authorizing"].includes(c.phase) || !["approval_required", "reserved"].includes(trade.status)) throw new HubError(409, "This swap can no longer be declined. Check its status.");
-        trade.status = "rejected"; trade.approval = { decision: "rejected", at: new Date().toISOString() }; c.detail = "Declined. Nothing was sent to your wallet and no allowance is held.";
+        trade.status = "rejected"; trade.approval = { decision: "rejected", at: new Date().toISOString() }; c.detail = c.history?.length ? "Purchase declined. No swap was issued. Confirmed token approvals remain onchain." : "Declined. No transaction was issued for this purchase.";
         recordEvent(state, "trade", `You declined the ${trade.asset.symbol} swap`, undefined, trade.id);
       }
     } else if (body.action === "submitted") {
       const userOpHash = body.userOpHash;
-      if (c.phase !== "issued" || typeof body.hash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(body.hash) || (c.hash && c.hash !== body.hash)) throw new HubError(409, "Invalid or conflicting transaction hash.");
+      const hash = typeof body.hash === "string" ? body.hash.toLowerCase() : "";
+      if (c.phase !== "issued" || !/^0x[0-9a-f]{64}$/.test(hash) || (c.hash && c.hash.toLowerCase() !== hash)) throw new HubError(409, "Invalid or conflicting transaction hash.");
       // The batch settled as a user operation, so its own hash is what identifies
       // it inside the bundler's transaction. Without it nothing can be verified.
       // Optional: a hash recovered by hand from a wallet will not have one, and
@@ -65,21 +69,23 @@ export async function POST(request: Request) {
         if (typeof userOpHash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(userOpHash) || (c.userOpHash && c.userOpHash !== userOpHash)) throw new HubError(409, "Invalid or conflicting user operation hash.");
         c.userOpHash = userOpHash;
       }
+      if (state.trades.some(other => other.id !== trade.id && (other.crypto?.hash?.toLowerCase() === hash || other.crypto?.history?.some(entry => entry.hash.toLowerCase() === hash)))) throw new HubError(409, "This transaction hash is already recorded for another purchase.");
       // A client hash is only a claim. Receipt verification is required to release or confirm funds.
-      c.hash = body.hash; c.detail = "Transaction hash received; awaiting onchain verification.";
+      c.hash = hash; c.detail = "Transaction hash received; awaiting onchain verification.";
     } else if (body.action === "status") {
       if (c.phase !== "issued" || !(c.batch ?? c.transaction) || !c.hash) throw new HubError(409, "No transaction hash is recorded. Recover the hash from your wallet before retrying.");
       const result = c.batch
         ? await verifyUserOperation(c.batch, c.userOpHash, c.hash)
         : await verifyTransaction(c.transaction!, c.hash);
       if (result === "confirmed") {
+        const confirmedHash = c.hash;
         (c.history ??= []).push({ step: c.step ?? "swap", hash: c.hash, result });
         if (c.step === "approval") {
           c.phase = "ready"; trade.status = "reserved"; c.hash = undefined; c.transaction = undefined;
           c.quote = undefined; c.quoteId = undefined;
           c.detail = "Token approval confirmed. Continue to get a fresh quote and sign the purchase.";
         } else { c.phase = "complete"; trade.status = "confirmed"; c.detail = "Swap confirmed onchain."; }
-        recordEvent(state, "trade", c.detail, c.hash, trade.id);
+        recordEvent(state, "trade", c.detail, confirmedHash, trade.id);
       } else if (result === "reverted") { (c.history ??= []).push({ step: c.step ?? "swap", hash: c.hash, result }); c.phase = "complete"; trade.status = "failed"; c.detail = "Transaction reverted onchain. Network fees may have been charged."; recordEvent(state, "trade", `The ${trade.asset.symbol} swap reverted onchain`, c.hash, trade.id); }
       else c.detail = "Waiting for the transaction and two block confirmations.";
     } else throw new HubError(400, "Unknown swap action.");

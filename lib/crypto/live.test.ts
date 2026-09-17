@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
+import { extraNetworkFee } from "./network-fee";
+import { erc20ApproveData, PERMIT2 } from "./aa";
 import { validatePermit } from "./permit";
 
 /** Hits the real Uniswap gateway and real RPC nodes. Off by default; run with
@@ -34,6 +36,8 @@ describe.skipIf(!live)("live swap pipeline", () => {
     expect(BigInt(await rpc<string>(8453, "eth_chainId", []))).toBe(8453n);
     expect(await tokenDecimals(8453, request.tokenIn)).toBe(6);
     expect(await tokenDecimals(8453, request.tokenOut)).toBe(18);
+    const extra = await extraNetworkFee({ chainId: 8453, from: request.wallet, to: request.tokenIn, data: erc20ApproveData(PERMIT2, BigInt(request.amount)), value: "0" }, 100000n, (method, params) => rpc(8453, method, params));
+    expect(extra).toBeGreaterThanOrEqual(0n);
     if (quote.permitData) {
       validatePermit(quote.permitData, request);
       await expect(cryptoServices.execution.swap(quote)).rejects.toThrow(/signature required/);

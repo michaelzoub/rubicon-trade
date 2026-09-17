@@ -106,6 +106,7 @@ export function AssetDetail({ kind, id }: { kind: Asset["kind"]; id: string }) {
             <strong ref={priceNode}>{usd(read ? read.price : asset.price)}</strong>
             <ChangePill value={asset.change} />
             <small>{read ? when(read.time) : asset.asOf ? `as of ${timeAgo(asset.asOf)}` : ""}</small>
+            <button type="button" className="hub-buy-primary" onClick={() => openPurchase({ asset })}>Buy {asset.symbol} <span aria-hidden="true">↗</span></button>
           </div>
         </header>
         <section className="hub-detail-chart" data-detail-part aria-label="Price history">
@@ -145,7 +146,6 @@ export function AssetDetail({ kind, id }: { kind: Asset["kind"]; id: string }) {
             <button type="button" className="hub-chip-button" onClick={() => ask(`Why did you surface ${asset.symbol}?`)}>Why did you surface this?</button>
           </div>
         </details>
-        <section data-detail-part><button type="button" className="hub-chip-button" onClick={() => openPurchase({ asset })}>Buy {asset.symbol}</button></section>
         {asset.news.length > 0 && <section data-detail-part><NewsList title="Recent" items={asset.news} /></section>}
       </>}
     </div>

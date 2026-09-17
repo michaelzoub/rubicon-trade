@@ -39,7 +39,7 @@ export type StateAction =
 /** Onchain swap actions. `propose` is the user's own swap; the rest drive a proposal through signing and verification. */
 export type CryptoAction =
   | { action: "propose"; chainId: number; wallet: string; tokenIn: string; tokenOut: string; amount: string; slippageBps?: number; note?: string }
-  | { action: "prepare" | "reject" | "status"; tradeId: string }
+  | { action: "prepare" | "resume" | "reject" | "status"; tradeId: string }
   | { action: "authorize"; tradeId: string; quoteId: string; signature?: string }
   | { action: "submitted"; tradeId: string; hash: string; userOpHash?: string };
 export type CryptoResult = { state: HubState; tradeId?: string; quoteId?: string; permitData?: import("@/lib/crypto/types").PermitData; batch?: SwapBatch; transaction?: Transaction; step?: "approval" | "swap"; expiresAt?: number };

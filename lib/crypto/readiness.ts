@@ -1,8 +1,8 @@
-import { chain, feeReserveUsd, parseUnits } from './chains';
+import { chain, feeCap, gaslessChain, parseUnits } from './chains';
 import type { WalletProvider } from './gasless';
 
 export type PurchaseBalance = { wallet: string; chainId: number; usdc: bigint; native: bigint };
-export const feeCap = (chainId: number) => BigInt(Math.ceil(feeReserveUsd(chainId) * 2 * 1e6));
+export { feeCap };
 /** Read-only: never asks a wallet to switch networks or expose more accounts. */
 export async function readPurchaseBalance(provider: WalletProvider, wallet: string, chainId: number): Promise<PurchaseBalance> {
   const check = async () => {
@@ -19,8 +19,15 @@ export async function readPurchaseBalance(provider: WalletProvider, wallet: stri
   if (![usdc, native].every(v => typeof v === 'string' && /^0x[0-9a-f]+$/i.test(v))) throw new Error('Balances are unavailable. Refresh to try again.');
   return { wallet: wallet.toLowerCase(), chainId, usdc: BigInt(usdc as string), native: BigInt(native as string) };
 }
+/** What a purchase really costs: the spend, plus the USDC Circle's Paymaster
+ * takes for the network fee where it is doing the paying. Counting the fee here
+ * is what stops a full-balance buy from passing the form and failing at the
+ * wallet prompt. */
+export function purchaseTotal(chainId: number, amount: string) {
+  return BigInt(parseUnits(amount, 6)) + (gaslessChain(chainId) ? feeCap(chainId) : 0n);
+}
 export function purchaseShortfall(balance: PurchaseBalance, amount: string) {
-  return balance.usdc < BigInt(parseUnits(amount, 6));
+  return balance.usdc < purchaseTotal(balance.chainId, amount);
 }
 export function purchaseError(error: unknown): string {
   const message = error instanceof Error ? error.message : '';

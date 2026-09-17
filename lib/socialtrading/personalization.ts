@@ -73,7 +73,7 @@ export function relevance(asset: Asset, state: HubState): Relevance {
   const matching = themes.filter(t => state.profile.themes.includes(t));
   const watched = state.profile.interests.some(i => i.symbol?.toUpperCase() === asset.symbol.toUpperCase() || i.id === asset.id);
   const relatedInterests = state.profile.interests.filter(i => i.kind === "custom" && topicRecommendations(i).some(a => a.symbol?.toUpperCase() === asset.symbol.toUpperCase() || a.id === asset.id));
-  const dislikes = state.dislikes.filter(d => corpus.includes(d.toLowerCase()) || (d.toLowerCase().includes("meme") && /meme|doge|shiba|pepe|inu/.test(corpus)));
+  const dislikes = [...new Set([...state.dislikes, ...(state.profile.investorAnswers.onboarding?.dislikes ?? [])])].filter(d => corpus.includes(d.toLowerCase()) || (d.toLowerCase().includes("meme") && /meme|doge|shiba|pepe|inu/.test(corpus)));
   const preferences = state.preferences.filter(p => corpus.includes(p.toLowerCase()) || themes.some(t => p.toLowerCase().includes(t)));
   const inferred = state.inferred.filter(i => (i.id.toUpperCase() === asset.symbol.toUpperCase() || i.id === asset.id || themes.includes(i.id as ThemeId)) && i.confidence >= .25);
   const inferredScore = inferred.reduce((sum, i) => sum + i.weight * i.confidence, 0);
