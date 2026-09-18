@@ -28,4 +28,16 @@ describe("investing profile", () => {
     const profile = { ...original, thesis: "Energy", investorAnswers: { ...original.investorAnswers, knowledge: 4 }, permission: "automatic", step: 6 };
     expect(readProfile(JSON.stringify(profile), "alice").step).toBe(5);
   });
+  it("roundtrips a silent familiarity check onto the investing profile", () => {
+    const original = newProfile("alice");
+    const profile = {
+      ...original, thesis: "Energy", permissionConfigured: true, step: 6,
+      investorAnswers: { ...original.investorAnswers, knowledge: 3, familiarityTier: 4 as const, familiarityScore: 24, selectedConceptIds: [5, 12] },
+    };
+    const loaded = readProfile(JSON.stringify(profile), "alice");
+    expect(loaded.investorAnswers).toMatchObject({ knowledge: 3, familiarityTier: 4, familiarityScore: 24, selectedConceptIds: [5, 12] });
+    expect(readProfile(JSON.stringify({ ...profile, investorAnswers: { ...profile.investorAnswers, familiarityTier: 9, selectedConceptIds: [1, 1, 99, "x"] } }), "alice").investorAnswers).toMatchObject({
+      familiarityTier: null, selectedConceptIds: [1],
+    });
+  });
 });

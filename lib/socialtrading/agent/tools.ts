@@ -1,6 +1,8 @@
 import { convictionsOf } from "../worldview";
 import "server-only";
 import { limitsError, PERMISSIONS, type InvestingProfile, type Interest, type Permission } from "../profile";
+import { FAMILIARITY_TIER_LABELS } from "../familiarity";
+import { EXPERIENCE } from "../onboarding";
 import { isThemeId, THEMES, type ThemeId } from "../themes";
 import { inferredThemes, personalize, recordEvent, relevance, themeName } from "../personalization";
 import { agentServices, type AgentServices } from "../agents/services";
@@ -41,7 +43,8 @@ export function profileSummary(state: HubState) {
     convictions: convictionsOf(state).map(c => ({ belief: c.text, strength: c.strength, origin: c.origin })),
     thesis: p.thesis, themes: p.themes.map(themeName), watching: p.interests.map(i => i.symbol || i.name),
     onboarding: {
-      investmentKnowledge: p.investorAnswers.knowledge === null ? "not answered" : ["just starting", "knows the basics", "comfortable", "experienced", "very experienced"][p.investorAnswers.knowledge],
+      investmentKnowledge: p.investorAnswers.familiarityTier != null ? FAMILIARITY_TIER_LABELS[p.investorAnswers.familiarityTier]
+        : p.investorAnswers.knowledge === null ? "not answered" : EXPERIENCE[p.investorAnswers.knowledge] ?? "very experienced",
       opportunityDrivers: p.investorAnswers.opportunityDrivers,
       ethicsAndImpact: p.investorAnswers.esgPriority === null ? "not answered" : ["returns first", "mostly returns", "balanced", "mostly impact", "impact first"][p.investorAnswers.esgPriority],
       aiPriority: p.investorAnswers.aiPriority === null ? "not answered" : ["not important", "a little", "somewhat", "a lot", "essential"][p.investorAnswers.aiPriority],

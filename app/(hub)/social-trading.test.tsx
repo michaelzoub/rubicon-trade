@@ -3,6 +3,7 @@ import * as React from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
+import { FAMILIARITY_CONCEPTS } from "../../lib/socialtrading/familiarity";
 import { profileKey } from "../../lib/socialtrading/profile";
 import { DECK_SIZE, basePrediction, newOnboarding, nextPrediction } from "../../lib/socialtrading/onboarding";
 
@@ -71,8 +72,13 @@ it("keeps profile fields hidden until an authenticated session is ready", async 
 
 /** The two shared foundations, then the opening AI chart and the map. Everyone
  * lands on the same base questions before the deck starts branching. */
+async function pickFamiliarity(experienced = true) {
+  if (experienced) for (const concept of FAMILIARITY_CONCEPTS) await click(concept.label);
+  await click("Continue");
+}
 async function foundation(level = "Experienced", confidence = "I know what I believe") {
-  await click(confidence); await click("Continue"); await click(level); await click("Continue");
+  await click(confidence); await click("Continue");
+  await pickFamiliarity(level === "Experienced");
   await place("Society and work", "84", "6"); await click("Continue");
   await click("Continue");   // Past the map, which nobody has to fill in.
 }
@@ -96,8 +102,7 @@ async function uncertain() {
   await click("I’m open to everything"); await click("Continue");
 }
 it("requires explicit foundation answers and carries only the views that were actually taken", async () => {
-  await render(); await click("Continue");
-  expect(container.textContent).toContain("Choose how clear");
+  await render();
   await foundation("Unknown grounds", "I’m here to explore");
   await uncertain();
   expect(container.textContent).toContain("Your outlook. Your rules.");
@@ -107,6 +112,10 @@ it("requires explicit foundation answers and carries only the views that were ac
   await click("Meet my agent");
   const saved = JSON.parse(localStorage.getItem(profileKey("alice"))!);
   expect(saved.completedAt).toBeTruthy();
+  expect(saved.investorAnswers.familiarityTier).toBe(1);
+  expect(saved.investorAnswers.familiarityScore).toBe(0);
+  expect(saved.investorAnswers.selectedConceptIds).toEqual([]);
+  expect(saved.investorAnswers.knowledge).toBe(0);
   // Every card after the opening chart was answered "not sure", so the opening
   // view is the only one allowed to shape the thesis or the themes.
   expect(saved.themes).toEqual(["ai"]);
@@ -131,6 +140,9 @@ it("saves disagreement, confidence, horizon, own beliefs and reversible dislikes
   await act(async () => (container.querySelector('input[value="notify"]') as HTMLInputElement).click());
   await click("Meet my agent");
   const p = complete.mock.calls[0][0];
+  expect(p.investorAnswers.familiarityTier).toBe(4);
+  expect(p.investorAnswers.familiarityScore).toBe(30);
+  expect(p.investorAnswers.knowledge).toBe(3);
   expect(p.thesis).toContain("I do not expect"); expect(p.thesis).toContain("90%");
   expect(p.investorAnswers.onboarding.dislikes).toEqual(["Memecoins"]);
   expect(p.investorAnswers.onboarding.responses.find((r: { id: string }) => r.id === first.id)).toMatchObject({ direction: "no", confidence: 90, years: 11 });
@@ -142,7 +154,7 @@ it("puts the world map in front of everyone and keeps the countries", async () =
   const complete = vi.fn();
   await act(async () => root.render(<ProfileFlow userId="alice" persist={false} onComplete={complete} />));
   await click("I know what I believe"); await click("Continue");
-  await click("Experienced"); await click("Continue");
+  await pickFamiliarity(true);
   await place("Society and work", "70", "4"); await click("Continue");
   expect(container.textContent).toContain("Where could conflict reshape markets?");
   await click("Russia");

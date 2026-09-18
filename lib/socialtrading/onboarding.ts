@@ -1,5 +1,5 @@
 export const CONFIDENCE = ["I’m here to explore", "I have a few hunches", "Some things feel clear", "I know what I believe"];
-export const EXPERIENCE = ["Unknown grounds", "I know the basics", "I am comfortable exploring", "Experienced"];
+export const EXPERIENCE = ["New to investing", "Getting started", "Comfortable investing", "Experienced investor"];
 export const EXPERIENCE_NOTES = ["I’m new or have barely started.", "I understand stocks, ETFs or crypto.", "I can research and compare investments myself.", "I manage my own portfolio and know what I’m looking at."];
 export const DISLIKES = ["Non-ESG companies", "ESG companies", "Fossil fuels", "Defence and weapons", "Tobacco", "Gambling", "Memecoins", "Highly speculative investments", "Real estate", "Commodities", "Short-term trading"];
 export const CATEGORIES = ["Technology", "Energy", "Money and crypto", "Health and demographics", "Government and geopolitics", "Climate and infrastructure", "Society and work"];

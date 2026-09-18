@@ -21,7 +21,6 @@ import { PREVIEW_ACCOUNT, PREVIEW_ASSETS, PREVIEW_STATE, PREVIEW_TOKENS, PREVIEW
 import { latestChat, newChat } from "@/lib/socialtrading/chats";
 
 import { ProfileFlow } from "../(hub)/social-trading";
-import { SiteHeader } from "../_components/site-header";
 import type { InvestingProfile } from "@/lib/socialtrading/profile";
 import { previewHref } from "../(hub)/_hub/navigation";
 
@@ -29,18 +28,18 @@ export function PreviewExperience({ view, kind, id }: { view: string; kind?: str
   const [profile, setProfile] = useState<InvestingProfile>();
   const [attempt, setAttempt] = useState(0);
   const [onboarding, setOnboarding] = useState(view === "onboarding");
-  return <>
-    <div className="container" style={{ position: "relative", zIndex: 60, padding: "12px 0 10px", display: "flex", gap: 16, alignItems: "center", background: "#fff" }}>
+  return <div className={`preview-experience${onboarding ? " is-onboarding" : ""}`}>
+    {!onboarding && <div className="container" style={{ position: "relative", zIndex: 60, padding: "12px 0 10px", display: "flex", gap: 16, alignItems: "center", background: "#fff" }}>
       <span className="socialtrading-caption">Preview · sample data</span>
       <button className="hub-inline-link" onClick={() => { setProfile(undefined); setAttempt(n => n + 1); setOnboarding(true); }}>Restart onboarding</button>
       <button className="hub-inline-link" onClick={() => setOnboarding(false)}>View hub</button>
       <a className="hub-inline-link" href="/preview?view=onboarding&onboarding=tree">Tree arm</a>
       <a className="hub-inline-link" href="/preview?view=onboarding&onboarding=inference">Inference arm</a>
       <a className="hub-inline-link" href="/preview/onboarding-compare">Compare A/B</a>
-    </div>
-    {onboarding ? <div className="landing-page socialtrading-page"><SiteHeader session={false} /><main className="container socialtrading-main"><div className="dashboard-theme socialtrading-flow"><ProfileFlow key={attempt} userId={PREVIEW_USER} name="Michael" persist={false} onComplete={value => { setProfile(value); setOnboarding(false); }} /></div></main></div>
+    </div>}
+    {onboarding ? <div className="landing-page socialtrading-page is-onboarding"><main className="container socialtrading-main"><div className="dashboard-theme socialtrading-flow"><ProfileFlow key={attempt} userId={PREVIEW_USER} name="Michael" persist={false} onComplete={value => { setProfile(value); setOnboarding(false); }} /></div></main></div>
       : <PreviewHub key={attempt} view={view === "onboarding" ? "home" : view} profile={profile} kind={kind} id={id} />}
-  </>;
+  </div>;
 }
 
 const assets = Object.values(PREVIEW_ASSETS);

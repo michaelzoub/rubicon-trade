@@ -35,7 +35,7 @@ describe("update_profile tool", () => {
     const state = hub();
     state.profile.investorAnswers = { knowledge: 1, guidedTest: true, opportunityDrivers: ["Human progress"], esgPriority: 4, aiPriority: 3, technologies: ["AI safety"], conflictCountries: ["Ukraine"], geopoliticalThesis: "Energy security becomes essential", futureVision: "AI safety will become essential infrastructure" };
     expect(profileSummary(state).onboarding).toEqual({
-      investmentKnowledge: "knows the basics", opportunityDrivers: ["Human progress"], ethicsAndImpact: "impact first", aiPriority: "a lot",
+      investmentKnowledge: "Getting started", opportunityDrivers: ["Human progress"], ethicsAndImpact: "impact first", aiPriority: "a lot",
       technologies: ["AI safety"], fiveToTenYearView: "AI safety will become essential infrastructure",
       geopoliticalOutlook: { countries: ["Ukraine"], thesis: "Energy security becomes essential" },
     });

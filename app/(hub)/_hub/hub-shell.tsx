@@ -40,8 +40,8 @@ export const NAV = [
   { href: "/activity", label: "Memory", icon: Clock, exact: true },
 ] as const;
 
-function Frame({ children, wide = false, accountStatus, nav }: { children: ReactNode; wide?: boolean; accountStatus?: ReactNode; nav?: ReactNode }) {
-  return <div className="landing-page socialtrading-page"><HoverTooltips /><SiteHeader accountStatus={accountStatus} session={!accountStatus} nav={nav} /><main className={`container socialtrading-main${wide ? " is-hub" : ""}`}><div className="dashboard-theme socialtrading-flow">{children}</div></main></div>;
+function Frame({ children, wide = false, onboarding = false, accountStatus, nav }: { children: ReactNode; wide?: boolean; onboarding?: boolean; accountStatus?: ReactNode; nav?: ReactNode }) {
+  return <div className={`landing-page socialtrading-page${onboarding ? " is-onboarding" : ""}`}><HoverTooltips />{!onboarding && <SiteHeader accountStatus={accountStatus} session={!accountStatus} nav={nav} />}<main className={`container socialtrading-main${wide ? " is-hub" : ""}`}><div className="dashboard-theme socialtrading-flow">{children}</div></main></div>;
 }
 
 export function HubShell({ children }: { children: ReactNode }) {

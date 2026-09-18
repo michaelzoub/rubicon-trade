@@ -8,8 +8,10 @@ import { DEFAULT_PLAN } from "@/lib/socialtrading/plans";
 import { suggestedThemes } from "@/lib/socialtrading/themes";
 import { generatedAgentName } from "@/lib/socialtrading/agents/naming";
 import { LoadingState } from "../_components/ui";
-import { ProfileCard } from "./profile-card";
+import { OnboardingAgentPeek } from "./onboarding-agent";
+import { FAMILIARITY_TITLE, familiarityFields, scoreFamiliarity, type FamiliarityResult } from "@/lib/socialtrading/familiarity";
 import { FoundationScale } from "./onboarding-drag";
+import { FamiliarityCheck } from "./familiarity-check";
 import { PredictionDeck, iconFor } from "./onboarding-deck";
 import { DislikeVoid } from "./onboarding-void";
 import { PredictionPad } from "./onboarding-chart";
@@ -22,8 +24,8 @@ const PERMISSION_ICONS = { notify: Bell, approve: MessageSquare, automatic: Slid
 /** One line per scene. Everything else a scene has to say, it says by being
  * touched — there are no leads, eyebrows or helper paragraphs under these.
  * Positional with SCENE; the opening chart borrows the AI question itself. */
-const TITLES = ["How much of the future already feels clear to you?", "How familiar does investing feel?", "", "Where could conflict reshape markets?", "Which futures do you see?", "Which views do you feel strongest about?", "Draw your prediction.", "What doesn’t belong in your future?", "Your outlook. Your rules."];
-const KINDS = ["scale", "scale", "pad", "map", "binary", "chips", "pad", "chips", "rules"];
+const TITLES = ["How much of the future already feels clear to you?", FAMILIARITY_TITLE, "", "Where could conflict reshape markets?", "Which futures do you see?", "Which views do you feel strongest about?", "Draw your prediction.", "What doesn’t belong in your future?", "Your outlook. Your rules."];
+const KINDS = ["scale", "chips", "pad", "map", "binary", "chips", "pad", "chips", "rules"];
 
 /** The decision-tree arm. Everyone answers the same two opening questions — how
  * far AI goes, on the chart, and where in the world it lands, on the map — and
@@ -77,9 +79,16 @@ export function TreeOnboarding({ userId, name, onComplete, completing = false, s
     const target = order[order.indexOf(scene) + direction];
     if (target !== undefined) update({ scene: target });
   }
+  function completeKnowledge(result: FamiliarityResult) {
+    const nextKnowledge = familiarityFields(result);
+    const knowledgeChanged = profile.investorAnswers.knowledge !== nextKnowledge.knowledge;
+    const target = order[order.indexOf(scene) + 1];
+    if (target === undefined) return;
+    update({ scene: target, ...(knowledgeChanged ? { responses: [], strongest: [] } : {}) }, { investorAnswers: { ...profile.investorAnswers, ...nextKnowledge } });
+  }
   function next() {
     if (scene === SCENE.clarity && a.confidence === null) return setError("Choose how clear the future feels to you.");
-    if (scene === SCENE.knowledge && profile.investorAnswers.knowledge === null) return setError("Choose a stop on your investing journey.");
+    if (scene === SCENE.knowledge) { completeKnowledge(scoreFamiliarity(profile.investorAnswers.selectedConceptIds ?? [])); return; }
     if (scene === SCENE.horizon && !a.responses.some(r => r.id === base.id && r.confidence !== undefined)) return setError("Place the dot to say how sure you are.");
     if (scene === SCENE.strongest && candidates.length && !a.strongest.length) return setError("Choose one or two views to explore more deeply.");
     if (scene === SCENE.chart && a.responses.some(r => a.strongest.includes(r.id) && (r.confidence === undefined || r.years === undefined))) return setError("Place the dot for each prediction.");
@@ -131,7 +140,7 @@ export function TreeOnboarding({ userId, name, onComplete, completing = false, s
         >
           <h1 ref={heading} tabIndex={-1} className="sr-only outline-none">{title}</h1>
           {scene === SCENE.clarity && <FoundationScale kind="clarity" value={a.confidence} onChange={confidence => update({ confidence })} />}
-          {scene === SCENE.knowledge && <FoundationScale kind="knowledge" value={profile.investorAnswers.knowledge} onChange={value => update({ responses: [], strongest: [] }, { investorAnswers: { ...profile.investorAnswers, knowledge: value } })} />}
+          {scene === SCENE.knowledge && <FamiliarityCheck showTitle={false} hideContinue busy={busy} initialSelectedIds={profile.investorAnswers.selectedConceptIds} onChange={ids => update({}, { investorAnswers: { ...profile.investorAnswers, selectedConceptIds: ids } })} onComplete={completeKnowledge} />}
           {scene === SCENE.horizon && <PredictionPad stance response={seeded} onChange={placeBase} />}
           {scene === SCENE.geography && <GeographyMap selected={profile.investorAnswers.conflictCountries} thesis={profile.investorAnswers.geopoliticalThesis} onSelected={conflictCountries => answers({ conflictCountries })} onThesis={geopoliticalThesis => answers({ geopoliticalThesis })} />}
           {scene === SCENE.deck && upcoming && <PredictionDeck card={upcoming} backs={Math.max(0, DECK_SIZE - deckProgress(a) - 1)} answered={deckProgress(a)} total={DECK_SIZE} onVote={vote}
@@ -164,6 +173,6 @@ export function TreeOnboarding({ userId, name, onComplete, completing = false, s
         </OnboardingCard>
       </div>
     </div>
-    <ProfileCard profile={preview} name={name} agentName={agentCreation ? generatedAgentName(preview, name, userId) : undefined} />
+    <OnboardingAgentPeek profile={preview} name={name} agentName={agentCreation ? generatedAgentName(preview, name, userId) : undefined} />
   </div>;
 }
