@@ -651,6 +651,7 @@ The half of the sequencer that decides *which topic*. Pure arithmetic over belie
 - Consumes: `ProfileModel`, `Belief` from Task 3; `PROBE_TOPICS`, `probeTopic`, `ProbeTopic` from Task 2.
 - Produces:
   - `const MAX_PROBES = 7`, `MIN_PROBES = 3`, `SUPPRESS = 0.15`, `KNOWN_CERTAINTY = 0.8`, `KNOWN_MARGIN = 0.3`, `MIN_VALUE = 0.05`, `TIE = 0.15`
+  - The thresholds are asserted through behaviour, never as `expect(SUPPRESS).toBe(0.15)`. A test that restates a constant fails with no information about what broke. `MAX_PROBES` and `MIN_PROBES` stay imported, because Task 5's bound tests are written against them rather than against literal 7 and 3.
   - `type Candidate = { topic: ProbeTopic; p: number; certainty: number; value: number }`
   - `rankTopics(model: ProfileModel): Candidate[]`
   - `probeId(id: TopicId): string` — returns `` `probe:${id}` ``
@@ -661,7 +662,7 @@ Create `lib/socialtrading/profile-probe.test.ts`:
 
 ```ts
 import { describe, expect, it } from "vitest";
-import { KNOWN_CERTAINTY, MAX_PROBES, MIN_PROBES, SUPPRESS, probeId, rankTopics } from "./profile-probe";
+import { MAX_PROBES, MIN_PROBES, probeId, rankTopics } from "./profile-probe";
 import { newProfileModel, type Belief, type ProfileModel } from "./profile-model";
 
 const model = (beliefs: Belief[], patch: Partial<ProfileModel> = {}): ProfileModel =>
@@ -674,13 +675,11 @@ describe("ranking the next topic", () => {
       { topic: "semiconductors", p: 0.85, certainty: 0.5 },
     ]));
     expect(ranked.map(c => c.topic.id)).toEqual(["semiconductors"]);
-    expect(SUPPRESS).toBe(0.15);
   });
 
   it("skips a topic we already know with confidence, and keeps the same reading when we do not", () => {
     expect(rankTopics(model([{ topic: "semiconductors", p: 0.9, certainty: 0.9 }]))).toEqual([]);
     expect(rankTopics(model([{ topic: "semiconductors", p: 0.9, certainty: 0.5 }])).map(c => c.topic.id)).toEqual(["semiconductors"]);
-    expect(KNOWN_CERTAINTY).toBe(0.8);
   });
 
   it("does not skip a confident reading that sits in the middle — that is not knowing", () => {
@@ -716,11 +715,6 @@ describe("ranking the next topic", () => {
 
   it("ignores a belief about a topic the catalog no longer has", () => {
     expect(rankTopics(model([{ topic: "sports", p: 0.9, certainty: 0.1 } as unknown as Belief]))).toEqual([]);
-  });
-
-  it("holds the run bounds the design fixed", () => {
-    expect(MAX_PROBES).toBe(7);
-    expect(MIN_PROBES).toBe(3);
   });
 });
 ```
@@ -1616,9 +1610,14 @@ import { PredictionDeck, DealingDeck } from "./onboarding-deck";
 const TOTAL = 2 + MAX_PROBES + 1;
 
 /** A probe kind names an interaction; a card kind names an answer shape.
- * `applyAnswer` speaks the second, so the two are mapped rather than merged. */
-const cardKind = (kind: Probe["kind"]): CardKind =>
-  kind === "spectrum" ? "scale" : kind === "choice" ? "binary" : kind === "map" ? "binary" : kind;
+ * `applyAnswer` speaks the second, so the two are mapped rather than merged.
+ *
+ * `map` is deliberately absent from the parameter type. A map answer goes
+ * straight into `ownBelief` and never reaches `applyAnswer`, so the compiler
+ * proves that branch cannot exist rather than us carrying a line that never
+ * runs. The one call site narrows with `answer.kind === "map"` first. */
+const cardKind = (kind: Exclude<Probe["kind"], "map">): CardKind =>
+  kind === "spectrum" ? "scale" : kind === "choice" ? "binary" : kind;
 ```
 
 **Change the signature** to:
