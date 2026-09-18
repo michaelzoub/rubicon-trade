@@ -57,10 +57,11 @@ export function Lens<T extends string>({ items, value, onChange, label, classNam
   };
 
   return <div ref={bar} className={`hub-lens ${className}`} role="tablist" aria-label={label} style={{ "--lens-hue": active.hue } as CSSProperties}>
-    {items.map(item => {
+    {items.map((item, index) => {
       const selected = item.id === value;
+      // The index rides along so the unchosen lenses can take turns inviting a press.
       return <button key={item.id} type="button" role="tab" data-lens={item.id} aria-selected={selected} tabIndex={selected ? 0 : -1}
-        className={`hub-lens-item${selected ? " is-active" : ""}`} style={{ "--lens-hue": item.hue } as CSSProperties}
+        className={`hub-lens-item${selected ? " is-active" : ""}`} style={{ "--lens-hue": item.hue, "--lens-index": index } as CSSProperties}
         onPointerMove={event => { if (event.pointerType === "touch" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return; const rect = event.currentTarget.getBoundingClientRect(); event.currentTarget.style.setProperty("--mx", `${(event.clientX - rect.left) / rect.width * 100}%`); event.currentTarget.style.setProperty("--my", `${(event.clientY - rect.top) / rect.height * 100}%`); }}
         onClick={() => onChange(item.id)} onKeyDown={key}>
         {item.icon && <item.icon size={14} strokeWidth={1.8} aria-hidden />}

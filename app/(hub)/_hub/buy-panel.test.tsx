@@ -12,6 +12,16 @@ vi.mock("@privy-io/react-auth", () => ({
   useWallets: () => ({ ready: true, wallets: [{ address: PREVIEW_WALLET, walletClientType: "privy", switchChain: vi.fn(), getEthereumProvider: async () => ({ request: vi.fn(async ({ method }: { method: string }) => method === "eth_chainId" ? "0x2105" : method === "eth_accounts" ? [PREVIEW_WALLET] : method === "eth_call" ? "0x3b9aca00" : "0x0") }) }] }),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => "/trade" }));
+/** The wallet's half of the purchase: one signature, one user operation. Real
+ * signing needs a bundler and a paymaster; what this asserts is the shape of
+ * the flow around it. */
+const chainMock = vi.hoisted(() => ({
+  sendSwapBatch: vi.fn(async ({ onSubmitted }: { onSubmitted?: (op: string) => void }) => {
+    onSubmitted?.(`0x${"ef".repeat(32)}`);
+    return { hash: `0x${"cd".repeat(32)}`, userOpHash: `0x${"ef".repeat(32)}` };
+  }),
+}));
+vi.mock("@/lib/crypto/gasless", () => ({ sendSwapBatch: chainMock.sendSwapBatch, recoverSwapOperation: vi.fn(async () => null) }));
 import { HubProvider } from "./hub-provider";
 import { BuyPanel } from "./buy-panel";
 
@@ -26,13 +36,23 @@ const bought = (status: HubState["trades"][number]["status"]): HubState => {
 /** The server resolves where the money is; the panel only renders the answer. */
 const seat = { chainId: 8453, wallet: PREVIEW_WALLET, balance: "500000000", reserve: "20000", status: "same_chain" as const };
 const route = { chosen: seat, candidates: [seat] };
+/** The same wallet, holding $7.30 — too little for any of the old fixed amounts. */
+const thin = { ...seat, balance: "7300000", status: "insufficient" as const };
+const batch = { chainId: 8453, sender: PREVIEW_WALLET, calls: [], callData: "0x", paymaster: "circle-usdc" };
+/** The server, answering each step of one purchase in order. */
 const api = {
   market: async () => ({ assets: [] }),
   searchTokens: async (_t: unknown, q: string) => ({ tokens: PREVIEW_TOKENS.filter(t => `${t.symbol} ${t.name}`.toLowerCase().includes(q.toLowerCase())) }),
-  crypto: async (_t: unknown, _r: number, body: { action: string }) =>
-    body.action === "purchase_route" ? { route }
-      : body.action === "propose" ? { state: bought("reserved"), tradeId: "t9" }
-      : { state: bought("confirmed") },
+  crypto: async (_t: unknown, _r: number, body: { action: string }) => {
+    switch (body.action) {
+      case "purchase_route": return { route };
+      case "propose": return { state: bought("reserved"), tradeId: "t9" };
+      case "prepare": return { state: bought("reserved"), quoteId: "q1", step: "swap", expiresAt: Date.now() + 120_000 };
+      case "authorize": return { state: bought("reserved"), batch, step: "swap", expiresAt: Date.now() + 120_000 };
+      case "submitted": return { state: bought("unknown") };
+      default: return { state: bought("confirmed") };
+    }
+  },
 };
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -62,44 +82,70 @@ it.each(["nvidia", "NVDA", "NVDAc"])("finds the recommended NVIDIA instrument fo
   }), expect.anything());
 });
 
-async function buyThenSettle() {
-  await act(async () => root.render(<HubProvider userId="preview-user" name="Michael" initial={PREVIEW_STATE} initialAccount={PREVIEW_ACCOUNT} api={api}><BuyPanel /></HubProvider>));
+async function buyThenSettle(over: Partial<typeof api> = {}) {
+  await act(async () => root.render(<HubProvider userId="preview-user" name="Michael" initial={PREVIEW_STATE} initialAccount={PREVIEW_ACCOUNT} api={{ ...api, ...over }}><BuyPanel /></HubProvider>));
   await setValue(container.querySelector("#buy-search") as HTMLInputElement, "bnvda");
   await tick();
   await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>(".hub-buy-result")).find(b => b.textContent?.includes("BNVDA"))!.click());
   expect(container.querySelector("#buy-search")).toBeNull();
   expect(container.querySelector(".hub-buy-estimate")?.textContent).toContain("BNVDA at today’s price");
   await resolved();
-  // The network, the wallet and the fee are one sentence, not four controls.
-  expect(container.querySelector(".hub-buy-form")!.textContent).toContain("Paying with USDC on Base");
+  // A purchase that works explains nothing: no network, no wallet, no fee
+  // sentence, no "where your money is" — and still no controls to resolve.
+  const form = container.querySelector(".hub-buy-form")!;
+  expect(form.textContent).not.toContain("Paying with USDC on Base");
+  expect(form.textContent).not.toContain("Where your money is");
+  expect(form.textContent).not.toContain("not brokerage shares");
+  expect(form.querySelector(".hub-notice")).toBeNull();
   expect(container.querySelector("select")).toBeNull();
   await act(async () => { container.querySelector("form.hub-buy-form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
   await tick();
-  expect(container.querySelector(".hub-swap-result .hub-trade--crypto")).not.toBeNull();
-  expect(container.querySelector(".hub-buy-done")).toBeNull();
-  const decline = Array.from(container.querySelectorAll<HTMLButtonElement>(".hub-swap-result button")).find(b => b.textContent === "Decline")!;
-  await act(async () => decline.click());
   await tick();
 }
 
-it("shows a purchase you placed without restating it or the agent's limits", async () => {
-  await act(async () => root.render(<HubProvider userId="preview-user" name="Michael" initial={PREVIEW_STATE} initialAccount={PREVIEW_ACCOUNT} api={api}><BuyPanel /></HubProvider>));
+async function chooseBNVDA(over: Partial<typeof api> = {}) {
+  await act(async () => root.render(<HubProvider userId="preview-user" name="Michael" initial={PREVIEW_STATE} initialAccount={PREVIEW_ACCOUNT} api={{ ...api, ...over }}><BuyPanel /></HubProvider>));
   await setValue(container.querySelector("#buy-search") as HTMLInputElement, "bnvda");
   await tick();
   await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>(".hub-buy-result")).find(b => b.textContent?.includes("BNVDA"))!.click());
   await resolved();
-  await act(async () => { container.querySelector("form.hub-buy-form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
-  await tick();
-  const card = container.querySelector(".hub-swap-result .hub-trade--crypto")!;
+}
+const chips = () => Array.from(container.querySelectorAll(".hub-buy-presets button")).map(b => b.textContent);
 
-  // The line above already says what this is, and the agent's limits are not a
-  // fact about a trade the person placed themselves.
-  expect(card.textContent).not.toContain("Your agent’s mode and limits");
-  expect(card.querySelector(".hub-trade-reasoning")).toBeNull();
-  // The status belongs in one place, not beside itself.
-  expect(card.textContent!.match(/Ready to sign/g) ?? []).toHaveLength(1);
-  // The guarantee that matters before signing survives.
-  expect(card.querySelector(".purchase-readiness")!.textContent).toContain("At least");
+it("says what you hold, and offers amounts that fit inside it", async () => {
+  await chooseBNVDA();
+  expect(container.querySelector(".hub-buy-balance")?.textContent).toBe("$500.00 available");
+  // Round numbers that fit, then all of it, less the fee the network takes
+  // out of the same USDC.
+  expect(chips()).toEqual(["$50", "$100", "$250", "$499.50"]);
+});
+
+it("re-scales the amounts to a small balance instead of offering refusals", async () => {
+  await chooseBNVDA({ crypto: async (_t: unknown, _r: number, body: { action: string }) => body.action === "purchase_route" ? { route: { chosen: null, candidates: [thin] } } : api.crypto(_t, _r, body) });
+  expect(container.querySelector(".hub-buy-balance")?.textContent).toBe("$7.30 available");
+  expect(chips()).toEqual(["$1.70", "$3.40", "$6.80"]);
+  // The opening $50 was never buyable here, so it never stays on screen.
+  expect((container.querySelector("#buy-amount") as HTMLInputElement).value).toBe("6.80");
+});
+
+it("settles in one press, with nothing to confirm in between", async () => {
+  await buyThenSettle();
+  // The whole purchase — quote, approvals, signature, submission — happened on
+  // the press. Anything asking the buyer to do it again is the bug this guards.
+  expect(chainMock.sendSwapBatch).toHaveBeenCalledTimes(1);
+  expect(container.textContent).not.toContain("Confirm purchase");
+  expect(container.textContent).not.toContain("One last step");
+  expect(container.querySelector(".hub-swap-result")).toBeNull();
+  expect(container.querySelector(".hub-buy-done")?.textContent).toContain("It’s yours.");
+}, 20000);
+
+it("hands the purchase back to its own card when the wallet cannot finish it", async () => {
+  chainMock.sendSwapBatch.mockRejectedValueOnce(new Error("User rejected the request."));
+  await buyThenSettle();
+  expect(container.querySelector(".hub-buy-done")).toBeNull();
+  // Everything that can recover a half-sent purchase lives on that card.
+  expect(container.querySelector(".hub-swap-result .hub-trade--crypto")).not.toBeNull();
+  expect(container.querySelector(".hub-error")?.textContent).toContain("Wallet request declined");
 }, 20000);
 
 it("celebrates in words when the buy settles onchain, and keeps the burst quiet under reduced motion", async () => {

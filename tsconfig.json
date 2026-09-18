@@ -31,13 +31,16 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
+    ".next-beliefs/types/**/*.ts",
     ".next-build/types/**/*.ts",
+    ".next-buy/types/**/*.ts",
+    ".next-gascheck/types/**/*.ts",
     ".next-purchase-dev/types/**/*.ts",
     ".next-redesign/types/**/*.ts",
     ".next-verify/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    ".next-gascheck/types/**/*.ts"
+    ".next-assets/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

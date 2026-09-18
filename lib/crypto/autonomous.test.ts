@@ -26,3 +26,9 @@ it('does not read Act mode as permission to spend', () => {
   // Act mode means "reserve without asking", which is not the same thing.
   expect(canBuyUnattended(state({ permission: 'automatic', autoExecute: false }), 'w1')).toBe(false);
 });
+
+it('requires a user signature for sales even when unattended buying is enabled', async () => {
+  const { executeAutonomousBuy } = await import('./autonomous');
+  const trade = { side: 'sell', crypto: { request: { chainId: 8453 } } } as import('@/lib/socialtrading/types').TradeIntent;
+  await expect(executeAutonomousBuy(state(), 'u1', trade, { id: 'w1', address: `0x${'11'.repeat(20)}` })).rejects.toThrow('does not authorize sales');
+});

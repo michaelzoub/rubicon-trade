@@ -4,6 +4,7 @@ import { useWallets } from "@privy-io/react-auth";
 import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, Check } from "lucide-react";
 import { CHAINS, explorerTx, parseUnits, shortAddress, type ChainId } from "@/lib/crypto/chains";
+import { BUY_CHAIN } from "@/lib/crypto/tradable";
 import { purchaseError } from "@/lib/crypto/readiness";
 import type { Holding } from "@/lib/crypto/recovery";
 import { useHub } from "./hub-provider";
@@ -46,7 +47,7 @@ export function RecoverFunds() {
     lock.current = true; setLoading(true); setError(""); setSent(null);
     try {
       const result = await crypto({ action: "holdings" });
-      setHoldings(result.holdings ?? []);
+      setHoldings((result.holdings ?? []).filter(h => h.chainId === BUY_CHAIN));
     } catch (e) { setError(purchaseError(e)); }
     finally { lock.current = false; setLoading(false); }
   }
@@ -95,10 +96,10 @@ export function RecoverFunds() {
       <span>Sent. <a className="hub-inline-link mono" href={explorerTx(sent.chainId, sent.hash)} target="_blank" rel="noopener noreferrer">{shortAddress(sent.hash)}<ArrowUpRight size={11} aria-hidden="true" /></a> It can take a minute to appear.</span>
     </p>}
 
-    {loading && holdings === null && <p className="hub-empty-inline" role="status">Looking across your networks…</p>}
+    {loading && holdings === null && <p className="hub-empty-inline" role="status">Checking your Base wallet…</p>}
     {error && !picked && <p className="hub-error" role="alert">{error}</p>}
 
-    {holdings !== null && !holdings.length && !loading && <p className="socialtrading-caption">Nothing is sitting in your wallets across {Object.keys(CHAINS).length} networks. If something arrived that you can’t see here, <button type="button" className="hub-inline-link" onClick={() => void scan()}>check again</button>.</p>}
+    {holdings !== null && !holdings.length && !loading && <p className="socialtrading-caption">No tokens found in your Base wallets. If something arrived that you can’t see here, <button type="button" className="hub-inline-link" onClick={() => void scan()}>check again</button>.</p>}
 
     {holdings !== null && holdings.length > 0 && <>
       <ul className="hub-recover-list" aria-label="What you're holding">

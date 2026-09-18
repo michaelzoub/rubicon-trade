@@ -2,13 +2,121 @@ import "server-only";
 import { chain } from "./chains";
 import { http } from "./http";
 import type { SwapBatch, Transaction } from "./types";
-export async function rpc<T>(chainId: number, method: string, params: unknown[]): Promise<T> {
-  chain(chainId); const url = process.env[`CRYPTO_RPC_URL_${chainId}`];
-  if (!url || !url.startsWith("https://")) throw new Error(`Configure CRYPTO_RPC_URL_${chainId} for transaction verification.`);
-  const result = await http<{ result: T; error?: unknown }>("Chain RPC", url, { body: { jsonrpc: "2.0", id: 1, method, params } });
-  if (result.error || !("result" in result)) throw new Error("Chain RPC could not verify the transaction.");
-  return result.result;
+
+/** Every read this app makes of a chain goes through here, which is why the
+ * pacing lives here too.
+ *
+ * A single purchase asks the chain a lot of small questions: where the money
+ * is, what the token's decimals are, what gas costs, whether the receipt has
+ * landed — and the resolver asks them for several wallets at once while the
+ * buy panel re-asks them on every keystroke. Against a shared or free endpoint
+ * that burst is what a 429 actually is: not a broken purchase, just too many
+ * questions at once. So the transport answers the repeats from memory, asks
+ * each distinct question only once while it is in flight, paces what is left,
+ * and retries a refusal on the next endpoint instead of surfacing it. */
+
+/** Endpoints for a chain, in preference order. One URL is the common case; a
+ * comma- or whitespace-separated list gives the retry somewhere else to go. */
+function endpoints(chainId: number): string[] {
+  const urls = (process.env[`CRYPTO_RPC_URL_${chainId}`] ?? "").split(/[\s,]+/).filter(url => url.startsWith("https://"));
+  if (!urls.length) throw new Error(`Configure CRYPTO_RPC_URL_${chainId} for transaction verification.`);
+  return urls;
 }
+
+/** `decimals()`, `symbol()`, `name()` — answers that cannot change, so asking
+ * twice is waste rather than freshness. */
+const IMMUTABLE_CALL = new Set(["0x313ce567", "0x95d89b41", "0x06fdde03"]);
+
+/** How long an answer stays good for. Anything that decides whether funds move
+ * — nonces, receipts, block numbers, gas estimates — is never remembered, so
+ * verification and nonce reservation still see the chain as it is right now. */
+function ttl(method: string, params: unknown[]): number {
+  switch (method) {
+    case "eth_chainId": return 300_000;
+    case "eth_call": return IMMUTABLE_CALL.has(String((params[0] as { data?: string } | undefined)?.data ?? "").slice(0, 10).toLowerCase()) ? 600_000 : 2_000;
+    case "eth_getBalance": return 2_000;
+    case "eth_gasPrice": case "eth_maxPriorityFeePerGas": case "eth_feeHistory": return 5_000;
+    default: return 0;
+  }
+}
+
+const cache = new Map<string, { until: number; value: unknown }>();
+const pending = new Map<string, Promise<unknown>>();
+/** Test seam: a fresh chain for a fresh scenario. */
+export function clearRpcCache() { cache.clear(); pending.clear(); }
+
+/** Statuses that mean "not now" rather than "no". */
+const TRANSIENT = new Set([408, 425, 429, 500, 502, 503, 504]);
+const ATTEMPTS = 4;
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const statusOf = (error: unknown) => typeof (error as { status?: unknown })?.status === "number" ? (error as { status: number }).status : 0;
+/** Honour the server's own advice, but never stall a purchase for longer than
+ * the person would wait. */
+const retryAfter = (error: unknown) => {
+  const seconds = Number((error as { retryAfter?: string | null })?.retryAfter);
+  return Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds * 1000, 4_000) : 0;
+};
+const backoff = (attempt: number) => 150 * 2 ** attempt + Math.random() * 120;
+
+/** No more than a handful of questions in the air per chain. Bursting is what
+ * trips a rate limit in the first place; waiting a few milliseconds is cheaper
+ * than being refused and retried. */
+const CONCURRENCY = 5;
+const lanes = new Map<number, { active: number; waiting: (() => void)[] }>();
+async function paced<T>(chainId: number, run: () => Promise<T>): Promise<T> {
+  const lane = lanes.get(chainId) ?? { active: 0, waiting: [] };
+  lanes.set(chainId, lane);
+  if (lane.active >= CONCURRENCY) await new Promise<void>(resolve => lane.waiting.push(resolve));
+  lane.active++;
+  try { return await run(); }
+  finally { lane.active--; lane.waiting.shift()?.(); }
+}
+
+async function send<T>(chainId: number, method: string, params: unknown[]): Promise<T> {
+  const urls = endpoints(chainId);
+  let failure: unknown;
+  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+    try {
+      const response = await http<{ result: T; error?: { message?: string } }>("Chain RPC", urls[attempt % urls.length], { body: { jsonrpc: "2.0", id: 1, method, params } });
+      // Some endpoints refuse inside a 200 rather than with a status. That is
+      // still "not now", and it is still worth asking the next one.
+      if (response.error) {
+        const message = String(response.error.message ?? "");
+        if (!/limit|throttl|capacity|too many|busy|exceeded/i.test(message)) throw new Error("Chain RPC could not verify the transaction.");
+        failure = Object.assign(new Error(`Chain RPC rate limit reached; retry later (429).`), { status: 429 });
+      } else {
+        if (!("result" in response)) throw new Error("Chain RPC could not verify the transaction.");
+        return response.result;
+      }
+    } catch (error) {
+      if (!TRANSIENT.has(statusOf(error))) throw error;
+      failure = error;
+    }
+    if (attempt === ATTEMPTS - 1) break;
+    await sleep(Math.max(retryAfter(failure), backoff(attempt)));
+  }
+  throw failure;
+}
+
+export async function rpc<T>(chainId: number, method: string, params: unknown[]): Promise<T> {
+  chain(chainId);
+  const lifetime = ttl(method, params);
+  if (!lifetime) return paced(chainId, () => send<T>(chainId, method, params));
+  const key = `${chainId}:${method}:${JSON.stringify(params)}`;
+  const hit = cache.get(key);
+  if (hit && hit.until > Date.now()) return hit.value as T;
+  const inflight = pending.get(key);
+  if (inflight) return inflight as Promise<T>;
+  const task = paced(chainId, () => send<T>(chainId, method, params)).then(value => {
+    if (cache.size >= 400) cache.delete(cache.keys().next().value!);
+    cache.set(key, { until: Date.now() + lifetime, value });
+    return value;
+  });
+  pending.set(key, task);
+  try { return await task; }
+  finally { pending.delete(key); }
+}
+
 export async function verifyTransaction(tx: Transaction, hash: string): Promise<"pending" | "confirmed" | "reverted"> {
   const [network, sent, receipt] = await Promise.all([
     rpc<string>(tx.chainId, "eth_chainId", []),

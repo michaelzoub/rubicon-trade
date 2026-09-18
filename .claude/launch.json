@@ -48,6 +48,42 @@
       "env": {
         "RUBICON_BUILD_DIR": ".next-redesign"
       }
+    },
+    {
+      "name": "web-buy",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "autoPort": true,
+      "env": {
+        "RUBICON_BUILD_DIR": ".next-buy"
+      }
+    },
+    {
+      "name": "web-beliefs",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "autoPort": true,
+      "env": {
+        "RUBICON_BUILD_DIR": ".next-beliefs"
+      }
+    },
+    {
+      "name": "web-assets",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "autoPort": true,
+      "env": {
+        "RUBICON_BUILD_DIR": ".next-assets"
+      }
     }
   ]
 }

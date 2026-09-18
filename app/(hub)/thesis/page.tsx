@@ -1,2 +1,2 @@
-import { ThesisView } from '../_hub/worldview';
-export default function ThesisPage() { return <ThesisView />; }
+import { redirect } from 'next/navigation';
+export default function ThesisPage() { redirect('/beliefs'); }

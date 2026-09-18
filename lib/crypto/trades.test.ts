@@ -8,7 +8,7 @@ vi.mock("./services", () => ({ cryptoServices: { execution: { quote: mocks.quote
 vi.mock("./rpc", () => ({ rpc: mocks.rpc }));
 import { proposeSwap, prepareSwap, authorizeSwap, userSwap } from "./trades";
 import { encodeAccountCalls } from "./aa";
-import { gaslessChain } from "./chains";
+import { chain, gaslessChain } from "./chains";
 // Agent purchases settle on Base, so the fixtures are Base.
 const req = { chainId: 8453, wallet: "0x1111111111111111111111111111111111111111", tokenIn: "0x2222222222222222222222222222222222222222", tokenOut: "0x3333333333333333333333333333333333333333", amount: "1000000", slippageBps: 50 };
 const hex = (text: string) => [...text].map(c => c.charCodeAt(0).toString(16).padStart(2, "0")).join("");
@@ -221,7 +221,7 @@ it("prepares a USDC-fee purchase without a separate Permit2 signature and simula
   expect(prepared.permitData).toBeUndefined();
   const result = await authorizeSwap(s, "alice", t, prepared.quoteId);
   expect(result.batch).toBeDefined();
-  expect(mocks.swap).toHaveBeenCalledWith(expect.anything(), undefined, { batchedApprovals: true });
+  expect(mocks.swap).toHaveBeenCalledWith(expect.anything(), undefined, { batchedApprovals: true, autonomous: false });
   expect(mocks.rpc).toHaveBeenCalledWith(8453, "eth_call", [expect.objectContaining({ to: req.wallet, data: result.batch!.callData }), "latest", expect.anything()]);
   expect(t.crypto?.phase).toBe("issued");
 });
@@ -237,4 +237,76 @@ it("keeps a purchase unissued when its complete batch reverts", async () => {
   await expect(authorizeSwap(s, "alice", t, prepared.quoteId)).rejects.toThrow("Purchase simulation failed");
   expect(t.crypto?.phase).toBe("authorizing");
   expect(t.crypto?.batch).toBeUndefined();
+});
+
+it("quotes and authorizes a user's canonical USDC buy when USD feeds are unavailable", async () => {
+  const s = state("notify"), usdc = chain(8453).usdc;
+  const request = { ...req, tokenIn: usdc, tokenOut: "0xb20000000000000000000078ee7ce2fe4908108c" };
+  mocks.value.mockRejectedValue(new Error("A fresh, reliable USD valuation is unavailable for this token."));
+  mocks.price.mockRejectedValue(new Error("A fresh, reliable USD valuation is unavailable for this token."));
+  const original = mocks.rpc.getMockImplementation()!;
+  mocks.rpc.mockImplementation(async (...args) => {
+    if (args[2]?.[0]?.data === "0x313ce567") return `0x${(args[2][0].to === usdc ? 6 : 8).toString(16).padStart(64, "0")}`;
+    return original(...args);
+  });
+  mocks.quote.mockResolvedValue({ outputAmount: "454100", minimumOutput: "451900", expiresAt: Date.now() + 60_000, request, raw: {} });
+  const t = await userSwap(s, "alice", { ...request, amount: "1" });
+  expect(t.value).toBe(1);
+  expect(t.crypto?.display.tokenOut).toEqual({ symbol: "NVDAc", decimals: 8 });
+  const prepared = await prepareSwap(s, "alice", t);
+  const authorized = await authorizeSwap(s, "alice", t, prepared.quoteId);
+  expect(authorized.batch).toBeDefined();
+  expect(mocks.value).not.toHaveBeenCalled();
+  expect(mocks.rpc).toHaveBeenCalledWith(8453, "eth_call", [expect.objectContaining({ to: req.wallet, data: authorized.batch!.callData }), "latest", expect.anything()]);
+  // An agent spending the same USDC is valued the same way, and for the same
+  // reason: the amount IS the dollar value. Routing it through a feed computed
+  // an identical number less reliably — and when the two could diverge, on a
+  // depeg, face value is the more conservative charge against the budget. The
+  // unattended path is the one nobody can retry, so it gets the answer that
+  // cannot be unavailable.
+  const agentTrade = await proposeSwap(state("automatic"), "alice", request, "agent buy");
+  expect(agentTrade.value).toBe(1);
+  expect(mocks.value).not.toHaveBeenCalled();
+});
+
+it("does not treat an arbitrary token as USDC just because the buy is user-initiated", async () => {
+  mocks.value.mockRejectedValue(new Error("USD valuation unavailable"));
+  await expect(userSwap(state(), "alice", { ...req, amount: "1" })).rejects.toThrow("USD valuation unavailable");
+});
+
+it("records a token-to-USDC swap as a sale of the input asset using executable proceeds", async () => {
+  const s = state("approve");
+  const sale = { ...req, tokenIn: req.tokenOut, tokenOut: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", amount: "1000000000000000000" };
+  mocks.quote.mockResolvedValue({ outputAmount: "50000000", minimumOutput: "49750000", expiresAt: Date.now() + 60000, request: sale, raw: {} });
+  mocks.value.mockRejectedValue(new Error("Market price is stale"));
+  const t = await proposeSwap(s, "alice", sale, "Sell the held token");
+  expect(t.side).toBe("sell");
+  expect(t.asset.id).toBe(`${sale.chainId}:${sale.tokenIn}`);
+  expect(t.asset.symbol).toBe("WXYZ");
+  expect(t.value).toBe(50);
+  expect(t.status).toBe("approval_required");
+  expect(mocks.value).not.toHaveBeenCalled();
+  expect(mocks.swap).not.toHaveBeenCalled();
+});
+it("refuses an agent sale exceeding the wallet balance before quoting", async () => {
+  const original = mocks.rpc.getMockImplementation()!;
+  mocks.rpc.mockImplementation(async (id, method, params) => params?.[0]?.data?.startsWith("0x70a08231") ? "0x0" : original(id, method, params));
+  await expect(proposeSwap(state(), "alice", { ...req, tokenIn: req.tokenOut, tokenOut: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" }, "sell")).rejects.toThrow("enough");
+  expect(mocks.quote).not.toHaveBeenCalled();
+});
+
+it("prepares and authorizes a sponsored sale without treating a signature request as settlement", async () => {
+  const s = state();
+  const usdc = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
+  const sale = { ...req, tokenIn: req.tokenOut, tokenOut: usdc, amount: "1000000000000000000" };
+  const original = mocks.rpc.getMockImplementation()!;
+  mocks.rpc.mockImplementation(async (id, method, params) => params?.[0]?.data === "0x313ce567" ? `0x${(params[0].to === usdc ? 6 : 18).toString(16).padStart(64, "0")}` : original(id, method, params));
+  mocks.quote.mockResolvedValue({ outputAmount: "50000000", minimumOutput: "49750000", expiresAt: Date.now() + 60000, request: sale, raw: {} });
+  const trade = await proposeSwap(s, "alice", sale, "Sell my holding");
+  const ready = await prepareSwap(s, "alice", trade);
+  const issued = await authorizeSwap(s, "alice", trade, ready.quoteId);
+  expect(issued.batch).toMatchObject({ sender: req.wallet, paymaster: "circle-usdc" });
+  expect(trade.side).toBe("sell");
+  expect(trade.status).toBe("unknown");
+  expect(trade.crypto?.phase).toBe("issued");
 });

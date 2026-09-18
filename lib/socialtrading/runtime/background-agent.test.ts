@@ -3,7 +3,7 @@ import { PREVIEW_ASSETS, PREVIEW_STATE } from "@/app/preview/fixture";
 import { defaultAgent } from "../agents/config";
 import { CapabilityRegistry } from "../agents/registry";
 import type { HubState } from "../types";
-import { OUT_OF_CREDITS_SUMMARY, runBackgroundAgent, WRITE_TOOLS } from "./background-agent";
+import { DELEGATED_TOOLS, isCheckReport, OUT_OF_CREDITS_SUMMARY, runBackgroundAgent, WRITE_TOOLS } from "./background-agent";
 import { latestChat } from "../chats";
 import { MemoryCreditLedger } from "../credits";
 import { MemoryRuntimeStore } from "./memory-store";
@@ -174,4 +174,203 @@ it("does not deliver a finding after the dispatcher aborts a slow model", async 
   expect(outcome.error).toBe("Run timed out.");
   expect(store.notifications).toHaveLength(0);
   expect(store.runs[0].status).toBe("failed");
+});
+
+/**
+ * Unattended buying, from a scheduled run.
+ *
+ * The grant, the limits and the signer are real elsewhere; what is checked here
+ * is the part that made the feature unreachable — whether a granted run is
+ * actually *invited* to buy — and that buying is one act, not a proposal the
+ * run might wander away from before settling it.
+ */
+describe("unattended buying", () => {
+  const bought: { tool: string; args: Record<string, unknown> }[] = [];
+  const buy = vi.fn(async (args: Record<string, unknown>) => {
+    bought.push({ tool: "buy_asset", args });
+    return { result: { bought: true, symbol: "AAPLc", usd: "3", status: "confirmed", hash: "0xabc" }, parts: [] };
+  });
+  const cryptoRegistry = new CapabilityRegistry([
+    { id: "market", tools: [
+      { schema: { type: "function", function: { name: "get_asset", description: "", parameters: {} } }, execute: (args) => getAsset(args) },
+      { schema: { type: "function", function: { name: "list_buyable_assets", description: "", parameters: {} } },
+        execute: async () => ({ result: { assets: [{ symbol: "AAPLc", underlying: "AAPL", decimals: 8 }] }, parts: [] }) },
+    ] },
+    { id: "trading", tools: [
+      { schema: { type: "function", function: { name: "buy_asset", description: "", parameters: {} } }, execute: buy },
+      { schema: { type: "function", function: { name: "propose_crypto_swap", description: "", parameters: {} } }, execute: update },
+      { schema: { type: "function", function: { name: "execute_crypto_swap", description: "", parameters: {} } }, execute: update },
+      { schema: { type: "function", function: { name: "propose_trade", description: "", parameters: {} } }, execute: update },
+    ] },
+    { id: "profile", tools: [] },
+  ]);
+  const granted = async () => ({ allowed: true, reason: "", wallet: "0xf212000000000000000000000000000000001790" });
+  const spender = () => { const s = agentState(); s.profile = { ...s.profile, permission: "automatic", autoExecute: true, limits: { perTrade: "3", daily: "5", weekly: "10" } }; return s; };
+  const buyTurns = () => [
+    { toolCalls: [call("get_asset", { id: "AAPL", kind: "stock", show_news: true })] },
+    { toolCalls: [call("list_buyable_assets", {})] },
+    { toolCalls: [call("buy_asset", { symbol: "AAPLc", usd: "3", reasoning: "Largest beat ever." })] },
+    { content: "Bought $3 of Apple after its largest quarterly beat ever." },
+  ];
+  beforeEach(() => { bought.length = 0; store.seed(USER, spender()); });
+
+  it("invites the buy as a step, and one call is the whole purchase", async () => {
+    const model = scriptedModel(buyTurns());
+    const outcome = await runBackgroundAgent(job, { ...deps(model), registry: cryptoRegistry, buyUnattended: granted });
+    const system = (model.calls[0].messages[0] as { content: string }).content;
+    // Invited, not merely permitted: offering the tool while saying "you cannot
+    // trade" is what kept this unreachable, so the step has to be in the Process.
+    expect(system).toContain("Acting: you may buy for them without asking");
+    expect(system).toContain("$3 a trade, $5 a day");
+    expect(system).not.toContain("You cannot trade");
+    const offered = model.calls[0].tools.map(t => t.function.name);
+    expect(offered).toContain("buy_asset");
+    // The attended pair stays out of scheduled runs entirely.
+    expect(offered).not.toContain("propose_crypto_swap");
+    expect(offered).not.toContain("execute_crypto_swap");
+    expect(bought).toHaveLength(1);
+    expect(bought[0].args).toEqual({ symbol: "AAPLc", usd: "3", reasoning: "Largest beat ever." });
+    expect(outcome.status).toBe("succeeded");
+  });
+
+  it("withholds the tool and refuses the call when the grant is absent", async () => {
+    const model = scriptedModel(buyTurns());
+    const outcome = await runBackgroundAgent(job, { ...deps(model), registry: cryptoRegistry, buyUnattended: async () => ({ allowed: false, reason: "Unattended buying is off." }) });
+    const system = (model.calls[0].messages[0] as { content: string }).content;
+    expect(system).toContain("You cannot trade");
+    expect(system).not.toContain("Acting: you may buy");
+    expect(model.calls[0].tools.map(t => t.function.name)).not.toContain("buy_asset");
+    // Called anyway: refused with the reason rather than silently dropped.
+    expect(bought).toEqual([]);
+    const refusal = model.calls.flatMap(c => c.messages).find(m => "name" in m && m.name === "buy_asset") as { content: string } | undefined;
+    expect(refusal?.content).toContain("Unattended buying is off.");
+    expect(outcome.status).toBe("succeeded");
+  });
+
+  it("discloses a settled purchase in the feed even when the model forgets to", async () => {
+    // The model writes about the news and says nothing about having spent money.
+    const model = scriptedModel([
+      { toolCalls: [call("buy_asset", { symbol: "AAPLc", usd: "3", reasoning: "Largest beat ever." })] },
+      { content: "Apple reported its largest quarterly beat ever and raised guidance by 34%." },
+    ]);
+    const outcome = await runBackgroundAgent(job, { ...deps(model), registry: cryptoRegistry, buyUnattended: granted });
+    expect(outcome.summary).toContain("Bought $3 of AAPLc for you");
+    expect(outcome.summary).toContain("largest quarterly beat");
+  });
+
+  it("never lets a scheduled run sell, even while buying is granted", async () => {
+    const model = scriptedModel([{ toolCalls: [call("propose_trade", { symbol: "AAPL", side: "sell" })] }, { content: "SILENT" }]);
+    await runBackgroundAgent(job, { ...deps(model), registry: cryptoRegistry, buyUnattended: granted });
+    const system = (model.calls[0].messages[0] as { content: string }).content;
+    expect(system).toContain("Never sell");
+    expect(update).not.toHaveBeenCalled();
+    const refusal = model.calls.flatMap(c => c.messages).find(m => "name" in m && m.name === "propose_trade") as { content: string } | undefined;
+    expect(refusal?.content).toContain("Not available during scheduled runs");
+  });
+});
+
+it("keeps decimals intact when a long finding is trimmed to fit the feed", async () => {
+  const long = "Apple reported its largest quarterly beat in company history with revenue of $142.8B versus $118.2B expected and EPS of $3.91 versus $2.44 for the quarter. It raised full-year guidance by 34% and announced a $200B buyback programme. Several banks moved their targets sharply higher on the back of it.";
+  const model = scriptedModel([{ content: long }]);
+  const outcome = await runBackgroundAgent(job, deps(model));
+  expect(outcome.summary).toContain("$142.8B");
+  expect(outcome.summary).toContain("$118.2B");
+  expect(outcome.summary).not.toMatch(/\$\d+\.\s/);
+  // Still trimmed to whole sentences within the feed's budget.
+  expect(outcome.summary.split(/\s+/).length).toBeLessThanOrEqual(40);
+  expect(outcome.summary.endsWith(".")).toBe(true);
+});
+
+/**
+ * Every string below is a real finish from this deployment's own run history,
+ * copied out of socialtrading_agent_runs. The agent was asked for SILENT and
+ * told not to list what it checked; it did this instead, on every run.
+ */
+describe("check-reports never reach the feed", () => {
+  const selfReports = [
+    "I checked the latest news and price changes for Apple, Nvidia, Tesla, and Enphase Energy, all relevant to your Energy and Consumer themes.",
+    "I checked the latest news and price updates for Apple, Nvidia, Tesla, and Enphase Energy relevant to your Energy and Consumer themes.",
+    "I checked recent news and price changes for Apple, Nvidia, Tesla, Enphase Energy, and NextEra Energy, all relevant to your Energy and Consumer themes.",
+    "No significant new developments or unusual news have appeared for Apple, Nvidia, Tesla, Enphase Energy, or ExxonMobil that would materially change the outlook on your Energy and Consumer themes right now.",
+    "Checked recent news and price changes for Apple, Nvidia, Tesla, and Enphase Energy. No new significant developments or unusual price moves that would matter to you.",
+    "No new significant developments or unusual price moves for Apple, Nvidia, Tesla or Enphase Energy today.",
+    // A provider outage is an operational fact, not news. Real, from 18:10:27.
+    "I attempted to retrieve the latest market data and news for Apple, Nvidia, Tesla, and Enphase Energy, but the market data service is currently busy and temporarily unavailable.",
+    "Unable to reach the market data service this time; prices are unavailable.",
+  ];
+  const findings = [
+    "Latest news relevant to your Energy and Consumer themes shows Tesla securing a 50% tax break for a $10 billion solar factory in Texas, supporting its robotaxi and energy storage ambitions.",
+    "Apple reported the largest quarterly beat in corporate history with revenue of $142.8B versus $118.2B expected and EPS of $3.91 versus $2.44.",
+    "Bought $3 of AAPLc for you under your limits. Apple reported its largest quarterly beat ever.",
+    "Nokia is adopting Nvidia’s AI platform for mobile networks, expanding beyond data centers.",
+  ];
+  it.each(selfReports)("drops: %s", text => expect(isCheckReport(text)).toBe(true));
+  it.each(findings)("keeps: %s", text => expect(isCheckReport(text)).toBe(false));
+
+  it("leaves the feed empty rather than filling it with what the agent looked at", async () => {
+    const model = scriptedModel([
+      { toolCalls: [call("get_asset", { id: "VRT", kind: "stock" })] },
+      { toolCalls: [call("remember", { notes: ["Checked VRT and CEG; quiet."] })] },
+      { content: selfReports[0] },
+    ]);
+    const outcome = await runBackgroundAgent(job, deps(model));
+    expect(outcome.summary).toBe("");
+    // The private detail survives where it belongs.
+    expect((await store.readMemory(USER, "agent-a")).notes).toEqual(["Checked VRT and CEG; quiet."]);
+    expect(outcome.decision?.inspected).toEqual(["get_asset(VRT)"]);
+  });
+
+  it("falls back to the finding it reached out about rather than to silence", async () => {
+    const model = scriptedModel([
+      { toolCalls: [call("notify_user", { title: "Tesla lands a $10B Texas solar plant", message: "Tesla secured a 50% tax break for a $10 billion solar factory in Texas.", relevance: "high", dedupe_key: "tsla-texas-2026-09" })] },
+      { content: selfReports[3] },
+    ]);
+    const outcome = await runBackgroundAgent(job, deps(model));
+    expect(outcome.summary).toBe("Tesla lands a $10B Texas solar plant");
+  });
+
+  it("still discloses a purchase when the model finishes with a check-report", async () => {
+    const buy = async () => ({ result: { bought: true, symbol: "AAPLc", usd: "3", status: "confirmed" }, parts: [] });
+    const registry = new CapabilityRegistry([
+      { id: "trading", tools: [{ schema: { type: "function", function: { name: "buy_asset", description: "", parameters: {} } }, execute: buy }] },
+      { id: "market", tools: [] }, { id: "profile", tools: [] },
+    ]);
+    const model = scriptedModel([
+      { toolCalls: [call("buy_asset", { symbol: "AAPLc", usd: "3", reasoning: "Huge beat." })] },
+      { content: selfReports[0] },
+    ]);
+    const outcome = await runBackgroundAgent(job, { ...deps(model), registry, buyUnattended: async () => ({ allowed: true, reason: "", wallet: "0xf212" }) });
+    // Spending money is never silent, whatever the model wrote.
+    expect(outcome.summary).toBe("Bought $3 of AAPLc for you under your limits.");
+  });
+});
+
+it("honours SILENT at the end of a paragraph, and remembers the prose around it", async () => {
+  // Real, from the 18:10:27 run: the model signalled silence the way it usually
+  // does — a paragraph with the token tacked on — and an exact match missed it.
+  const finish = "I attempted to retrieve the latest market data for Apple and Nvidia, but the service is busy. I will try again later. For now, there is no new information to report. SILENT.";
+  const model = scriptedModel([{ toolCalls: [call("remember", { notes: ["Data provider was down."] })] }, { content: finish }]);
+  const outcome = await runBackgroundAgent(job, deps(model));
+  expect(outcome.summary).toBe("");
+  // The reason it stayed quiet is carried into the next wake-up.
+  expect((await store.readMemory(USER, "agent-a")).lastSummary).toBe(finish.replace(" SILENT.", ""));
+});
+
+it("still treats a bare SILENT as silence and remembers nothing from it", async () => {
+  const model = scriptedModel([{ content: "SILENT" }]);
+  const outcome = await runBackgroundAgent(job, deps(model));
+  expect(outcome.summary).toBe("");
+  expect((await store.readMemory(USER, "agent-a")).lastSummary).toBe("");
+});
+
+it("records tool failures on the run, so a quiet failure is findable afterwards", async () => {
+  const boom = new CapabilityRegistry([
+    { id: "market", tools: [{ schema: { type: "function", function: { name: "get_asset", description: "", parameters: {} } },
+      execute: async () => { throw new Error("Market data is busy. Try again shortly."); } }] },
+    { id: "trading", tools: [] }, { id: "profile", tools: [] },
+  ]);
+  const model = scriptedModel([{ toolCalls: [call("get_asset", { id: "AAPL" })] }, { content: "SILENT" }]);
+  const outcome = await runBackgroundAgent(job, { ...deps(model), registry: boom });
+  expect(outcome.status).toBe("succeeded");
+  expect(outcome.decision?.failures).toEqual(["get_asset: Market data is busy. Try again shortly."]);
 });

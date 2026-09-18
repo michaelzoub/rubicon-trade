@@ -33,10 +33,16 @@ export function MarketQuote({ chainId, contract, price, change, chart = [], larg
   const value = data?.price ?? price;
   const delta = data?.change ?? change;
   const points = data?.chart.length ? data.chart : chart;
-  return <span className={`hub-market-quote${large ? " is-large" : ""}`} aria-label="Token market data">
-    <span className="hub-market-quote-values"><strong>{value == null ? loading ? "Loading price…" : "Price unavailable" : usd(value)}</strong>
-      <span className={`hub-change${delta != null && delta > 0 ? " is-up" : delta != null && delta < 0 ? " is-down" : ""}`}>{delta == null ? loading ? "Loading change…" : "24h change unavailable" : `${pct(delta)} · 24h`}</span>
+  // A number that is on its way is shown as the shape it will take, shimmering,
+  // the way the rest of Rubicon waits. Words like "Loading price…" sit in the
+  // slot the price will occupy and change its width when they leave.
+  return <span className={`hub-market-quote${large ? " is-large" : ""}${loading ? " is-loading" : ""}`} aria-label="Token market data" aria-busy={loading || undefined}>
+    <span className="hub-market-quote-values">
+      <strong>{value == null ? loading ? <span className="rubicon-skeleton hub-quote-skeleton is-price" /> : "Price unavailable" : usd(value)}</strong>
+      <span className={`hub-change${delta != null && delta > 0 ? " is-up" : delta != null && delta < 0 ? " is-down" : ""}`}>{delta == null ? loading ? <span className="rubicon-skeleton hub-quote-skeleton is-change" /> : "24h change unavailable" : `${pct(delta)} · 24h`}</span>
     </span>
-    {points.length > 1 ? <span className="hub-market-quote-chart"><PriceTrace points={points} height={large ? 110 : 32} scrub={false} label="Token price history, last 7 days" /></span> : <small>{loading ? "Loading chart…" : "Price history unavailable"}</small>}
+    {points.length > 1 ? <span className="hub-market-quote-chart"><PriceTrace points={points} height={large ? 110 : 32} scrub={false} label="Token price history, last 7 days" /></span>
+      : loading ? <span className="rubicon-skeleton hub-quote-skeleton is-chart" style={{ height: large ? 110 : 32 }} />
+      : <small>Price history unavailable</small>}
   </span>;
 }

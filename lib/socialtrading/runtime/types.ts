@@ -25,6 +25,9 @@ export type RunDecision = {
   reason: string;
   /** Set when the agent wanted to notify but policy stopped it. */
   suppressed?: string;
+  /** Tools that threw during the run. A scheduled run has nobody watching it, so
+   * a failure that only reached the model's context leaves no trace afterwards. */
+  failures?: string[];
 };
 
 export type RunOutcome = {

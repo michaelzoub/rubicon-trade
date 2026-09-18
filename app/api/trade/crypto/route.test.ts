@@ -115,3 +115,13 @@ it('refuses a changed Privy wallet owner before issuing anything', async () => {
   db.owns.mockRejectedValueOnce(new Error('Wallet no longer linked'));
   expect((await action('prepare')).status).toBe(502); expect(db.quote).not.toHaveBeenCalled();
 });
+it('allows a user sale into USDC on Ethereum while keeping purchases on Base', async () => {
+  const sale = { ...r, chainId: 1, tokenIn: r.tokenOut, tokenOut: chain(1).usdc, amount: '1' };
+  db.quote.mockImplementation(async request => ({ ...quote(), request }));
+  const result = await post({ action: 'propose', ...sale });
+  expect(result.status).toBe(200);
+  const proposed = result.body.state.trades.at(-1);
+  expect(proposed).toMatchObject({ initiator: 'user', side: 'sell', status: 'reserved', crypto: { request: { chainId: 1, tokenIn: sale.tokenIn, tokenOut: sale.tokenOut } } });
+  const buy = await post({ action: 'propose', ...sale, tokenIn: chain(1).usdc, tokenOut: r.tokenOut });
+  expect(buy.status).toBe(400);
+});

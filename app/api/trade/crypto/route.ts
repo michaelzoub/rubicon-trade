@@ -1,7 +1,7 @@
 import { advanceBridge, proposeBridge } from "@/lib/crypto/bridges";
 import { resolvePurchaseRoute } from "@/lib/crypto/route-resolver";
 import { BUY_CHAIN, CROSS_CHAIN_FUNDING } from "@/lib/crypto/tradable";
-import { findHoldings, transferCall } from "@/lib/crypto/recovery";
+import { scanHoldings, transferCall } from "@/lib/crypto/recovery";
 import { authenticate, bodyOf, failure, HubError, loadState, requestedAgent, saveState } from "@/lib/socialtrading/server";
 import { authorizeSwap, prepareSwap, resumeSwap, userSwap } from "@/lib/crypto/trades";
 import { rpc as rpcCall, verifyTransaction, verifyUserOperation } from "@/lib/crypto/rpc";
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     if (q !== null) {
       const query = q.trim().slice(0, 100);
       if (!query) return Response.json({ tokens: [] });
-      return Response.json({ tokens: normalizeMatches(await cryptoServices.discovery.search(query), query), fetchedAt: new Date().toISOString() }, { headers: { "Cache-Control": "no-store" } });
+      return Response.json({ tokens: normalizeMatches((await cryptoServices.discovery.search(query)).filter(pair => pair.chain === chain(BUY_CHAIN).dex), query), fetchedAt: new Date().toISOString() }, { headers: { "Cache-Control": "no-store" } });
     }
     return Response.json({ wallets: await userWallets(userId) }, { headers: { "Cache-Control": "no-store" } });
   }
@@ -39,13 +39,14 @@ export async function POST(request: Request) {
       // transaction the user signs in their own wallet.
       const wallets = await userWallets(userId);
       const extra = Array.isArray(body.extra) ? (body.extra as { chainId: number; token: string }[]).slice(0, 5) : undefined;
-      return Response.json({ holdings: await findHoldings(userId, wallets, state, extra) });
+      return Response.json(await scanHoldings(userId, wallets, state, extra, [BUY_CHAIN]), { headers: { "Cache-Control": "no-store" } });
     }
     if (body.action === "withdraw") {
       const wallet = String(body.wallet);
       await ownedWallet(userId, wallet);
       const chainId = Number(body.chainId);
       chain(chainId);
+      if (chainId !== BUY_CHAIN) throw new HubError(400, "Withdrawals are available on Base only.");
       const call = transferCall(String(body.token), String(body.to), String(body.amount));
       // The nonce is reserved here, exactly as a swap's is, so a lost wallet
       // response can never be resent as a second transfer.
@@ -64,13 +65,14 @@ export async function POST(request: Request) {
       // Single-chain by decision. A crossing is refused here rather than part-way
       // through a route, so a purchase can never strand between two networks.
       if (crossing && !CROSS_CHAIN_FUNDING) throw new HubError(400, `Rubicon buys on ${chain(BUY_CHAIN).name}. Hold USDC on ${chain(BUY_CHAIN).name} to buy, or use Send something out in your profile to move it there.`);
-      if (Number(body.chainId) !== BUY_CHAIN && !CROSS_CHAIN_FUNDING) throw new HubError(400, `Rubicon buys on ${chain(BUY_CHAIN).name}, not ${chain(Number(body.chainId)).name}.`);
+      if (Number(body.chainId) !== BUY_CHAIN) throw new HubError(400, "Buys and sells are available on Base only.");
       const trade = crossing ? await proposeBridge(state, userId, body) : await userSwap(state, userId, body);
       return Response.json({ state: await saveState(userId, state), tradeId: trade.id });
     }
     if (typeof body.tradeId !== "string") throw new HubError(400, "Choose a swap proposal.");
     const trade = state.trades.find(t => t.id === body.tradeId), c = trade?.crypto;
     if (!trade || !c) throw new HubError(404, "Swap not found.");
+    if (["prepare", "resume", "authorize", "bridge_prepare", "bridge_resume"].includes(String(body.action)) && c.request.chainId !== BUY_CHAIN) throw new HubError(400, "Trading is available on Base only.");
     if (c.bridge) {
       const result = await advanceBridge(state, userId, trade, body);
       return Response.json({ state: await saveState(userId, state), ...result });

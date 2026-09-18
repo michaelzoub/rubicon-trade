@@ -2,8 +2,8 @@
 
 import { HubLink } from "./navigation";
 import { useWallets } from "@privy-io/react-auth";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { CHAIN_IDS, CHAINS, DEFAULT_CHAIN, NATIVE, shortAddress, type ChainId } from "@/lib/crypto/chains";
+import { useEffect, useState, type FormEvent } from "react";
+import { CHAINS, DEFAULT_CHAIN, NATIVE, shortAddress } from "@/lib/crypto/chains";
 import { useHub } from "./hub-provider";
 import { TradeCard } from "./parts";
 
@@ -24,8 +24,7 @@ export function SwapForm({ receive, contracts, title = "Trade onchain", onPropos
   const { crypto, state } = useHub();
   const { wallets, ready } = useWallets();
   const known = receive?.contracts ?? contracts;
-  const chains = useMemo(() => known ? CHAIN_IDS.filter(id => known[String(id)]) : CHAIN_IDS, [known]);
-  const [chainId, setChainId] = useState<ChainId>(chains.includes(DEFAULT_CHAIN) ? DEFAULT_CHAIN : chains[0] ?? DEFAULT_CHAIN);
+  const chainId = DEFAULT_CHAIN;
   const [wallet, setWallet] = useState("");
   const [pay, setPay] = useState<"usdc" | "native" | "other">("usdc");
   const [payOther, setPayOther] = useState("");
@@ -59,9 +58,12 @@ export function SwapForm({ receive, contracts, title = "Trade onchain", onPropos
     <p className="hub-section-lead">Swap from a wallet you control. This is your decision: your agent’s mode and spending limits apply only to trades it proposes. You review the exact quote, then sign in your wallet.</p>
     {ready && wallets.length === 0 && <p className="hub-notice">Connect or create a wallet first. Manage wallets on the <HubLink className="hub-inline-link" href="/profile">Profile</HubLink> page.</p>}
     <form className="hub-swap-form" onSubmit={submit}>
-      <label className="hub-swap-field">Network
-        <select className="socialtrading-input" value={chainId} onChange={e => setChainId(Number(e.target.value) as ChainId)}>{chains.map(id => <option key={id} value={id}>{CHAINS[id].name}</option>)}</select>
-      </label>
+      {/* Network selector disabled: swaps always settle on Base.
+        <select value={chainId} onChange={e => setChainId(Number(e.target.value))}>
+          {CHAIN_IDS.map(id => <option key={id} value={id}>{CHAINS[id].name}</option>)}
+        </select>
+      */}
+      <p className="socialtrading-caption">Network · Base</p>
       <label className="hub-swap-field">From wallet
         <select className="socialtrading-input mono" value={wallet} onChange={e => setWallet(e.target.value)} disabled={!wallets.length}>
           {!wallets.length && <option value="">No connected wallet</option>}
@@ -70,7 +72,7 @@ export function SwapForm({ receive, contracts, title = "Trade onchain", onPropos
       </label>
       <label className="hub-swap-field">Pay with
         <select className="socialtrading-input" value={pay} onChange={e => setPay(e.target.value as typeof pay)}>
-          <option value="usdc">USDC</option><option value="native">{net.nativeSymbol} (native)</option><option value="other">Another token…</option>
+          <option value="usdc">USDC</option>{/* Native ETH option disabled for the Base-only experience. */}<option value="other">Another token…</option>
         </select>
       </label>
       {pay === "other" && <label className="hub-swap-field">Pay token contract<input className="socialtrading-input mono" value={payOther} onChange={e => setPayOther(e.target.value)} placeholder="0x…" spellCheck={false} /></label>}

@@ -167,3 +167,180 @@
   .mem-belief-name { max-width: 90px; font-size: 9px; }
   .mem-insight { flex-wrap: wrap; gap: 14px; }
 }
+
+/* ─── The confidence tree ──────────────────────────────────────────────────
+   Colour is how well-supported a belief is and distance from the trunk is the
+   same number, so the ideas everything else rests on sit closest and greenest.
+   `--conf` is the ramp colour for a node, `--strength` its confidence and
+   `--certainty` how sure the model was of that confidence. */
+
+.mem-field { height: min(560px, 60vh); min-height: 380px; }
+.mem-orbit { display: none; }
+
+/* The trunk. Always the thesis, always the centre. */
+.mem-trunk {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  display: grid; gap: 4px; justify-items: center; text-align: center;
+  padding: 15px 20px; border: 1px solid #e0e8ef; border-radius: 18px;
+  background: #fffffff2; box-shadow: 0 8px 30px #44627a0f; cursor: pointer;
+  font: inherit; z-index: 2;
+}
+.mem-trunk::before {
+  content: ""; position: absolute; inset: -7px; border-radius: 24px;
+  border: 1px solid var(--conf, #8babc1); opacity: .3; pointer-events: none;
+}
+.mem-trunk span { font-size: 13px; color: #35485c; }
+.mem-trunk small { font-size: 9px; color: #81909d; }
+.mem-trunk[aria-pressed="true"] { box-shadow: 0 8px 30px #44627a1f; }
+.mem-trunk[aria-pressed="true"]::before { opacity: .85; }
+.mem-trunk:focus-visible { outline: 2px solid var(--id-accent, #4b94ed); outline-offset: 8px; }
+
+/* Bodies take the confidence colour outright. A pillar is larger than the
+   ideas it carries, so the tiers read before any label is parsed. */
+.mem-belief { transition: opacity .35s; z-index: 1; }
+.mem-belief-body {
+  background: radial-gradient(circle at 34% 28%, #ffffffdd 6%, color-mix(in srgb, var(--conf, #8babc1) 42%, #fff) 34%, var(--conf, #8babc1) 88%);
+  box-shadow: 0 5px 18px color-mix(in srgb, var(--conf, #8babc1) 34%, transparent);
+}
+.mem-belief[data-tier="pillar"] .mem-belief-body {
+  width: calc(26px + var(--strength, 0) * 26px);
+  height: calc(26px + var(--strength, 0) * 26px);
+}
+.mem-belief[data-tier="pillar"] .mem-belief-name { font-size: 12px; color: #34485b; letter-spacing: -.01em; }
+.mem-belief[data-tier="idea"] .mem-belief-body {
+  width: calc(11px + var(--strength, 0) * 19px);
+  height: calc(11px + var(--strength, 0) * 19px);
+}
+.mem-belief[data-tier="idea"] .mem-belief-name { max-width: 148px; }
+
+/* How sure the model was, drawn as a halo rather than a second number. */
+.mem-belief[data-tier] .mem-belief-body {
+  outline: calc(var(--certainty, 0) * 4px) solid color-mix(in srgb, var(--conf, #8babc1) 24%, transparent);
+  outline-offset: 3px;
+}
+/* Nothing scored it, so nothing is claimed: a dashed edge, not a halo. */
+.mem-belief[data-unscored] .mem-belief-body { outline: 0; border: 1px dashed color-mix(in srgb, var(--conf, #8babc1) 55%, transparent); }
+
+.mem-belief[aria-pressed="true"] .mem-belief-body { outline: 2px solid var(--conf, #729dc3); outline-offset: 6px; }
+.mem-belief[aria-pressed="true"] .mem-belief-name { background: #fff; box-shadow: 0 2px 10px #44627a14; }
+
+/* Cousins: two ideas under different pillars that still share ground. */
+.mem-edges line[data-kind="related"] { stroke-dasharray: 2 5; }
+.mem-edges line[data-kind="satellite"] { stroke: #b9c6d2; stroke-dasharray: 2 3; stroke-width: 1; }
+
+/* The key. Without it the colour is decoration; with it, it is a reading. */
+.mem-key { display: grid; gap: 7px; max-width: 420px; margin: 4px auto 22px; justify-items: stretch; }
+.mem-key-ramp { height: 5px; border-radius: 3px; background: linear-gradient(90deg, #b8ac9e, #cba55e 35%, #84a862 70%, #2f8f63); }
+.mem-key-ends { display: flex; justify-content: space-between; }
+.mem-key-ends b { font-size: 9px; font-weight: 400; color: #8b97a4; letter-spacing: .04em; text-transform: uppercase; }
+.mem-key p { font-size: 11px; line-height: 1.7; color: #8b97a4; text-align: center; margin: 2px 0 0; }
+
+.mem-insight > div:nth-child(2), .mem-insight > div:nth-child(3) { display: grid; gap: 4px; text-align: center; min-width: 74px; }
+
+@media (max-width: 760px) {
+  .mem-field { height: 66vh; }
+  .mem-belief[data-tier="idea"] .mem-belief-name { max-width: 96px; font-size: 9px; }
+  .mem-trunk { padding: 11px 14px; }
+  .mem-trunk span { font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mem-belief { transition: none; }
+}
+
+/* ─── Handled like a map ───────────────────────────────────────────────────
+   The field is a viewport; the canvas inside it is what moves. Time is not a
+   gesture here, so a pointer in the field only ever moves the tree. */
+.mem { padding: 0 0 56px; }
+.mem-heading, .mem-journey { display: none; }
+.mem-field {
+  height: min(620px, 66vh);
+  min-height: 420px;
+  margin-top: 8px;
+  max-width: none;
+  overflow: hidden;
+  touch-action: none;
+  border-radius: 20px;
+}
+.mem-canvas { position: absolute; inset: 0; will-change: transform; }
+.mem-edges { overflow: visible; }
+
+/* The trunk says the thesis, in the investor's own words. */
+.mem-trunk {
+  max-width: min(310px, 42%);
+  padding: 16px 20px;
+  gap: 0;
+}
+.mem-trunk span {
+  font-size: 13px;
+  line-height: 1.55;
+  color: #2f4257;
+  letter-spacing: -.01em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+}
+
+.mem-recentre {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 3;
+  padding: 7px 13px;
+  border: 1px solid #e2e8ef;
+  border-radius: 999px;
+  background: #fffffff2;
+  color: #5c6b7b;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  box-shadow: 0 6px 20px #44627a12;
+}
+.mem-recentre:hover { color: #35485c; }
+.mem-recentre:focus-visible { outline: 2px solid var(--id-accent, #4b94ed); outline-offset: 3px; }
+
+@media (max-width: 760px) {
+  .mem-field { height: 62vh; min-height: 340px; }
+  .mem-trunk { max-width: 60%; padding: 12px 14px; }
+  .mem-trunk span { font-size: 11px; -webkit-line-clamp: 3; }
+}
+
+/* The trunk is a statement, not a panel: narrow enough that the first ring
+   clears it, quiet enough that the beliefs around it stay the subject. */
+.mem-trunk {
+  max-width: 236px;
+  padding: 13px 16px;
+  border-radius: 15px;
+  background: #fffffff5;
+  box-shadow: 0 10px 34px #44627a12;
+}
+.mem-trunk span {
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: #46596c;
+  /* Two lines: the thesis is stated here, and taken apart in the ring around it. */
+  -webkit-line-clamp: 2;
+}
+.mem-trunk::before { inset: -6px; border-radius: 21px; }
+@media (max-width: 760px) { .mem-trunk { max-width: 180px; padding: 10px 12px; } }
+
+/* The key, and the one place the reading is explained in words. */
+.mem-key-scale { display: flex; align-items: center; gap: 10px; }
+.mem-key-scale .mem-key-ramp { flex: 1; }
+.mem-key-help {
+  flex-shrink: 0;
+  width: 16px; height: 16px;
+  display: grid; place-items: center;
+  padding: 0;
+  border: 1px solid #dfe5ec;
+  border-radius: 50%;
+  background: #fff;
+  color: #8b97a4;
+  font: inherit;
+  font-size: 10px;
+  line-height: 1;
+  cursor: help;
+  transition: color .2s, border-color .2s;
+}
+.mem-key-help:hover, .mem-key-help:focus-visible { color: #3f5062; border-color: #c3cedb; }
+.mem-key-help:focus-visible { outline: 2px solid var(--id-accent, #4b94ed); outline-offset: 3px; }

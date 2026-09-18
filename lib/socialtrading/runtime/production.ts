@@ -26,7 +26,10 @@ export function productionDeps(overrides: Partial<BackgroundAgentDeps<AgentServi
       const userId = state.profile.userId;
       if (!userId) return autonomyState(state, null);
       const wallet = await firstDelegatedWallet(userId).catch(() => null);
-      return autonomyState(state, wallet?.id ?? null);
+      // The address travels with the verdict: scheduled runs are not offered
+      // get_crypto_wallets, so this is the only way the agent learns where a
+      // purchase settles from.
+      return { ...autonomyState(state, wallet?.id ?? null), wallet: wallet?.address };
     },
     ...overrides,
   };

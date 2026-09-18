@@ -1,0 +1,90 @@
+/* The plate travels with its component: these rules are imported by
+ * buy-ticker.tsx itself, so the card can never render into a page whose
+ * stylesheet list happens not to include them. */
+/* ── The instrument plate ────────────────────────────────────────────────────
+ *
+ * One dark object, identical on the light trade page and inside the charcoal
+ * dialog, because it is not a panel of the page — it is the thing being bought.
+ * Everything in it is stacked in reading order: who, how it has moved, what it
+ * costs. The trace runs full-bleed under the number so the price reads as the
+ * end of that line rather than as a figure beside a picture of one. */
+.buy-ticker {
+  --plate-ink: #f3f7fc;
+  --plate-quiet: #8d9bac;
+  /* The trace takes its colour from here; brighter than the light-page pair,
+   * which would sink into this surface. */
+  --trace-up: #3ddc84;
+  --trace-down: #f4766a;
+  --trace-blue: #2f7df6;
+  position: relative;
+  overflow: hidden;
+  padding: 16px 18px 20px;
+  border-radius: var(--radius-card, 18px);
+  background: linear-gradient(#1a2028, #0f1317 62%);
+  box-shadow: inset 0 0 0 1px #ffffff14, 0 24px 60px #00000047;
+  color: var(--plate-ink);
+}
+/* A field of points, fading out before it reaches the number. Close enough to
+ * an instrument's own grid to read as one; quiet enough to never be looked at. */
+.buy-ticker::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, #ffffff16 1px, transparent 1px);
+  background-size: 15px 15px;
+  -webkit-mask-image: linear-gradient(#000, transparent 58%);
+  mask-image: linear-gradient(#000, transparent 58%);
+  pointer-events: none;
+}
+/* The day's colour, as light rather than as a label. */
+.buy-ticker::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 -40% 0;
+  height: 80%;
+  background: radial-gradient(ellipse at 50% 100%, var(--glow, #2f7df61f), transparent 70%);
+  pointer-events: none;
+}
+.buy-ticker.tone-up { --glow: #3ddc8426; }
+.buy-ticker.tone-down { --glow: #f4766a22; }
+.buy-ticker > * { position: relative; }
+
+.buy-ticker-id { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+.buy-ticker-id .hub-asset-logo { width: 38px; height: 38px; }
+.buy-ticker-id p { display: grid; gap: 1px; min-width: 0; margin: 0; }
+.buy-ticker-id strong { font-size: 19px; font-weight: 600; letter-spacing: -.015em; }
+.buy-ticker-id p span { overflow: hidden; color: var(--plate-quiet); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.buy-ticker-refresh { display: inline-flex; align-items: center; gap: 6px; color: var(--plate-quiet); font-size: 11px; }
+.buy-ticker-refresh em { font-style: normal; font-variant-numeric: tabular-nums; }
+
+.buy-ticker-trace { margin: 10px -18px 0; }
+.buy-ticker-trace-wait { display: block; height: 96px; margin: 0 18px; border-radius: 12px; }
+
+.buy-ticker-price {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  margin: 0;
+  font-size: clamp(34px, 9.5vw, 46px);
+  font-weight: 600;
+  letter-spacing: -.035em;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+  /* Lit from above, like the rest of the plate. */
+  background: linear-gradient(#ffffff, #aebbca);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.buy-ticker-currency { align-self: center; font-size: .4em; font-weight: 500; -webkit-text-fill-color: #6f7d8d; }
+.buy-ticker-unknown { font-size: 17px; font-weight: 500; -webkit-text-fill-color: var(--plate-quiet); }
+.buy-ticker-price-wait { display: block; width: 62%; height: 44px; border-radius: 10px; }
+.buy-ticker-delta { margin: 6px 0 0; color: var(--plate-quiet); font-size: 12.5px; }
+.buy-ticker-delta .is-up { color: #3ddc84; font-weight: 600; }
+.buy-ticker-delta .is-down { color: #f4766a; font-weight: 600; }
+
+@media (max-width: 420px) {
+  .buy-ticker { padding: 14px 14px 18px; }
+  .buy-ticker-trace { margin: 10px -14px 0; }
+  .buy-ticker-trace-wait { margin: 0 14px; }
+}

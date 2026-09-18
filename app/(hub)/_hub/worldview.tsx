@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react';
-import { ArrowUpRight, Plus, X } from 'lucide-react';
+import { ArrowUpRight, X } from 'lucide-react';
 import { convictionsOf, placement, point, relevance, rotationFor } from '@/lib/socialtrading/worldview';
 import type { Asset } from '@/lib/socialtrading/types';
 import { gsap, useGSAP, Flip, prefersReducedMotion } from '../../_components/motion';
@@ -12,6 +12,8 @@ import { assetHref, AssetLogo, Sparkline, ChangeText } from './parts';
 import { usd } from './format';
 import { openPurchase } from './purchase';
 import './worldview.css';
+import { BeliefsGraph } from './beliefs-graph';
+import { WalletHoldings } from './wallet-holdings';
 
 function useAssembly(key: unknown) {
   const root = useRef<HTMLDivElement>(null);
@@ -22,33 +24,11 @@ function useAssembly(key: unknown) {
   }, { scope: root, dependencies: [key], revertOnUpdate: true });
   return root;
 }
-export function ThesisView({ compact = false }: { compact?: boolean }) {
-  const { state, mutate, busy } = useHub();
-  const beliefs = convictionsOf(state);
-  const [selected, select] = useState<string | null>(null);
-  const [editing, edit] = useState(false);
-  const [text, setText] = useState('');
-  const current = beliefs.find(c => c.id === selected);
-  const root = useAssembly(selected);
-  async function save(strength: number, remove = false) {
-    const result = await mutate({ action: 'conviction', id: current?.id ?? crypto.randomUUID(), text: editing ? text : current?.text ?? text, strength, remove });
-    if (result) { select(null); edit(false); setText(''); }
-  }
-  return <section className={`wv-thesis ${compact ? 'is-compact' : ''}`}>
-    <header className="wv-heading"><div><p className="eyebrow">Thesis · a living object</p><h1 className="landing-section-title">What you believe.</h1><p>A point of view. Always becoming.</p></div>{compact ? <HubLink href="/thesis" className="hub-inline-link">Open your thesis <ArrowUpRight size={14}/></HubLink> : <button className="hub-chip-button" onClick={() => { select(null); edit(true); setText(''); }}><Plus size={14}/> Add a belief</button>}</header>
-    <div className="wv-thesis-layout" ref={root}>
-      <div className="wv-strata" aria-label="Your convictions">
-        <span className="wv-axis">YOUR WORLDVIEW</span>
-        {beliefs.length === 0 && <p className="hub-empty">Start with one thing you believe about the future.</p>}
-        {beliefs.slice(0, compact ? 3 : 30).map((c, i) => <button key={c.id} className={`wv-stratum ${selected === c.id ? 'is-selected' : ''}`} style={{ '--weight': c.strength, '--offset': `${i % 3 * 14}px` } as CSSProperties} onClick={() => { select(c.id); edit(false); }} aria-pressed={selected === c.id}><span className="wv-number">{String(i + 1).padStart(2, '0')}</span><strong>{c.text}</strong><small>{c.strength >= .7 ? 'Core conviction' : c.strength >= .4 ? 'Taking shape' : 'An open question'}</small><ArrowUpRight size={16}/></button>)}
-        <div className="wv-strata-foot"><span className="wv-blue-dot"/> Beliefs carry weight. Uncertainty leaves room.</div>
-      </div>
-      {!compact && <aside className="wv-inspect" data-assemble>
-        {current || editing ? <><p className="eyebrow">{editing ? 'In your own words' : 'Inside this conviction'}</p>{editing ? <textarea aria-label="Belief" value={text} onChange={e => setText(e.target.value)} maxLength={1000} autoFocus placeholder="I believe…"/> : <h2>{current?.text}</h2>}
-          {current && <><p>{current.origin}</p><small>Last considered {new Date(current.updatedAt).toLocaleDateString()}</small><div className="wv-context"><span>Connected through</span><p>{current.themes.length ? current.themes.join(' · ') : 'Your broader worldview'}</p><span>Still uncertain</span><p>{current.strength < .7 ? 'This idea needs more evidence before it becomes a core conviction.' : 'Conviction reflects your belief, not a verified market forecast.'}</p></div></>}
-          <div className="wv-actions">{editing ? <><button disabled={busy || !text.trim()} onClick={() => void save(current?.strength ?? .5)}>Keep this belief</button><button onClick={() => edit(false)}>Cancel</button></> : <><button disabled={busy || current!.strength >= 1} onClick={() => void save(Math.min(1, current!.strength + .15))}>Strengthen</button><button disabled={busy || current!.strength <= 0} onClick={() => void save(Math.max(0, current!.strength - .15))}>Soften</button><button onClick={() => { setText(current!.text); edit(true); }}>Correct the agent</button><button disabled={busy} onClick={() => void save(0, true)}>Let this go</button></>}</div></> : <><span className="wv-mini-orb"/><h2>Your thinking has a shape.</h2><p>Select a layer to trace its origin, question an assumption, or change how much weight it carries.</p><HubLink className="hub-inline-link" href="/activity">Revisit how you got here <ArrowUpRight size={14}/></HubLink></>}
-      </aside>}
-    </div>
+export function BeliefsView({ compact = false }: { compact?: boolean }) {
+  return <section className="wv-thesis">
+    <header className="wv-heading wv-heading-bare"><HubLink href={compact ? '/beliefs' : '/profile'} className="button button-secondary button-nav">{compact ? 'Open your beliefs' : 'Edit your beliefs'} <ArrowUpRight size={14}/></HubLink></header>
+    <BeliefsGraph />
+    {!compact && <WalletHoldings />}
   </section>;
 }
 export function DecisionSurface({ asset: providedAsset, question, onClose }: { asset?: Asset; question?: string; onClose: () => void }) {
@@ -66,9 +46,9 @@ export function DecisionSurface({ asset: providedAsset, question, onClose }: { a
     <header data-assemble><span className="wv-mini-orb"/><p className="eyebrow">Your agent · putting this in perspective</p><button className="wv-close" onClick={onClose} aria-label="Close decision workspace"><X size={17}/></button></header>
     <h2 data-assemble>{question ?? `Where ${asset?.name} fits in your world.`}</h2>
     <div className="wv-reasoning">
-      <section data-assemble><span>01 / YOUR BELIEF</span><h3>{belief?.text ?? 'No direct thesis connection yet.'}</h3><p>{belief?.origin ?? 'Treat this as a discovery, rather than an established fit.'}</p></section>
+      <section data-assemble><span>01 / YOUR BELIEF</span><h3>{belief?.text ?? 'No direct belief connection yet.'}</h3><p>{belief?.origin ?? 'Treat this as a discovery, rather than an established fit.'}</p></section>
       <section data-assemble><span>02 / THE SIGNAL</span>{asset ? <><h3>{asset.news[0]?.title ?? asset.label ?? asset.name}</h3><p>{asset.reason ?? asset.description ?? 'The available market data does not yet explain the move.'}</p>{asset.news[0] && <a href={asset.news[0].url} target="_blank" rel="noreferrer">Read source ↗</a>}<small>{asset.source} · {asset.asOf ? new Date(asset.asOf).toLocaleString() : 'Timestamp unavailable'}</small></> : <p>{busy ? 'Your agent is gathering evidence…' : response?.parts.filter(p => p.type === 'text').map(p => p.text).join('\n') || 'Ask your agent to gather evidence for this question.'}</p>}</section>
-      <section data-assemble><span>03 / WHY IT MATTERS</span><h3>{belief ? 'Test the belief behind the interest.' : 'Find the connection first.'}</h3><p>{reasons.join(' ') || asset?.reason || 'Separate a change in the underlying business from a change in its market price.'}</p><span>WHAT REMAINS OPEN</span><p>A price move alone cannot confirm or disprove your thesis. The cause, duration, and effect on your assumptions still need checking.</p></section>
+      <section data-assemble><span>03 / WHY IT MATTERS</span><h3>{belief ? 'Test the belief behind the interest.' : 'Find the connection first.'}</h3><p>{reasons.join(' ') || asset?.reason || 'Separate a change in the underlying business from a change in its market price.'}</p><span>WHAT REMAINS OPEN</span><p>A price move alone cannot confirm or disprove your belief. The cause, duration, and effect on your assumptions still need checking.</p></section>
     </div>
     <footer data-assemble><div><span className="eyebrow">Your memory</span><p>{history.length ? history.map(s => `${s.action} · ${new Date(s.at).toLocaleDateString()}`).join(' / ') : 'No recorded decision on this idea yet.'}</p></div><div className="wv-actions">{asset && <><button onClick={() => openPurchase({ asset })}>Buy {asset.symbol}</button><button disabled={busy} onClick={async () => { if (await signal('watched', asset)) setFeedback('Kept in your world.'); }}>Keep watching</button><button disabled={busy} onClick={async () => { if (await signal('dismissed', asset)) { setFeedback('Moved to the periphery.'); } }}>Not for me</button></>}<button disabled={busy} onClick={() => { const prompt = `Investigate the evidence, thesis connection, uncertainty and possible actions for: ${question ?? asset?.name}`; setInvestigation(prompt); void send(prompt); }}>Investigate with agent</button></div></footer>{investigation && <section className="wv-investigation"><p className="eyebrow">What your agent found</p><p>{busy ? 'Gathering evidence…' : response?.parts.filter(p => p.type === 'text').map(p => p.text).join('\n') || 'No evidence returned. Check the workspace error and try again.'}</p></section>}{feedback && <p role="status">{feedback}</p>}
   </div>;
@@ -148,7 +128,7 @@ export function SpatialMarket({ assets, theme = null, snapshot }: { assets: Asse
     <div ref={field} className="wv-space" data-agent-region="market" data-agent-weight="2" aria-label="The market, placed by what you believe">
       <div className="wv-space-wash" aria-hidden="true" />
       <div className="gravity-ring gravity-ring--inner" aria-hidden="true" /><div className="gravity-ring gravity-ring--outer" aria-hidden="true" />
-      <HubLink href="/thesis" className="wv-centre" aria-label="You, and what you believe. Open your thesis.">
+      <HubLink href="/beliefs" className="wv-centre" aria-label="You, and what you believe. Open your beliefs.">
         <ProfileAvatar profile={state.profile} seed={state.agent?.id ?? userId} themes={state.profile.themes} className="wv-centre-mark" />
       </HubLink>
       {placed.map(({ asset, place }) => {

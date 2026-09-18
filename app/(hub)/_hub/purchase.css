@@ -1,0 +1,102 @@
+/* Keep purchase controls contained and legible over the charcoal surface. */
+.rubicon-purchase .hub-buy :is(.hub-buy-form, .hub-buy-amount, .hub-buy-amount-row, .hub-buy-target, .hub-buy-result, .hub-buy-result-id) {
+  min-width: 0;
+  max-width: 100%;
+}
+.rubicon-purchase .hub-buy .hub-buy-amount-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.rubicon-purchase .hub-sell .hub-buy-amount-row { grid-template-columns: minmax(0, 1fr) auto; }
+.rubicon-purchase .hub-buy .hub-buy-currency {
+  position: static;
+  color: #b6c5d7;
+  font-size: 28px;
+}
+.rubicon-purchase .hub-buy .hub-buy-amount-row input.socialtrading-input {
+  field-sizing: fixed;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 6px 0;
+  border-radius: 0;
+  font-size: clamp(26px, 7vw, 36px);
+  line-height: 1.25;
+  color: #f5f7fa;
+  caret-color: #b6d2ed;
+}
+.rubicon-purchase .hub-buy-unit {
+  max-width: 8ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #b6c5d7;
+  font-size: 14px;
+}
+/* The amounts are one set, so they are one row of equal cells: a chip that
+ * re-measures itself per label makes the row read as ragged rather than as a
+ * choice between four of the same thing. */
+.rubicon-purchase .hub-buy .hub-buy-presets {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+/* Every button in this dialog states its box exactly once, in a rule with no
+ * state in the selector. Hover, press and the pressed amount may only repaint
+ * it. Restating padding, min-height or font-size inside a `:hover` — which is
+ * what `.hub-buy-submit` used to inherit from hub-consumer.css while its hover
+ * came from refinements.css — resizes the button under the cursor.
+ *
+ * The press itself is not ours: `.dashboard-theme .button:active` and
+ * `.dashboard-theme button:not(:disabled):active` in globals.css already give
+ * every Rubicon button the same scale, and `.button`'s transition already
+ * carries it. We set colour, radius and rhythm; the behaviour stays global. */
+.rubicon-purchase .hub-buy .hub-chip-button {
+  display: inline-flex;
+  justify-content: center;
+  min-height: 34px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: #191c20;
+  color: #e1e8f0;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: center;
+}
+.rubicon-purchase .hub-buy .hub-chip-button:not(:disabled):hover { background: #252b33; color: #f2f6fb; }
+.rubicon-purchase .hub-buy .hub-chip-button[aria-pressed=true] { background: #26374a; color: #fff; }
+.rubicon-purchase .hub-buy .button.button-primary {
+  width: 100%;
+  max-width: 100%;
+  min-height: 48px;
+  padding: 13px 18px;
+  border-radius: 9px;
+  background: #1d2926;
+  color: #f1f8f5;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: normal;
+}
+.rubicon-purchase .hub-buy .button.button-primary:not(:disabled):hover,
+.rubicon-purchase .hub-buy .button.button-primary.hub-buy-submit:not(:disabled):hover { background: #293c35; }
+/* `.hub-buy-submit` lifts a pixel on hover out on the light trade page. On a
+ * dialog that is already floating, that lift reads as wobble, and globals.css
+ * says a Rubicon primary does not move on hover — only on press. Excluding
+ * `:active` leaves that global press scale untouched. */
+.rubicon-purchase .hub-buy .button.button-primary.hub-buy-submit:not(:disabled):hover:not(:active) { transform: none; }
+.rubicon-purchase .hub-buy .button:disabled { opacity: .5; }
+.rubicon-purchase .hub-buy .hub-buy-result:not(:disabled):hover { background: #1d242d; transform: none; }
+.rubicon-purchase .hub-sell .hub-buy-result { grid-template-columns: 40px minmax(0, 1fr) minmax(0, 40%); }
+.rubicon-purchase .hub-sell-balance { min-width: 0; overflow-wrap: anywhere; }
+.rubicon-purchase .hub-buy-result-id strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rubicon-purchase .purchase-progress { display: grid; justify-items: center; gap: 10px; padding: 22px 12px 14px; }
+.rubicon-purchase .purchase-tabs button { background: transparent; color: #aeb8c6; border-radius: 6px; transform: none; }
+.rubicon-purchase .purchase-tabs button:is(:hover, [aria-pressed=true]) { background: #26303c; color: #f5f7fa; }
+.rubicon-purchase::selection,
+.rubicon-purchase ::selection { background: #375b80; color: #fff; }
+.rubicon-purchase :is(button, input):focus-visible { outline: 2px solid #a9c7e8 !important; outline-offset: 3px; }

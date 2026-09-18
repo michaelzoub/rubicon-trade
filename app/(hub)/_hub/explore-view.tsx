@@ -10,6 +10,7 @@ import { useGloss } from "./gloss";
 import { useHub } from "./hub-provider";
 import { isTradable } from "@/lib/crypto/tradable";
 import { Lens, type LensItem } from "./lens";
+import { openPurchase } from "./purchase";
 import { AssetGrid } from "./parts";
 
 /** Four ways of looking, not four filters. Stocks and crypto travel together under every lens. */
@@ -82,6 +83,7 @@ export function ExploreView() {
 
   return (
     <div className={`hub-explore${loading && assets ? " is-loading" : ""}`}>
+      <div className="hub-portfolio-entry"><button type="button" className="hub-chip-button" onClick={() => openPurchase({ side: "sell" })}>Your tokens · Sell</button></div>
       <div className="hub-explore-controls">
         <Lens className="hub-discovery-lenses" items={LENSES} value={lens} label="Ways to explore" onChange={id => change(() => { setLens(id); setTheme(null); setQuery(""); })} />
         {lens === "forYou" && <label className="hub-search hub-explore-search"><Search size={14} aria-hidden="true" /><span className="sr-only">Search stocks and crypto</span>

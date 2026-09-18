@@ -40,6 +40,10 @@ export type TradeInitiator = "agent" | "user";
 export type TradeIntent = {
   crypto?: import("@/lib/crypto/types").CryptoTrade;
   initiator?: TradeInitiator;
+  /** Decided and settled with nobody present. Distinct from `initiator`: the
+   * agent proposes in chat too, but a person signs those. Declared to the venue
+   * as the decision origin. */
+  unattended?: boolean;
   id: string; asset: { id: string; symbol: string; name: string; kind: AssetKind }; side: "buy" | "sell"; value: number;
   estimatedPrice: number | null; estimatedQuantity: number | null; resultingExposure: number | null;
   createdAt: string; status: TradeStatus;

@@ -2,6 +2,7 @@ import "server-only";
 import { cryptoServices } from "./services";
 import { ownedWallet } from "./wallet";
 import { address, chain, NATIVE, parseUnits, swapRequest } from "./chains";
+import { rpc } from "./rpc";
 import { BUY_CHAIN } from "./tradable";
 import { preflight, tokenDecimals, tokenSymbol, approvalTransaction, checkTransactionGas } from "./preflight";
 import { catalogEntry } from "./catalog";
@@ -16,6 +17,31 @@ import type { SwapBatch, SwapRequest, TokenDisplay, Transaction } from "./types"
 /** A proposal that was never signed goes stale: quotes, prices, and the user's intent all move. */
 export const PROPOSAL_TTL = 24 * 3600_000;
 const usd = (n: number) => `$${n.toFixed(2)}`;
+
+/** A user's USDC buy is denominated in USDC, independently of an oracle's
+ * dollar mark. The output and minimum come from a fresh executable quote.
+ * Agent budgets and swaps spending other assets still need USD valuation. */
+async function inputValue(request: SwapRequest, initiator: TradeInitiator, services = cryptoServices, quotedOutput?: string) {
+  if (request.tokenOut === chain(request.chainId).usdc) {
+    const output = quotedOutput ?? (await services.execution.quote(request)).outputAmount;
+    const cents = (BigInt(output) + 9999n) / 10000n;
+    if (cents > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("Invalid sale value.");
+    return Number(cents) / 100;
+  }
+  // Spending the chain's canonical USDC: the amount is the dollar value, by
+  // definition. This used to be granted only to a person, so an agent buying
+  // with USDC had its input priced by a feed instead — and DefiLlama refuses a
+  // quote older than five minutes, which is most of the day for these tokens.
+  // A purchase that cannot be valued is a purchase that does not happen, so the
+  // one path nobody is watching depended on the least reliable answer. Who
+  // initiated it does not change what a dollar is worth.
+  if (request.tokenIn === chain(request.chainId).usdc) {
+    const cents = (BigInt(request.amount) + 9999n) / 10000n;
+    if (cents > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("Invalid USDC amount.");
+    return Number(cents) / 100;
+  }
+  return services.valuation.value({ chainId: request.chainId, address: request.tokenIn }, request.amount);
+}
 
 /** What a token is: the ticker to print, and where its decimal point sits.
  *
@@ -52,17 +78,23 @@ async function describe(services: typeof cryptoServices, chainId: number, token:
  * belong to the user; the quote is read-only. Agent proposals in Act mode
  * reserve their allowance immediately; every swap still needs the user's
  * wallet signature because no delegated signer exists. */
-export async function proposeSwap(state: HubState, userId: string, input: SwapRequest, reasoning: string, services = cryptoServices, initiator: TradeInitiator = "agent") {
+export async function proposeSwap(state: HubState, userId: string, input: SwapRequest, reasoning: string, services = cryptoServices, initiator: TradeInitiator = "agent", unattended = false) {
   const request = swapRequest(input); await ownedWallet(userId, request.wallet);
   // Everything the agent buys settles on Base. This is enforced here rather than
   // in the prompt, because a scheduled run has no one to correct it: the cron
   // dispatcher reaches this same function, so the rule holds for every caller.
   if (initiator !== "user" && request.chainId !== BUY_CHAIN) throw new Error(`Rubicon buys on ${chain(BUY_CHAIN).name}. Propose this swap on ${chain(BUY_CHAIN).name}, or ask the user to buy it themselves.`);
-  const [quote, value, tokenIn, tokenOut] = await Promise.all([
-    services.execution.quote(request),
-    services.valuation.value({ chainId: request.chainId, address: request.tokenIn }, request.amount),
+  const selling = request.tokenOut === chain(request.chainId).usdc;
+  if (selling) {
+    const balance = await rpc<string>(request.chainId, request.tokenIn === NATIVE ? "eth_getBalance" : "eth_call", request.tokenIn === NATIVE ? [request.wallet, "latest"] : [{ to: request.tokenIn, data: `0x70a08231${request.wallet.slice(2).padStart(64, "0")}` }, "latest"]);
+    if (!/^0x[0-9a-f]+$/i.test(balance) || BigInt(balance) < BigInt(request.amount)) throw new Error("You don’t hold enough of this token to sell that amount.");
+  }
+  const [quote, tokenIn, tokenOut] = await Promise.all([
+    services.execution.quote(request, { autonomous: unattended }),
     describe(services, request.chainId, request.tokenIn), describe(services, request.chainId, request.tokenOut),
   ]);
+  const value = await inputValue(request, initiator, services, quote.outputAmount);
+  const assetToken = selling ? request.tokenIn : request.tokenOut, assetDisplay = selling ? tokenIn : tokenOut;
   const policy = tradePolicy(state.profile, value, state.trades, false, Date.now(), initiator), at = new Date().toISOString();
   const status: TradeIntent["status"] = policy.allowed ? "reserved" : policy.needsApproval ? "approval_required" : "blocked";
   // The fee sentence has to match the one the card prints above it: on a
@@ -72,7 +104,7 @@ export async function proposeSwap(state: HubState, userId: string, input: SwapRe
     : initiator === "user" ? `Review and sign in your wallet when you’re ready. ${fee}`
     : status === "reserved" ? "Within your agent’s limits and reserved against them. It still settles only when you sign in your wallet."
     : `Waiting for you to review and sign in your wallet. ${fee}`;
-  const trade: TradeIntent = { id: crypto.randomUUID(), initiator, asset: { id: `${request.chainId}:${request.tokenOut}`, symbol: tokenOut.symbol.toUpperCase(), name: `${tokenOut.symbol.toUpperCase()} on ${chain(request.chainId).name}`, kind: "crypto" }, side: "buy", value, estimatedPrice: null, estimatedQuantity: null, resultingExposure: null, createdAt: at, reasoning: reasoning.slice(0, 600), policy: { ...policy, at }, status,
+  const trade: TradeIntent = { id: crypto.randomUUID(), initiator, ...(unattended ? { unattended: true } : {}), asset: { id: `${request.chainId}:${assetToken}`, symbol: assetDisplay.symbol.toUpperCase(), name: `${assetDisplay.symbol.toUpperCase()} on ${chain(request.chainId).name}`, kind: "crypto" }, side: selling ? "sell" : "buy", value, estimatedPrice: null, estimatedQuantity: null, resultingExposure: null, createdAt: at, reasoning: reasoning.slice(0, 600), policy: { ...policy, at }, status,
     crypto: { request, outputAmount: quote.outputAmount, minimumOutput: quote.minimumOutput, expiresAt: quote.expiresAt, phase: "ready", detail, display: { tokenIn, tokenOut } } };
   state.trades.push(trade);
   recordEvent(state, "trade", `${initiator === "user" ? "You set up" : "Proposed"} a Uniswap swap for ${usd(value)} of ${trade.asset.symbol} on ${chain(request.chainId).name}`, detail, trade.id);
@@ -107,8 +139,8 @@ export async function prepareSwap(state: HubState, userId: string, trade: TradeI
     if (c.display.tokenIn.decimals !== null && c.display.tokenIn.decimals !== funds.inputDecimals) throw new Error("Token decimals changed. Request a new proposal.");
     c.display.tokenIn.decimals = funds.inputDecimals; c.display.tokenOut.decimals = funds.outputDecimals;
   }
-  const value = await cryptoServices.valuation.value({ chainId: c.request.chainId, address: c.request.tokenIn }, c.request.amount);
-  if (value > trade.value) throw new Error("The USD input value increased. Ask for a new swap proposal.");
+  const value = await inputValue(c.request, trade.initiator ?? "agent");
+  if (value > trade.value && !(trade.initiator === "user" && trade.side === "sell")) throw new Error("The USD input value increased. Ask for a new swap proposal.");
   const policy = tradePolicy(state.profile, trade.value, state.trades.filter(t => t.id !== trade.id), true, Date.now(), trade.initiator ?? "agent");
   if (!policy.allowed) throw new Error(policy.reason);
   // A sponsored swap carries its own approvals inside the batch, so there is no
@@ -122,7 +154,7 @@ export async function prepareSwap(state: HubState, userId: string, trade: TradeI
     return { transaction: approval, step: c.step, expiresAt: c.expiresAt };
   }
   // Only quote after every required approval is confirmed.
-  const quote = await cryptoServices.execution.quote(c.request);
+  const quote = await cryptoServices.execution.quote(c.request, { autonomous: trade.unattended === true });
   if (BigInt(quote.minimumOutput) < BigInt(c.minimumOutput)) throw new Error("The quote moved below your minimum output. Ask for a new proposal.");
   c.quote = quote; c.quoteId = crypto.randomUUID(); c.expiresAt = quote.expiresAt;
   c.phase = "authorizing"; c.step = "swap";
@@ -166,7 +198,7 @@ export async function authorizeSwap(state: HubState, userId: string, trade: Trad
   }
   // The batch grants both approval layers itself. A separate Permit2 signature
   // is unnecessary, and a standalone swap simulation cannot see those approvals.
-  const transaction = await cryptoServices.execution.swap(c.quote, typeof signature === "string" ? signature : undefined, { batchedApprovals: sponsored });
+  const transaction = await cryptoServices.execution.swap(c.quote, typeof signature === "string" ? signature : undefined, { batchedApprovals: sponsored, autonomous: trade.unattended === true });
   // The batch is built from the router call the quote produced, so the calldata
   // the chain is later held to is the calldata authorized here and nothing else.
   const batch = sponsored ? await buildSwapBatch(c.request, transaction) : null;

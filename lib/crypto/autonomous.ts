@@ -45,12 +45,14 @@ export const canBuyUnattended = (state: HubState, walletId?: string | null) => a
 export async function executeAutonomousBuy(state: HubState, userId: string, trade: TradeIntent, wallet: { id: string; address: string }) {
   const c = trade.crypto;
   if (!c) throw new Error('This proposal has nothing to execute.');
+  if (trade.side === 'sell') throw new Error('Unattended buying permission does not authorize sales. Review and sign this sale in your wallet.');
   const gate = autonomyState(state, wallet.id);
   if (!gate.allowed) throw new Error(gate.reason);
 
   // Base only, checked here as well as in `proposeSwap`, because this is the
   // one path where nobody would notice a mistake until the money had moved.
   if (c.request.chainId !== BUY_CHAIN) throw new Error(`Unattended buying settles on ${chain(BUY_CHAIN).name} only.`);
+  if (c.request.tokenOut === chain(c.request.chainId).usdc) throw new Error('Unattended buying permission does not authorize sales. Review and sign this sale in your wallet.');
   if (c.request.wallet.toLowerCase() !== wallet.address.toLowerCase()) throw new Error('This proposal is for a different wallet than the delegated one.');
 
   // The limits again, immediately before spending. A reservation made minutes

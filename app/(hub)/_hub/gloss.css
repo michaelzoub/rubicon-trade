@@ -35,3 +35,93 @@
 @media (prefers-reduced-motion: reduce) {
   .gloss { backdrop-filter: none; }
 }
+
+/* Dark tone: the reveal over a drawn field belongs to the same world as the
+   account popup, and its edge carries the colour of whatever it describes.
+   `--account-edge` is set per reveal; the recipe is the one the account rows use. */
+.gloss[data-tone="dark"] {
+  position: fixed;
+  padding: 12px 13px 13px;
+  border-radius: 12px;
+  background: #111;
+  border: 1px solid #262626;
+  box-shadow: 0 1px 0 #ffffff0a inset, 0 18px 44px -16px #000e;
+  backdrop-filter: none;
+  overflow: hidden;
+}
+.gloss[data-tone="dark"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: conic-gradient(from var(--account-edge-angle, 0deg), #ffffff0b,
+    color-mix(in srgb, var(--account-edge, #647c9d) 65%, #171717) 25%, #ffffff0b 50%,
+    color-mix(in srgb, var(--account-edge, #647c9d) 38%, #171717) 75%, #ffffff0b);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+}
+.gloss[data-tone="dark"] .gloss-title {
+  color: #fff;
+  font-size: .8rem;
+  letter-spacing: -.01em;
+  text-transform: none;
+  line-height: 1.45;
+  margin-bottom: 10px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+.gloss[data-tone="dark"] dl { gap: 2px; }
+.gloss[data-tone="dark"] dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
+  min-height: 30px;
+  padding: 0 9px;
+  border-radius: 8px;
+}
+.gloss[data-tone="dark"] dt { color: #ffffffb3; font-size: 12px; letter-spacing: -.005em; text-transform: none; }
+.gloss[data-tone="dark"] dd {
+  color: #fff; font-size: 12px; font-variant-numeric: tabular-nums;
+  letter-spacing: -.005em; text-align: right; -webkit-line-clamp: 2;
+}
+/* Only the reading worth showcasing gets an edge of its own. */
+.gloss[data-tone="dark"] dl > div[data-lead] { position: relative; min-height: 34px; }
+.gloss[data-tone="dark"] dl > div[data-lead]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: conic-gradient(from var(--account-edge-angle, 0deg), #ffffff0b,
+    color-mix(in srgb, var(--account-edge, #647c9d) 72%, #171717) 25%, #ffffff0b 50%,
+    color-mix(in srgb, var(--account-edge, #647c9d) 45%, #171717) 75%, #ffffff0b);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+}
+.gloss[data-tone="dark"] dl > div[data-lead] dt { color: var(--account-edge, #fff); }
+.gloss[data-tone="dark"] dl > div[data-lead] dd { font-size: 13px; }
+
+/* A reading fits on one line, label left and value right. A sentence does not,
+   so it takes the row to itself rather than crushing the label beside it. */
+.gloss[data-tone="dark"] { width: min(274px, calc(100vw - 32px)); }
+.gloss[data-tone="dark"] dl > div[data-stacked] {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 3px;
+  padding-block: 8px;
+  min-height: 0;
+}
+.gloss[data-tone="dark"] dl > div[data-stacked] dd { text-align: left; -webkit-line-clamp: 3; }
+.gloss[data-tone="dark"] dl > div[data-stacked][data-lead] { min-height: 0; }
+/* However tall the content, the reveal stays inside the window. */
+.gloss[data-tone="dark"] { max-height: calc(100vh - 24px); overflow: auto; }

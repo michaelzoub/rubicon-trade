@@ -15,6 +15,7 @@ import { HubProvider } from "./hub-provider";
 import { ActivityView, needsYou } from "./activity-view";
 import { GlossProvider, GLOSS_ID } from "./gloss";
 import { buildGraph, summarise } from "@/lib/socialtrading/memory-graph";
+import { buildTree, treePlan } from "@/lib/socialtrading/belief-tree";
 
 let container: HTMLDivElement, root: Root;
 beforeEach(() => {
@@ -25,10 +26,12 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
 const render = async () => act(async () => root.render(<HubProvider userId="preview-user" name="Michael" initial={PREVIEW_STATE} initialAccount={PREVIEW_ACCOUNT}><GlossProvider><ActivityView /></GlossProvider></HubProvider>));
 
-it("draws the worldview as beliefs rather than as a report", async () => {
+it("draws the worldview as a tree rooted in the thesis, not as a report", async () => {
   await render();
   const frames = buildGraph(PREVIEW_STATE);
   const latest = frames[frames.length - 1];
+  // Nothing reaches Jev under test, so this is the tree the view falls back to.
+  const tree = buildTree(latest, treePlan(latest, PREVIEW_STATE.profile.themes), null);
 
   // Nothing here is an activity page any more.
   expect(container.querySelector(".hub-pulse-bead")).toBeNull();
@@ -36,12 +39,24 @@ it("draws the worldview as beliefs rather than as a report", async () => {
   expect(container.querySelector(".hub-day")).toBeNull();
   expect(container.textContent).not.toContain("Your world, lately");
 
+  // One trunk, always the thesis, always the centre.
+  expect(container.querySelectorAll(".mem-trunk")).toHaveLength(1);
+
   const beliefs = Array.from(container.querySelectorAll<HTMLElement>(".mem-belief"));
-  expect(beliefs).toHaveLength(latest.nodes.length);
-  // Conviction is the size of the body, so strength is read rather than printed.
-  expect(beliefs[0].style.getPropertyValue("--strength")).toBe(String(latest.nodes[0].strength));
+  expect(beliefs).toHaveLength(tree.nodes.length - 1);
+  expect(beliefs.some(b => b.dataset.tier === "pillar")).toBe(true);
+  expect(beliefs.some(b => b.dataset.tier === "idea")).toBe(true);
+  // Colour and size are the confidence, so it is read rather than printed.
+  for (const belief of beliefs) {
+    expect(belief.style.getPropertyValue("--conf")).toMatch(/^#[0-9a-f]{6}$/);
+    expect(Number(belief.style.getPropertyValue("--strength"))).toBeGreaterThanOrEqual(0);
+  }
   expect(beliefs[0].getAttribute("aria-describedby")).toBe(GLOSS_ID);
   expect(container.querySelectorAll(".mem-edges line").length).toBeGreaterThan(0);
+  // Without a model behind it the view says the numbers are its own estimate.
+  expect(container.querySelector(".mem-key")?.textContent).toContain("estimated from your own recorded strengths");
+  // The one place the reading is explained in words, on demand rather than as a caption.
+  expect(container.querySelector(".mem-key-help")?.getAttribute("aria-label")).toBe("How to read this tree");
 });
 
 it("moves through time from the keyboard as well as by dragging", async () => {
@@ -67,7 +82,12 @@ it("keeps the exact sequence reachable underneath the field", async () => {
 it("says what each belief did, for anyone who cannot see it move", async () => {
   await render();
   const labels = Array.from(container.querySelectorAll(".mem-belief")).map(b => b.getAttribute("aria-label") ?? "");
-  expect(labels.every(l => /per cent conviction/.test(l))).toBe(true);
+  expect(labels.length).toBeGreaterThan(0);
+  // Colour is a reading, so the same reading is spelled out in words and a number.
+  expect(labels.every(l => /(Foundational|Strongly aligned|Loosely aligned|Barely aligned|Pulls against it) with your thesis, \d+%\./.test(l))).toBe(true);
+  // The thesis is the measure, so it reports no reading of its own.
+  expect(container.querySelector(".mem-trunk")?.getAttribute("aria-label")).toContain("carries no score");
+  expect(container.querySelector(".mem-trunk")?.getAttribute("aria-label")).not.toMatch(/\d+%/);
   expect(container.querySelector(".mem-field")?.getAttribute("aria-label")).toContain("arrow keys");
 });
 

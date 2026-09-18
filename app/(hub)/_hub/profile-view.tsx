@@ -1,9 +1,10 @@
 "use client";
 
-import { Bell, Brain, Check, Compass, MessageSquare, Plus, Quote, ShieldCheck, SlidersHorizontal, Wallet, X, type LucideIcon } from "lucide-react";
+import { Brain, Compass, MessageSquare, Plus, Quote, ShieldCheck, Wallet, X, type LucideIcon } from "lucide-react";
 import { useHubRouter as useRouter } from "./navigation";
 import { useEffect, useId, useRef, useState, type ReactNode, type CSSProperties } from "react";
-import { limitsError, PERMISSIONS, type InvestingProfile, type Permission } from "@/lib/socialtrading/profile";
+import { limitsError, PERMISSIONS, type InvestingProfile } from "@/lib/socialtrading/profile";
+import { ComfortZone, ModeChooser, MODE_LABEL, MODE_LINE, modeOf, withMode, type Mode } from "./agent-modes";
 import { DEFAULT_PLAN, followedAssets, formatCredits, learnedAssets, limitStatus } from "@/lib/socialtrading/plans";
 import { isThemeId, THEMES, type ThemeId } from "@/lib/socialtrading/themes";
 import { identityDepth, identityLine, identitySignature, identityStage, identityStats, milestones, nextStep } from "@/lib/socialtrading/identity";
@@ -25,16 +26,6 @@ import { DepositFunds } from "./deposit-funds";
 import { HubLink as Link } from "./navigation";
 
 const TELL = ["I’m becoming more interested in nuclear", "Stop showing me memecoins", "Add VRT to things I’m watching", "Change my daily limit to $200"];
-const ICONS = { notify: Bell, approve: MessageSquare, automatic: SlidersHorizontal, buy: Wallet };
-/** The four ways an agent can work with you, as one decision.
- *
- * `buy` is not a fourth permission in the data model — it is `automatic` plus a
- * delegated signer — but it is a fourth *choice* here, because "it can spend
- * without me" is what a person is actually deciding, and burying that in a
- * checkbox somewhere else made it unfindable. */
-type Mode = Permission | "buy";
-const MODE_LABEL: Record<Mode, string> = { ...PERMISSIONS, buy: "Buy for me" };
-const MODE_LINE: Record<Mode, string> = { notify: "It tells you what it sees. Every buy is yours to make.", approve: "It brings you ideas and proposes trades. Nothing moves until you say so.", automatic: "It proposes inside a comfort zone you set. You still sign every one.", buy: "It buys inside your comfort zone while you are away, on Base, using your USDC. Needs a signer you grant and can revoke." };
 const money = (v: string) => v && Number.isFinite(Number(v)) ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(v)) : null;
 const list = (items: string[], max = 3) => items.length <= max ? items.join(", ") : `${items.slice(0, max).join(", ")} +${items.length - max}`;
 
@@ -121,14 +112,29 @@ export function ProfileView() {
   const wallets = useLinkedWallets();
   const [profile, setProfile] = useState<InvestingProfile>(state.profile);
   /** The radio reflects both stored facts, so a saved choice survives a reload. */
-  const mode: Mode = profile.autoExecute && profile.permission === "automatic" ? "buy" : profile.permission;
+  const mode: Mode = modeOf(profile);
   const [dislikes, setDislikes] = useState(state.dislikes);
   const [preferences, setPreferences] = useState(state.preferences);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const save_ = useRef<HTMLDivElement>(null);
-  useEffect(() => { setProfile(state.profile); setDislikes(state.dislikes); setPreferences(state.preferences); }, [state.profile, state.dislikes, state.preferences]);
+  /** The last server values this form adopted. Kept so a background refresh can
+   * be told apart from the user's own edits: the account poll every 60s (and on
+   * every tab focus) hands us a new `state.profile` object, and adopting it
+   * blindly threw away whatever was half-filled in — including the "Buy for me"
+   * choice that reveals the signer panel, which is why granting a signer kept
+   * slipping away mid-flow. */
+  const synced = useRef({ p: state.profile, d: state.dislikes, pr: state.preferences });
+  const draftRef = useRef({ p: profile, d: dislikes, pr: preferences });
+  draftRef.current = { p: profile, d: dislikes, pr: preferences };
+  useEffect(() => {
+    const previous = synced.current;
+    synced.current = { p: state.profile, d: state.dislikes, pr: state.preferences };
+    // Only adopt the server's version when the user has nothing in flight.
+    if (JSON.stringify(draftRef.current) !== JSON.stringify(previous)) return;
+    setProfile(state.profile); setDislikes(state.dislikes); setPreferences(state.preferences);
+  }, [state.profile, state.dislikes, state.preferences]);
   useEffect(() => { void refreshAgents(); }, [refreshAgents]);
   const dirty = JSON.stringify({ p: profile, d: dislikes, pr: preferences }) !== JSON.stringify({ p: state.profile, d: state.dislikes, pr: state.preferences });
   const learned = learnedThemes(state.inferred, state.profile.themes);
@@ -234,29 +240,10 @@ export function ProfileView() {
         </Facet>
 
         <Facet icon={ShieldCheck} title="How your agent works with you" summary={<p><strong>{MODE_LABEL[mode]}</strong> · {MODE_LINE[mode]}{profile.permission !== "notify" && zone ? <> Comfort zone: {zone}.</> : ""}</p>}>
-          <fieldset className="hub-modes">
-            <legend className="sr-only">How your agent works with you</legend>
-            {(Object.keys(MODE_LABEL) as Mode[]).map(value => { const Icon = ICONS[value]; const selected = mode === value; return <label key={value} className={`hub-mode${selected ? " is-selected" : ""}`}>
-              <input type="radio" name="permission" value={value} checked={selected} onChange={() => setProfile(p => ({
-                ...p, permissionConfigured: true,
-                permission: value === "buy" ? "automatic" : value,
-                // Choosing anything else is also how you stop it spending.
-                autoExecute: value === "buy",
-              }))} />
-              <span className="hub-mode-icon" aria-hidden="true"><Icon size={18} strokeWidth={1.6} /></span>
-              <span className="hub-mode-copy"><strong>{MODE_LABEL[value]}</strong><small>{MODE_LINE[value]}</small></span>
-              <span className="hub-mode-check" aria-hidden="true">{selected && <Check size={12} />}</span>
-            </label>; })}
-          </fieldset>
+          <ModeChooser mode={mode} onChange={value => setProfile(p => withMode(p, value))} />
           {/* The signer lives with the choice that needs it, not three fields away. */}
-          {mode === "buy" && <div className="hub-field"><DelegateSigning /></div>}
-          {profile.permission !== "notify" && <div className="hub-field hub-zone">
-            <div className="hub-field-head"><p>{profile.permission === "automatic" ? "Comfort zone · USD" : "Comfort zone · USD (optional)"}</p></div>
-            <div className="hub-zone-fields">
-              {([["perTrade", "Per trade"], ["daily", "Per day"], ["weekly", "Per week"]] as const).map(([key, label]) => <label key={key} className="hub-zone-field"><span>{label}</span><span className="hub-zone-input"><i aria-hidden="true">$</i><input className="socialtrading-input" type="number" inputMode="decimal" min="0.01" step="0.01" value={profile.limits[key]} onChange={e => setProfile(p => ({ ...p, limits: { ...p.limits, [key]: e.target.value } }))} placeholder="0" /></span></label>)}
-            </div>
-            <p className="socialtrading-caption">Your agent stays inside these; trades you place yourself don’t count. Checked on the server before anything is quoted.</p>
-          </div>}
+          {mode === "buy" && <div className="hub-field"><DelegateSigning draft={{ permission: profile.permission, limits: profile.limits }} /></div>}
+          {profile.permission !== "notify" && <ComfortZone limits={profile.limits} required={profile.permission === "automatic"} onChange={limits => setProfile(p => ({ ...p, limits }))} />}
         </Facet>
 
         <Facet icon={Brain} title="What your agent remembers" action="Look" summary={<p>{inferredThemes.length || inferredAssets.length ? <>{inferredThemes.length ? `${inferredThemes.length} ${inferredThemes.length === 1 ? "theme" : "themes"}` : ""}{inferredThemes.length && inferredAssets.length ? " and " : ""}{inferredAssets.length ? `${inferredAssets.length} ${inferredAssets.length === 1 ? "asset" : "assets"}` : ""}, picked up from {signals} {signals === 1 ? "signal" : "signals"}. Never a rule; forget any of it.</> : "Nothing yet. Open opportunities, ask follow-ups, or approve and pass on ideas and this fills in."}</p>}>

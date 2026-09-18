@@ -21,3 +21,6 @@ tsconfig.tsbuildinfo
 
 # Next.js verification builds
 .next-verify/
+
+# All Next.js build output dirs (.next, .next-buy, .next-beliefs, ...)
+.next*/

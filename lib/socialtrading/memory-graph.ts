@@ -156,5 +156,5 @@ export function summarise(frame: GraphFrame): string {
     counts.contradicted && `${counts.contradicted} contradicted`,
     counts.released && `${counts.released} let go`,
   ].filter(Boolean);
-  return said.length ? said.join(" · ") : "Nothing moved";
+  return said.length ? said.join(", ") : "Nothing moved";
 }

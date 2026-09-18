@@ -129,3 +129,53 @@
   .hub-quiet-card, .hub-quiet-card::before, .quiet-card-open, .quiet-card-signal, .hub-explore .hub-field-panel, .hub-explore .hub-explore-results { transition: none; }
   .trace-chip { animation: none; }
 }
+
+/* ---------- The cards the agent is sure about ---------- */
+/* A strong match should be findable from across the grid without shouting: it
+   wears the drawn edge the account menu wears — a conic sweep masked to a
+   hairline, so it is outlined in light rather than boxed in — and it twitches
+   every few seconds the way a game leaves an item shaking until it is picked
+   up. The nudge lives on a wrapper because the card itself is under GSAP's
+   hand for the pointer tilt, and two authors on one transform is a fight. */
+.hub-quiet-nudge { display: flex; min-width: 0; }
+.hub-quiet-nudge > .hub-quiet-card { flex: 1; min-width: 0; }
+.hub-quiet-nudge.is-aligned { animation: quiet-nudge 7.5s ease-in-out var(--nudge-delay, 0s) infinite; }
+/* A pointer arriving ends the invitation: the tilt takes the transform back. */
+.hub-quiet-nudge.is-aligned:hover, .hub-quiet-nudge.is-aligned:focus-within { animation: none; }
+@keyframes quiet-nudge {
+  0%, 82%, 100% { transform: none; }
+  85% { transform: translateY(-3px) rotate(-1.1deg); }
+  88.5% { transform: translateY(-4px) rotate(1.1deg); }
+  92% { transform: translateY(-2px) rotate(-.65deg); }
+  95.5% { transform: translateY(-1px) rotate(.32deg); }
+  98% { transform: rotate(-.1deg); }
+}
+
+.hub-quiet-card.is-aligned { border-color: transparent;
+  box-shadow: 0 1px 2px rgba(23, 42, 69, .05), 0 22px 52px -32px rgba(var(--hub-blue-rgb, 47, 128, 237), .55); }
+.hub-quiet-card.is-aligned::before { opacity: .45; }
+.hub-quiet-card.is-aligned:hover, .hub-quiet-card.is-aligned:focus-within { border-color: transparent;
+  box-shadow: 0 1px 2px rgba(23, 42, 69, .05), 0 30px 62px -28px rgba(var(--hub-blue-rgb, 47, 128, 237), .6); }
+.hub-quiet-card.is-aligned::after {
+  content: ""; position: absolute; inset: 0; z-index: 3; border-radius: inherit; padding: 1.5px; pointer-events: none;
+  background: conic-gradient(from var(--edge-angle, 0deg),
+    rgba(var(--hub-blue-rgb, 47, 128, 237), .10),
+    rgba(var(--hub-blue-rgb, 47, 128, 237), .85) 16%,
+    rgba(var(--hub-blue-rgb, 47, 128, 237), .18) 34%,
+    rgba(var(--hub-blue-rgb, 47, 128, 237), .12) 54%,
+    rgba(var(--hub-blue-rgb, 47, 128, 237), .62) 74%,
+    rgba(var(--hub-blue-rgb, 47, 128, 237), .10));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); mask-composite: exclude;
+  animation: quiet-edge-sweep 9s linear infinite;
+}
+@keyframes quiet-edge-sweep { to { --edge-angle: 360deg; } }
+/* The reason it is here is worth reading, so it stops being a whisper. */
+.hub-quiet-card.is-aligned .quiet-card-signal { color: var(--hub-blue-ink, #2366b8); font-weight: 500;
+  box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb, 47, 128, 237), .28); background: rgba(240, 246, 255, .9); }
+
+@media (prefers-reduced-motion: reduce) {
+  /* The edge stays — it is information. Only the invitation to move goes. */
+  .hub-quiet-nudge.is-aligned { animation: none; }
+  .hub-quiet-card.is-aligned::after { animation: none; }
+}

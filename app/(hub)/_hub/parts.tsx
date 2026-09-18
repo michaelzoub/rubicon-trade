@@ -6,7 +6,7 @@ import { tradability } from "@/lib/crypto/tradable";
 import { ArrowUpRight, Check, Eye, EyeOff, HelpCircle, X } from "lucide-react";
 import { HubLink as Link } from "./navigation";
 import { useHubRouter as useRouter } from "./navigation";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Asset, MessagePart, ProfileChange, TradeIntent } from "@/lib/socialtrading/types";
 import { PERMISSIONS } from "@/lib/socialtrading/profile";
 import { followedAssets, limitStatus } from "@/lib/socialtrading/plans";
@@ -163,7 +163,13 @@ function QuietAssetCard({ asset: initial }: { asset: Asset }) {
   const [hit, setHit] = useState<TraceHit | null>(null);
   const points = asset.chart.slice(-40);
   const read = hit ? points[hit.index] : null;
-  return <article ref={tilt.root} className={`hub-quiet-card${hit ? " is-reading" : ""}`} data-asset={asset.symbol} onPointerMove={tilt.onPointerMove} onPointerLeave={tilt.onPointerLeave}>
+  /** A card the agent is sure about says so in its edge, and twitches every few
+   * seconds until you pick it up. The beat is derived from the symbol so the
+   * grid never nudges in unison — and so the server and the client agree. */
+  const aligned = asset.labelTone === "match";
+  const beat = [...asset.symbol].reduce((n, c) => n + c.charCodeAt(0), 0) % 8;
+  return <div className={`hub-quiet-nudge${aligned ? " is-aligned" : ""}`} style={{ "--nudge-delay": `${(beat * .93).toFixed(2)}s` } as CSSProperties}>
+    <article ref={tilt.root} className={`hub-quiet-card${hit ? " is-reading" : ""}${aligned ? " is-aligned" : ""}`} data-asset={asset.symbol} onPointerMove={tilt.onPointerMove} onPointerLeave={tilt.onPointerLeave}>
     <Link href={assetHref(asset)} onClick={() => { void signal("opened", asset); }} aria-label={`Open ${asset.name}`}>
       <span className="quiet-card-top">
         <span className="quiet-card-title"><AssetLogo asset={asset}/><span><strong>{asset.symbol}</strong><small>{asset.name}</small></span></span>
@@ -179,7 +185,8 @@ function QuietAssetCard({ asset: initial }: { asset: Asset }) {
         <span className="quiet-card-signal">{asset.label || "A new connection"}</span>
       </span>
     </Link>
-  </article>;
+    </article>
+  </div>;
 }
 
 /** Buy, or the honest reason you can't.
@@ -247,7 +254,7 @@ const TRADE_STATUS: Record<TradeIntent["status"], string> = {
 };
 export { TRADE_STATUS };
 
-export function TradeCard({ tradeId, expanded = false }: { tradeId: string; expanded?: boolean }) {
+export function TradeCard({ tradeId, expanded = false, simple = false, quiet = false }: { tradeId: string; expanded?: boolean; simple?: boolean; quiet?: boolean }) {
   const { state, mutate } = useHub();
   const trade = state.trades.find(t => t.id === tradeId);
   const root = useEnter<HTMLDivElement>();
@@ -261,7 +268,7 @@ export function TradeCard({ tradeId, expanded = false }: { tradeId: string; expa
   }, [trade]);
   if (!trade) return <div className="hub-notice">This trade is no longer available.</div>;
   if (trade.crypto?.bridge) return <BridgeTradeCard trade={trade} />;
-  if (trade.crypto) return <CryptoTradeCard trade={trade} expanded={expanded} />;
+  if (trade.crypto) return <CryptoTradeCard trade={trade} expanded={expanded} simple={simple} quiet={quiet} />;
   const pending = trade.status === "approval_required";
   const connected = state.brokerage?.connected ?? false;
   return <div ref={root} className={`hub-trade is-${trade.status}${pending ? " hub-priority-card" : ""}`} role="group" aria-label="Trade confirmation">

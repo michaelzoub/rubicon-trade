@@ -2,6 +2,7 @@ import 'server-only';
 import { encodeFunctionData, decodeFunctionResult, parseAbi } from 'viem';
 import { address, chain, CHAIN_IDS, formatUnits, type ChainId } from './chains';
 import { rpc } from './rpc';
+import { indexedTokens } from './portfolio-index';
 import { ownedWallet } from './wallet';
 import { CATALOG_ENTRIES } from './catalog';
 import type { HubState } from '@/lib/socialtrading/types';
@@ -68,8 +69,9 @@ async function readChain(chainId: number, wallet: string, tokens: string[]): Pro
       balance = decodeFunctionResult({ abi: erc20Abi, functionName: 'balanceOf', data: bal.returnData }) as bigint;
       if (balance <= 0n) continue;
       symbol = sym?.success ? String(decodeFunctionResult({ abi: erc20Abi, functionName: 'symbol', data: sym.returnData })).slice(0, 12) : 'Token';
-      decimals = dec?.success ? Number(decodeFunctionResult({ abi: erc20Abi, functionName: 'decimals', data: dec.returnData })) : 18;
-      if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) decimals = 18;
+      if (!dec?.success) continue;
+      decimals = Number(decodeFunctionResult({ abi: erc20Abi, functionName: 'decimals', data: dec.returnData }));
+      if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) continue;
     } catch { continue; }
     held.push({
       chainId, chainName: chain(chainId).name, wallet, token,
@@ -83,18 +85,32 @@ async function readChain(chainId: number, wallet: string, tokens: string[]): Pro
 /** Everything of the user's that is sitting somewhere, across every supported
  * network. Read-only: it never moves anything and never asks a wallet to switch
  * networks. Sending is the user's own signature, from the client. */
-export async function findHoldings(userId: string, wallets: string[], state?: HubState, extra?: { chainId: number; token: string }[]): Promise<Holding[]> {
-  const list = [...new Set(wallets.map(address))].slice(0, 3);
-  if (!list.length) return [];
+export type HoldingsScan = { holdings: Holding[]; complete: boolean; warnings: string[]; fetchedAt: string };
+export async function scanHoldings(userId: string, wallets: string[], state?: HubState, extra?: { chainId: number; token: string }[], networks: readonly ChainId[] = CHAIN_IDS): Promise<HoldingsScan> {
+  const list = [...new Set(wallets.map(address))];
   await Promise.all(list.map(w => ownedWallet(userId, w)));
-
-  const pairs = list.flatMap(wallet => CHAIN_IDS.map(chainId => ({ wallet, chainId })));
+  const warnings = new Set<string>();
+  const pairs = list.flatMap(wallet => networks.map(chainId => ({ wallet, chainId })));
   const results = await Promise.all(pairs.map(async ({ wallet, chainId }) => {
-    const tokens = [...new Set([...candidates(chainId, state), ...(extra ?? []).filter(e => e.chainId === chainId).map(e => address(e.token))])];
-    // One chain failing is not a reason to report nothing about the others.
-    try { return await readChain(chainId, wallet, tokens.slice(0, 40)); } catch { return []; }
+    let discovered: string[] = [];
+    try {
+      const index = await indexedTokens(chainId, wallet);
+      discovered = index.tokens;
+      if (!index.complete) warnings.add(`${chain(chainId).name}: showing known tokens; full discovery is unavailable or incomplete.`);
+    } catch { warnings.add(`${chain(chainId).name}: token discovery is unavailable; showing known tokens.`); }
+    const tokens = [...new Set([...candidates(chainId, state), ...discovered, ...(extra ?? []).filter(e => e.chainId === chainId).map(e => address(e.token))])];
+    const held: Holding[] = [];
+    for (let offset = 0; offset < tokens.length; offset += 40) {
+      try { held.push(...await readChain(chainId, wallet, tokens.slice(offset, offset + 40))); }
+      catch { warnings.add(`${chain(chainId).name}: some balances could not be checked.`); }
+    }
+    return held;
   }));
-  return results.flat().sort((a, b) => Number(b.kind === 'usdc') - Number(a.kind === 'usdc') || a.chainName.localeCompare(b.chainName) || a.symbol.localeCompare(b.symbol));
+  return { holdings: results.flat().sort((a, b) => Number(b.kind === 'usdc') - Number(a.kind === 'usdc') || a.chainName.localeCompare(b.chainName) || a.symbol.localeCompare(b.symbol)), complete: !warnings.size, warnings: [...warnings], fetchedAt: new Date().toISOString() };
+}
+
+export async function findHoldings(userId: string, wallets: string[], state?: HubState, extra?: { chainId: number; token: string }[]): Promise<Holding[]> {
+  return (await scanHoldings(userId, wallets, state, extra)).holdings;
 }
 
 /** Calldata for an ERC-20 transfer the user signs themselves. The server never

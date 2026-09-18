@@ -31,9 +31,9 @@ export function CommandMenu({ resolveHref }: { resolveHref: (href: string) => st
   return <div ref={root} className="rubicon-more" onPointerEnter={event => { cancel(); if (event.pointerType === "mouse") setOpen(true); }} onPointerLeave={() => { cancel(); timer.current = setTimeout(() => { if (!pinned.current && !root.current?.contains(document.activeElement)) close(); }, 180); }} onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) close(); }}>
     <button ref={trigger} type="button" className="rubicon-more-trigger" aria-label="Discover more of Rubicon" aria-expanded={open} aria-controls="rubicon-destinations" aria-keyshortcuts="Meta+k Control+k" onClick={() => { cancel(); if (pinned.current) close(); else { pinned.current = true; setOpen(true); } }}><Plus size={19} /></button>
     {open && <nav id="rubicon-destinations" className="rubicon-portals" aria-label="More of Rubicon">
-      <HubLink href={resolveHref("/thesis")} className="rubicon-portal is-thesis" onClick={close}>
-        <span className="portal-heading"><strong>Your thesis</strong><ArrowUpRight size={15}/></span><span className="portal-note">What you believe.</span>
-        <span className="portal-strata" aria-hidden="true"><i/><i/><i/><i/></span>
+      <HubLink href={resolveHref("/beliefs")} className="rubicon-portal is-thesis" onClick={close}>
+        <span className="portal-heading"><strong>Your beliefs</strong><ArrowUpRight size={15}/></span><span className="portal-note">The thinking behind your holdings.</span>
+        <svg className="portal-beliefs" viewBox="0 0 240 100" aria-hidden="true"><path d="M0 92 L35 85 L70 88 L105 61 L140 68 L175 38 L210 45 L240 24 L240 100 L0 100Z" fill="#729fdd" opacity=".25"/><path d="M0 92 L35 85 L70 88 L105 61 L140 68 L175 38 L210 45 L240 24" fill="none" stroke="#8ab3eb" strokeWidth="2"/><path d="M0 98 L35 93 L70 94 L105 79 L140 84 L175 65 L210 72 L240 57 L240 100 L0 100Z" fill="#8ab3eb" opacity=".4"/><g fill="#c4dbfa"><circle cx="105" cy="61" r="4"/><circle cx="175" cy="38" r="4"/><circle cx="240" cy="24" r="4"/></g></svg>
       </HubLink>
       <HubLink href={resolveHref("/agents")} className="rubicon-portal is-agents" onClick={close}>
         <span className="portal-heading"><strong>Your agents</strong><ArrowUpRight size={15}/></span><span className="portal-note">A mind beside yours.</span>

@@ -4,12 +4,19 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { AgentCreature } from "../(hub)/_hub/agent-creature";
 import { gsap, useGSAP } from "./motion";
 import { readLoadingAgent } from "./loading-agent-identity";
+import { avatarTraits } from "@/lib/socialtrading/avatar";
+import { identityPalette } from "@/lib/socialtrading/identity-palette";
 import "./agent-loading-state.css";
 
-export function AgentLoadingState({ label = "Loading…", userId }: { label?: string; userId?: string }) {
+export function AgentLoadingState({ label = "Loading…", userId, randomAgent = false }: { label?: string; userId?: string; randomAgent?: boolean }) {
   const root = useRef<HTMLDivElement>(null);
   const [identity, setIdentity] = useState(() => readLoadingAgent());
-  useEffect(() => { setIdentity(readLoadingAgent(userId)); }, [userId]);
+  useEffect(() => {
+    if (randomAgent) {
+      const seed = crypto.randomUUID();
+      setIdentity({ traits: avatarTraits(seed), palette: identityPalette(seed, []) });
+    } else setIdentity(readLoadingAgent(userId));
+  }, [userId, randomAgent]);
 
   useGSAP(() => {
     const media = gsap.matchMedia();
@@ -34,7 +41,7 @@ export function AgentLoadingState({ label = "Loading…", userId }: { label?: st
     return () => media.revert();
   }, { scope: root });
 
-  return <div ref={root} className="agent-loading" role="status" aria-live="polite"
+  return <div ref={root} className="agent-loading" role="status" aria-live="polite" aria-label={label || "Loading"}
     style={{ "--loading-accent": identity.palette.accent, "--loading-wash": identity.palette.wash } as CSSProperties}>
     <div className="agent-loading-stage" aria-hidden="true">
       <span className="agent-loading-orbit" />
@@ -42,7 +49,7 @@ export function AgentLoadingState({ label = "Loading…", userId }: { label?: st
       <span className="agent-loading-shadow" />
       <div className="agent-loading-body"><AgentCreature traits={identity.traits} palette={identity.palette} expression="rest" lookAt={{ from: { x: 0, y: 0 }, to: null }} className="agent-loading-creature" /></div>
     </div>
-    <p className="agent-loading-label">{label}</p>
+    {label && <p className="agent-loading-label">{label}</p>}
     <div className="agent-loading-signals" aria-hidden="true">{[0, 1, 2].map(i => <span key={i} className="agent-loading-signal" />)}</div>
   </div>;
 }

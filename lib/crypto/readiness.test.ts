@@ -52,7 +52,10 @@ describe('purchase readiness', () => {
     await expect(readPurchaseBalance(bad, wallet, 8453)).rejects.toThrow('unavailable');
   });
   it('does not expose raw node failures', () => {
-    expect(purchaseError(new Error('Purchase simulation failed. Request a fresh quote.'))).toContain('Purchase simulation failed');
+    // A dry run of the calldata reverting is not a fact about anyone's day:
+    // it says the purchase will not go through, and that nothing was spent.
+    expect(purchaseError(new Error('Purchase simulation failed. Request a fresh quote.'))).toContain('can’t be bought');
+    expect(purchaseError(new Error('Purchase simulation failed. Request a fresh quote.'))).not.toContain('simulation');
     expect(purchaseError(new Error('Uniswap request failed (500).'))).toContain('Uniswap');
     expect(purchaseError(new Error('RPC internal error secret'))).not.toContain('RPC');
     expect(purchaseError(new Error('4001 rejected'))).toContain('declined');

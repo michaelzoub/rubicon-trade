@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
+import { SellPanel } from "./sell-panel";
 import { BuyPanel } from "./buy-panel";
 import { HubLink as Link } from "./navigation";
 import { PERMISSIONS } from "@/lib/socialtrading/profile";
@@ -29,6 +30,7 @@ export function TradeView() {
     </header>
     <div className="hub-buy-stage">
       <BuyPanel title="Buy" />
+      <SellPanel />
       <details className="hub-wallet-profile">
         <summary><span className="hub-wallet-monogram">{(name || "You").slice(0, 1).toUpperCase()}</span><span><strong>{name || "Your account"}</strong><small>Wallet &amp; what your agent may do</small></span></summary>
         <section className="hub-side-card" aria-labelledby="wallets-title">

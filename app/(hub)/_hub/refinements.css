@@ -1,10 +1,10 @@
 /* The shell remains light. A purchase alone enters the dark attention state. */
 .rubicon-navigation{display:flex;align-items:center;gap:24px}.rubicon-navigation .hub-nav{gap:22px;background:transparent;border:0;box-shadow:none}.rubicon-navigation .hub-nav-link{padding:12px 2px;border:0;background:transparent;font-size:12px;letter-spacing:.02em;color:#8290a0}.rubicon-navigation .hub-nav-link.is-active{color:#265d9e;background:transparent;box-shadow:none}.rubicon-navigation .hub-nav-mark{height:2px;bottom:2px;border-radius:2px;background:linear-gradient(90deg,transparent,#639bdf,transparent);box-shadow:0 3px 12px #6a9de655}.rubicon-command-trigger{display:flex;align-items:center;gap:7px;background:none;border:0;color:#8391a1;cursor:pointer}.rubicon-command-trigger kbd{font:10px inherit;white-space:nowrap}.rubicon-command,.rubicon-purchase{position:fixed;inset:0;margin:auto;width:calc(100% - 32px);max-height:calc(100dvh - 48px);overflow:auto;border:1px solid #dbe3ed;padding:0;border-radius:22px;box-shadow:0 35px 130px #12223d44}.rubicon-command::backdrop{background:#24385355;backdrop-filter:blur(8px)}.rubicon-command{max-width:540px;background:#fbfcff;color:#293c54}.rubicon-command header{display:flex;align-items:center;gap:14px;padding:22px;border-bottom:1px solid #e3eaf3}.rubicon-command input{min-width:0;flex:1;background:none;border:0;outline:0;font:inherit;font-size:15px}.rubicon-command header button,.purchase-heading button{display:grid;place-items:center;background:none;border:0;color:inherit;cursor:pointer;padding:8px}.command-results{padding:12px;max-height:55vh;overflow:auto}.command-results>button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:16px;padding:15px 12px;background:none;border:0;border-radius:10px;text-align:left;cursor:pointer;font-size:13px;color:inherit}.command-results>button:hover,.command-results>button:focus-visible{background:#eaf2ff;outline:0}.command-results small,.command-results p{font-size:11px;color:#718299}.command-results p{padding:12px}.rubicon-command footer{padding:16px 24px;border-top:1px solid #e3eaf3;font-size:10px;color:#8190a3}
-.rubicon-purchase{max-width:560px;background:radial-gradient(ellipse at 50% 0,#222b35,#101317 60%);color:#f0f3f8;border-color:#ffffff20;box-shadow:0 45px 150px #0009;--ink:#f1f4f8;--muted:#acb7c5;--border:#ffffff20;--surface:#171c22;--card:#171c22;color-scheme:dark}.rubicon-purchase::backdrop{background:#0b1116aa;backdrop-filter:blur(12px)}.purchase-heading{display:flex;align-items:center;justify-content:space-between;padding:22px 26px 0;color:#9baaba;font-size:9px;letter-spacing:.18em}.purchase-heading>div{display:flex;align-items:center;gap:10px}.purchase-seal{width:7px;height:7px;border-radius:50%;background:#a5c8f6;box-shadow:0 0 18px #96bfff88}.rubicon-purchase .hub-buy{border:0;border-radius:0;background:transparent;box-shadow:none;padding:24px 28px;margin:0;color:#f1f4f8}.rubicon-purchase .hub-buy-light{display:none}.rubicon-purchase .hub-part-title{color:#f1f4f8;font-size:20px;letter-spacing:-.5px;text-transform:none}.rubicon-purchase .hub-trade-status,.rubicon-purchase .socialtrading-caption,.rubicon-purchase .hub-buy-target-meta,.rubicon-purchase .hub-buy-target-symbol span,.rubicon-purchase .hub-buy-estimate{color:#aebbc9}.rubicon-purchase .hub-buy-target-symbol{color:#f4f6fa}.rubicon-purchase .socialtrading-input,.rubicon-purchase .hub-buy-search-box{background:#ffffff07;border-color:#ffffff22;color:#f2f5fa}.rubicon-purchase .hub-buy-amount{margin:28px 0}.rubicon-purchase .hub-buy-amount input{color:#fff;font-size:58px;font-weight:400;letter-spacing:-3px;background:transparent;box-shadow:none}.rubicon-purchase .hub-buy-currency{color:#8195ac}.rubicon-purchase .hub-chip-button{background:#ffffff08;border-color:#ffffff24;color:#d0dbe8}.rubicon-purchase .hub-chip-button[aria-pressed=true]{background:#b7d2f5;color:#132136}.rubicon-purchase .hub-buy-result{color:#eef3fa;border-color:#ffffff12;background:transparent}.rubicon-purchase .hub-buy-result:hover{background:#ffffff0a}.rubicon-purchase .hub-buy-result-id span,.rubicon-purchase .hub-buy-result-price,.rubicon-purchase .hub-buy-wallet{color:#b9c4d1}.rubicon-purchase .hub-buy-submit,.rubicon-purchase .button-primary{background:linear-gradient(#dce9fa,#abc7ed);color:#111d2d;border:1px solid #e1eeff66;box-shadow:0 4px 0 #617994,0 8px 24px #0006;border-radius:12px;min-height:48px;width:100%;transition:transform .15s,box-shadow .15s}.rubicon-purchase .button-primary:active{transform:translateY(2px);box-shadow:0 2px 0 #617994}.rubicon-purchase .button-primary:disabled{opacity:.4}.purchase-requirements{font-size:11px;line-height:1.8;color:#aebbc9;margin:18px 0}.rubicon-purchase> .purchase-requirements{margin:20px 28px 0}.purchase-footnote{padding:0 28px 25px;color:#92a2b5;font-size:10px;line-height:1.7}.rubicon-purchase .hub-buy-done,.rubicon-purchase .hub-trade{background:#ffffff06;border-color:#ffffff20;color:#edf3fa}.rubicon-purchase .hub-trade-facts dd,.rubicon-purchase .hub-trade-line{color:#edf3fa}.rubicon-purchase .hub-trade p,.rubicon-purchase .hub-trade small{color:#bcc8d7}.rubicon-purchase .hub-trade-disclosure{background:transparent}.rubicon-purchase .hub-inline-link{color:#b4d2fa}.rubicon-purchase :focus-visible{outline:2px solid #c2dcff;outline-offset:4px}.rubicon-purchase .hub-buy-actions{display:grid;gap:18px}.rubicon-purchase .hub-error{background:#5b242d;color:#ffdce1}
+.rubicon-purchase{max-width:560px;background:radial-gradient(ellipse at 50% 0,#222b35,#101317 60%);color:#f0f3f8;border-color:#ffffff20;box-shadow:0 45px 150px #0009;--ink:#f1f4f8;--muted:#acb7c5;--border:#ffffff20;--surface:#171c22;--card:#171c22;color-scheme:dark}.rubicon-purchase::backdrop{background:#0b1116aa;backdrop-filter:blur(12px)}.purchase-heading{display:flex;align-items:center;justify-content:space-between;padding:22px 26px 0;color:#9baaba;font-size:9px;letter-spacing:.18em}.purchase-heading>div{display:flex;align-items:center;gap:10px}.purchase-seal{width:7px;height:7px;border-radius:50%;background:#a5c8f6;box-shadow:0 0 18px #96bfff88}.rubicon-purchase .hub-buy{border:0;border-radius:0;background:transparent;box-shadow:none;padding:24px 28px;margin:0;color:#f1f4f8}.rubicon-purchase .hub-buy-light{display:none}.rubicon-purchase .hub-part-title{color:#f1f4f8;font-size:20px;letter-spacing:-.5px;text-transform:none}.rubicon-purchase .hub-trade-status,.rubicon-purchase .socialtrading-caption,.rubicon-purchase .hub-buy-target-meta,.rubicon-purchase .hub-buy-target-symbol span,.rubicon-purchase .hub-buy-estimate{color:#aebbc9}.rubicon-purchase .hub-buy-target-symbol{color:#f4f6fa}.rubicon-purchase .socialtrading-input,.rubicon-purchase .hub-buy-search-box{background:#ffffff07;border-color:#ffffff22;color:#f2f5fa}.rubicon-purchase .hub-buy-amount{margin:28px 0}.rubicon-purchase .hub-buy-amount input{color:#fff;font-size:58px;font-weight:400;letter-spacing:-3px;background:transparent;box-shadow:none}.rubicon-purchase .hub-buy-currency{color:#8195ac}.rubicon-purchase .hub-chip-button{background:#ffffff08;border-color:#ffffff24;color:#d0dbe8}.rubicon-purchase .hub-chip-button[aria-pressed=true]{background:#b7d2f5;color:#132136}.rubicon-purchase .hub-buy-result{color:#eef3fa;border-color:#ffffff12;background:transparent}.rubicon-purchase .hub-buy-result:hover{background:#ffffff0a}.rubicon-purchase .hub-buy-result-id span,.rubicon-purchase .hub-buy-result-price,.rubicon-purchase .hub-buy-wallet{color:#b9c4d1}.rubicon-purchase .button-primary:disabled{opacity:.4}.purchase-requirements{font-size:11px;line-height:1.8;color:#aebbc9;margin:18px 0}.rubicon-purchase> .purchase-requirements{margin:20px 28px 0}.purchase-footnote{padding:0 28px 25px;color:#92a2b5;font-size:10px;line-height:1.7}.rubicon-purchase .hub-buy-done,.rubicon-purchase .hub-trade{background:#ffffff06;border-color:#ffffff20;color:#edf3fa}.rubicon-purchase .hub-trade-facts dd,.rubicon-purchase .hub-trade-line{color:#edf3fa}.rubicon-purchase .hub-trade p,.rubicon-purchase .hub-trade small{color:#bcc8d7}.rubicon-purchase .hub-trade-disclosure{background:transparent}.rubicon-purchase .hub-inline-link{color:#b4d2fa}.rubicon-purchase :focus-visible{outline:2px solid #c2dcff;outline-offset:4px}.rubicon-purchase .hub-buy-actions{display:grid;gap:18px}.rubicon-purchase .hub-error{background:#5b242d;color:#ffdce1}
 @media(max-width:640px){.rubicon-navigation{gap:12px}.rubicon-navigation .hub-nav{gap:15px}.rubicon-command-trigger kbd{display:none}.rubicon-purchase .hub-buy{padding:20px}.rubicon-purchase{max-height:calc(100dvh - 24px)}.rubicon-purchase .hub-buy-target{flex-wrap:wrap}.rubicon-purchase .hub-buy-result{flex-wrap:wrap}}
 @media(prefers-reduced-motion:reduce){.rubicon-purchase .button-primary{transition:none}}
 .rubicon-purchase .hub-trade-status{background:#ffffff0b;border-color:#ffffff20;color:#c9d6e7}.rubicon-purchase .hub-notice{background:#ffffff08;border-color:#ffffff20;color:#c9d6e7}.rubicon-purchase .hub-buy-done strong{color:#e6f3ff}.rubicon-purchase .hub-buy-done span{color:#b6c9df}.rubicon-purchase .hub-buy-target{border-color:#ffffff18}.rubicon-purchase .hub-buy-search-box input{border:0;background:transparent}.ambient-panel footer{flex-wrap:wrap;gap:10px}
-.rubicon-purchase{--quiet:#a9b7c8;--line:#ffffff20;--surface-muted:#202833;--hub-blue:#b7d2f5;--hub-blue-ink:#14243a}.rubicon-purchase .hub-buy-target{background:#ffffff07;box-shadow:inset 0 0 0 1px #ffffff18}.rubicon-purchase .hub-buy-form{gap:14px}.rubicon-purchase .hub-buy-form .purchase-requirements{margin:0;line-height:1.7}.rubicon-purchase .hub-buy-amount{margin:12px 0}.rubicon-purchase .hub-buy .button.button-primary.hub-buy-submit,.rubicon-purchase .hub-buy .button.button-primary.hub-buy-submit:not(:disabled):hover{background:linear-gradient(#e2edfc,#aecbed);border-color:#d9eaff80;border-radius:12px;color:#132035;box-shadow:0 3px 0 #65809f,0 8px 24px #0005}.rubicon-purchase .hub-buy .hub-buy-result,.rubicon-purchase .hub-buy .hub-buy-result:hover{background:#ffffff06;box-shadow:inset 0 0 0 1px #ffffff20}.rubicon-purchase .hub-buy-result-price{grid-column:2/-1;display:flex;justify-content:space-between}.rubicon-purchase .hub-buy .hub-buy-amount-row input.socialtrading-input:focus-visible{outline:1px solid #b7d2f5;outline-offset:4px}.rubicon-purchase .hub-buy-results .hub-label{background:#253348;color:#d1e2fa}
+.rubicon-purchase{--quiet:#a9b7c8;--line:#ffffff20;--surface-muted:#202833;--hub-blue:#b7d2f5;--hub-blue-ink:#14243a}.rubicon-purchase .hub-buy-target{background:#ffffff07;box-shadow:inset 0 0 0 1px #ffffff18}.rubicon-purchase .hub-buy-form{gap:14px}.rubicon-purchase .hub-buy-form .purchase-requirements{margin:0;line-height:1.7}.rubicon-purchase .hub-buy-amount{margin:12px 0}.rubicon-purchase .hub-buy .hub-buy-result,.rubicon-purchase .hub-buy .hub-buy-result:hover{background:#ffffff06;box-shadow:inset 0 0 0 1px #ffffff20}.rubicon-purchase .hub-buy-result-price{grid-column:2/-1;display:flex;justify-content:space-between}.rubicon-purchase .hub-buy .hub-buy-amount-row input.socialtrading-input:focus-visible{outline:1px solid #b7d2f5;outline-offset:4px}.rubicon-purchase .hub-buy-results .hub-label{background:#253348;color:#d1e2fa}
 .purchase-backdrop{position:fixed;inset:0;z-index:1000;background:#0b1116aa;backdrop-filter:blur(12px)}.purchase-backdrop[hidden]{display:none}.purchase-backdrop .rubicon-purchase{z-index:1}
 
 /* Muted color lives only in the one-pixel edge of each account action. */
@@ -17,7 +17,8 @@
   background: transparent;
   box-shadow: none;
 }
-.hub-account-menu :is(.hub-account-head, .hub-account-row.is-link, .hub-account-signout)::after {
+.hub-account-menu :is(.hub-account-head, .hub-account-row.is-link, .hub-account-signout)::after,
+.rubicon-purchase :is(.hub-trade-line-out, .hub-trade-line-in, .button-primary, .hub-buy-target, .hub-buy-amount)::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -111,20 +112,8 @@
   .hub-route-why { grid-column: 1 / -1; }
 }
 
-/* The primary action keeps its light face on hover: `.dashboard-theme
-   .button-primary:hover` in globals.css paints it near-black, which on this
-   surface reads as the button switching off rather than responding. */
-.rubicon-purchase .button.button-primary:not(:disabled):hover,
-.rubicon-purchase .hub-buy .button.button-primary:not(:disabled):hover {
-  background: linear-gradient(#eaf3ff, #bcd6f3);
-  border-color: #e8f2ff99;
-  color: #132035;
-  box-shadow: 0 4px 0 #65809f, 0 10px 28px #0006;
-}
-.rubicon-purchase .button.button-primary:not(:disabled):active {
-  transform: translateY(2px);
-  box-shadow: 0 1px 0 #65809f, 0 4px 14px #0005;
-}
+/* The primary action's face and its press are both settled in purchase.css,
+   in one block that never restates geometry. */
 /* One guarantee, not a second copy of the details list. */
 .rubicon-purchase .purchase-readiness { display: grid; gap: 4px; padding: 12px 14px; border-radius: 12px; }
 .rubicon-purchase .purchase-readiness strong { font-size: 13px; }
@@ -162,6 +151,20 @@
 .hub-buy-primary.is-unavailable:hover { background: transparent; box-shadow: inset 0 0 0 1px var(--line, #e3eaf3); transform: none; }
 .rubicon-purchase .hub-buy-primary.is-unavailable { color: #8fa0b3; box-shadow: inset 0 0 0 1px #ffffff20; }
 
+/* A price on its way is the shape of a price, shimmering — the same wait the
+   explore grid and asset detail already use — not the words "Loading price…"
+   sitting where the number goes. Each placeholder is sized like the value it
+   stands in for, so nothing shifts when the number lands. */
+.hub-quote-skeleton { display: block; border-radius: 6px; }
+/* Results on their way are result-shaped rows, not the word "Searching…". */
+.hub-result-skeleton { display: block; height: 68px; border-radius: 16px; }
+.hub-buy-results-waiting { list-style: none; margin: 0; padding: 0; }
+.hub-quote-skeleton.is-price { width: 5.5em; height: 1em; }
+.hub-quote-skeleton.is-change { width: 4.5em; height: .9em; }
+.hub-quote-skeleton.is-chart { width: 100%; border-radius: 10px; }
+.hub-market-quote:not(.is-large) .hub-quote-skeleton { margin-left: auto; }
+.rubicon-purchase { --skeleton-sheen: #2b3543; }
+
 .hub-market-quote { display: grid; gap: 4px; width: 170px; min-width: 0; margin-left: auto; text-align: right; }
 .hub-market-quote-values { display: grid; gap: 3px; font-variant-numeric: tabular-nums; }
 .hub-market-quote-values strong { font-size: 14px; font-weight: 500; }
@@ -191,3 +194,206 @@
 .hub-delegate-toggle small { color: var(--quiet, #7b8ea6); font-size: 11px; line-height: 1.5; }
 .hub-delegate-live { display: flex; gap: 6px; align-items: center; font-size: 11px; color: #1f8a5b; }
 .rubicon-purchase .hub-delegate-toggle, .rubicon-purchase .hub-delegate-wallets li { box-shadow: inset 0 0 0 1px #ffffff20; }
+
+/* Purchases use the profile popup's charcoal surface and quiet colored edges. */
+.purchase-quantity-label { display: none; }
+.purchase-backdrop { background: #0008; backdrop-filter: blur(8px); }
+.purchase-backdrop .rubicon-purchase {
+  width: min(100%, 420px); border-radius: 14px; background: #111; border-color: #292929;
+  box-shadow: 0 1px 0 #ffffff0a inset, 0 18px 40px -18px #000c;
+  --ink: #fff; --muted: #ffffffb3; --quiet: #ffffff73; --line: #ffffff12;
+  --surface: #111; --surface-muted: #191919; --card: #111;
+  --hub-blue: #94accc; --hub-blue-ink: #fff;
+}
+.rubicon-purchase .purchase-heading { padding: 10px 16px 0; color: #ffffff73; letter-spacing: .12em; }
+.rubicon-purchase .purchase-seal { background: #94accc; box-shadow: none; width: 5px; height: 5px; }
+.rubicon-purchase .purchase-heading > button { min-width: 32px; min-height: 32px; border: 0; border-radius: 9px; color: #ffffffb3; }
+.rubicon-purchase .purchase-heading > button:hover { background: #ffffff0a; }
+.rubicon-purchase .hub-buy { padding: 12px 16px 16px; gap: 12px; }
+.rubicon-purchase .hub-buy > .hub-trade-head { margin-bottom: 0; }
+.rubicon-purchase .hub-part-title { font-size: 16px; font-weight: 600; letter-spacing: -.012em; color: #fff; }
+.rubicon-purchase .hub-buy .hub-swap-result { margin-top: 0; padding-top: 0; border: 0; }
+.rubicon-purchase .hub-trade { padding: 12px 0 0; gap: 0; border: 0; border-top: 1px solid #ffffff12; border-radius: 0; background: transparent; box-shadow: none; }
+.rubicon-purchase .hub-trade::before, .rubicon-purchase .hub-trade::after { content: none; }
+.rubicon-purchase .hub-trade .hub-part-title { font-size: 12px; font-weight: 400; letter-spacing: 0; color: #ffffff73; }
+.rubicon-purchase .hub-trade-line { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; margin: 12px 0; font-size: 17px; font-weight: 600; }
+.rubicon-purchase .hub-trade-line > :is(.hub-trade-line-out, .hub-trade-line-in) {
+  position: relative; display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
+  gap: 4px 12px; padding: 12px; border-radius: 9px; color: #fff; font-variant-numeric: tabular-nums;
+  --account-edge: #647c9d;
+}
+.rubicon-purchase .hub-trade-line > .hub-trade-line-in { --account-edge: #5e9185; }
+.rubicon-purchase .purchase-quantity-label { display: inline; color: #ffffffb3; font-size: 12px; font-weight: 400; letter-spacing: 0; }
+.rubicon-purchase .hub-trade-line-arrow { display: none; }
+.rubicon-purchase .hub-trade-line small { padding: 4px 12px 0; font-size: 11px; color: #ffffff73; line-height: 1.5; }
+.rubicon-purchase .hub-disclosure { margin: 0; border-color: #ffffff12; color: #ffffffb3; }
+.rubicon-purchase .hub-disclosure summary { padding: 10px 12px; font-size: 12px; }
+.rubicon-purchase .hub-trade-facts { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.rubicon-purchase .hub-trade-facts > div { display: flex; justify-content: space-between; gap: 12px; }
+.rubicon-purchase .hub-trade-facts dd { text-align: right; color: #fff; overflow-wrap: anywhere; }
+.rubicon-purchase .hub-trade-actions { margin-top: 10px; }
+/* Only the edge tint belongs here; the box itself is stated once, in
+   purchase.css, so no state can restate it and resize the button. */
+.rubicon-purchase .hub-buy .button.button-primary { position: relative; --account-edge: #5e9185; }
+.rubicon-purchase .hub-buy.has-target .hub-buy-target,
+.rubicon-purchase .hub-buy-amount { position: relative; --account-edge: #647c9d; border-radius: 9px; background: transparent; box-shadow: none; border: 0; padding: 12px; }
+.rubicon-purchase .hub-buy-amount { --account-edge: #5e9185; }
+.rubicon-purchase .hub-buy .hub-buy-amount-row input.socialtrading-input { font-size: 36px; color: #fff; }
+.rubicon-purchase .hub-chip-button { background: transparent; border-color: #ffffff12; color: #ffffffb3; }
+.rubicon-purchase .hub-chip-button[aria-pressed=true] { background: #ffffff0d; color: #fff; border-color: #647c9d; }
+.rubicon-purchase .hub-notice { background: #ffffff06; border-color: #ffffff12; color: #ffffffb3; }
+.rubicon-purchase :focus-visible { outline: 2px solid #94accc; outline-offset: 3px; }
+
+/* A purchase is a calm moment, with the same squared edges as the account menu. */
+.rubicon-purchase :is(.button, .hub-chip-button, .hub-trade-raw-toggle) { border-radius: 9px; }
+.rubicon-purchase .hub-buy .button.button-secondary { width: 100%; min-height: 42px; border: 1px solid #ffffff18; border-radius: 9px; background: #ffffff06; color: #ffffffb3; box-shadow: none; font-size: 13px; }
+.rubicon-purchase .hub-buy .button.button-secondary:hover:not(:disabled) { background: #ffffff0d; color: #fff; }
+.purchase-progress { display: grid; justify-items: center; gap: 10px; padding: 22px 12px 14px; text-align: center; }
+.purchase-progress strong { color: var(--ink); font-size: 20px; font-weight: 500; letter-spacing: -.035em; }
+.purchase-progress p { max-width: 29ch; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.purchase-progress-light { display: grid; place-items: center; width: 54px; height: 54px; margin-bottom: 4px; border-radius: 16px; color: #b6d2ed; background: radial-gradient(ellipse, #94accc22, #94accc04 70%); box-shadow: 0 0 30px #94accc12; }
+.hub-purchase-simple .hub-trade-line { margin-top: 12px; }
+@media (prefers-reduced-motion: no-preference) {
+  .purchase-progress-light.is-active { animation: purchase-breathe 3s ease-in-out infinite; }
+  @keyframes purchase-breathe { 50% { transform: translateY(-3px); box-shadow: 0 0 38px #94accc30; } }
+}
+.purchase-tabs { display: flex; gap: 4px; margin: 12px 16px 0; padding: 4px; border: 1px solid #ffffff12; border-radius: 9px; background: #ffffff03; }
+.purchase-tabs button { flex: 1; padding: 8px 12px; border-radius: 6px; color: #ffffff73; font-size: 12px; transition: background .2s, color .2s; }
+.purchase-tabs button[aria-pressed=true] { background: #ffffff0a; color: #fff; }
+.hub-sell-balance { margin-left: auto; text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
+.hub-sell-balance small { display: block; margin-top: 3px; color: var(--quiet); font-size: 10px; }
+.hub-sell .hub-buy-result[aria-pressed=true] { background: #94accc12; }
+.hub-sell .hub-buy-result:disabled { cursor: default; opacity: .6; }
+.hub-portfolio-entry { display: flex; justify-content: flex-end; margin-bottom: 16px; }
+.hub-portfolio-entry .hub-chip-button { border-radius: 9px; }
+.rubicon-purchase .hub-sell .hub-buy-result { grid-template-columns: 40px minmax(0, 1fr) auto; border-radius: 9px; }
+.rubicon-purchase .hub-sell .hub-buy-result-id { grid-column: 2; grid-row: auto; }
+.rubicon-purchase .hub-sell .hub-sell-balance { grid-column: 3; grid-row: 1; }
+.rubicon-purchase .hub-sell .hub-buy-result[aria-pressed=true] { background: #94accc12; box-shadow: inset 0 0 0 1px #647c9d; }
+
+/* ---------- Adjusting one agent ----------
+ *
+ * The account popup's language, at dialog size: the shared #111 hover surface,
+ * hairline rules instead of boxes, white type on muted labels, and Rubicon blue
+ * only where something is chosen. Portalled to <body>, outside .dashboard-theme
+ * and .hub-layout, so it carries its own tokens rather than inheriting the page
+ * it opened over. Every explanation waits for a pointer. */
+@property --edge-angle { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
+
+.hub-adjust-backdrop {
+  --account-line: #ffffff12; --account-quiet: #ffffff73; --account-mid: #ffffffb3;
+  --hub-blue: #2f80ed; --hub-blue-rgb: 47, 128, 237; --hub-blue-light: #6aa8f7;
+  --ease-out: cubic-bezier(.23, 1, .32, 1);
+  position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 1rem;
+  background: #0b0b0ea8; backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); animation: hub-adjust-fade 180ms ease;
+}
+.hub-adjust { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(27rem, 100%); max-height: calc(100svh - 2rem); border-radius: 16px; background: #111; color: #fff; border: 1px solid #292929; box-shadow: 0 1px 0 #ffffff0a inset, 0 24px 60px -20px #000e; font-size: 13px; line-height: 1.5; outline: none; overflow: hidden; animation: hub-adjust-in 200ms var(--ease-out); }
+@keyframes hub-adjust-in { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
+@keyframes hub-adjust-fade { from { opacity: 0; } }
+
+.hub-adjust-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: 14px 16px 12px; }
+.hub-adjust-eyebrow { color: var(--account-quiet); font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
+.hub-adjust-head h2 { margin-top: 2px; color: #fff; font-size: 15px; font-weight: 600; letter-spacing: -.012em; }
+.hub-adjust-close { display: grid; place-items: center; width: 26px; height: 26px; flex: none; border-radius: 50%; color: var(--account-quiet); cursor: pointer; transition: background-color 160ms ease, color 160ms ease; }
+.hub-adjust-close:hover, .hub-adjust-close:focus-visible { background: #ffffff0a; color: #fff; outline: none; }
+
+.hub-adjust-body { min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #ffffff1f transparent; }
+.hub-adjust-card { padding: 14px 16px 16px; border-top: 1px solid var(--account-line); }
+.hub-adjust-card h3 { color: #fff; font-size: 13px; font-weight: 600; letter-spacing: -.008em; }
+.hub-adjust-card > p { margin-top: 1px; margin-bottom: 10px; color: var(--account-quiet); font-size: 12px; line-height: 1.45; }
+
+.hub-adjust-thesis { display: block; width: 100%; min-height: 76px; padding: 9px 11px; border: 0; border-radius: 10px; background: #ffffff0a; color: #fff; font: inherit; font-size: 12.5px; line-height: 1.55; resize: vertical; box-shadow: inset 0 0 0 1px #ffffff14; transition: box-shadow 160ms ease; }
+.hub-adjust-thesis::placeholder { color: var(--account-quiet); }
+.hub-adjust-thesis:focus-visible { outline: none; box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .7); }
+
+.hub-adjust-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.hub-adjust-empty { color: var(--account-quiet); font-size: 12px; }
+.hub-adjust-chips button { display: inline-flex; gap: 5px; align-items: center; padding: 4px 8px 4px 10px; border-radius: 999px; background: #ffffff0f; color: #fff; font-size: 12px; font-weight: 500; cursor: pointer; transition: background-color 160ms ease, color 160ms ease; }
+.hub-adjust-chips button svg { color: var(--account-quiet); transition: color 160ms ease; }
+.hub-adjust-chips button:hover, .hub-adjust-chips button:focus-visible { background: #ff5f571a; color: #ff9a93; outline: none; }
+.hub-adjust-chips button:hover svg, .hub-adjust-chips button:focus-visible svg { color: inherit; }
+.hub-adjust-add { display: flex; gap: 6px; margin-top: 8px; }
+.hub-adjust-add input { flex: 1; min-width: 0; padding: 7px 12px; border: 0; border-radius: 999px; background: #ffffff0a; color: #fff; font: inherit; font-size: 12px; box-shadow: inset 0 0 0 1px #ffffff14; transition: box-shadow 160ms ease; }
+.hub-adjust-add input::placeholder { color: var(--account-quiet); }
+.hub-adjust-add input:focus-visible { outline: none; box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .7); }
+.hub-adjust-add button { display: inline-flex; gap: 4px; align-items: center; flex: none; padding: 7px 13px; border-radius: 999px; background: #ffffff14; color: #fff; font-size: 12px; font-weight: 500; cursor: pointer; transition: background-color 160ms ease; }
+.hub-adjust-add button:not(:disabled):hover { background: #ffffff22; }
+.hub-adjust-add button:disabled { opacity: .35; cursor: not-allowed; }
+
+/* ---------- The four ways it can go ---------- */
+.hub-modetiles { display: grid; gap: 10px; }
+.hub-modetiles-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+.hub-modetile { position: relative; display: flex; align-items: center; gap: 8px; padding: 8px 9px; border-radius: 10px; background: #ffffff08; color: var(--account-mid); cursor: pointer; transition: background-color 180ms ease, color 180ms ease; }
+.hub-modetile input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+/* The drawn edge the account menu wears: a conic sweep masked to one pixel, so
+   a tile is outlined in light rather than boxed in. */
+.hub-modetile::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none;
+  background: conic-gradient(from var(--edge-angle, 0deg), #ffffff0b, rgba(var(--hub-blue-rgb), .75) 25%, #ffffff0b 50%, rgba(var(--hub-blue-rgb), .45) 75%, #ffffff0b);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); mask-composite: exclude;
+  opacity: 0; transition: opacity 220ms ease;
+}
+.hub-modetile:hover { background: #ffffff12; color: #fff; }
+.hub-modetile:hover::after { opacity: .65; }
+.hub-modetile.is-selected { background: rgba(var(--hub-blue-rgb), .16); color: #fff; }
+.hub-modetile.is-selected::after { opacity: 1; background: conic-gradient(from var(--edge-angle, 0deg), rgba(var(--hub-blue-rgb), .4), var(--hub-blue-light) 25%, rgba(var(--hub-blue-rgb), .4) 50%, var(--hub-blue-light) 75%, rgba(var(--hub-blue-rgb), .4)); }
+.hub-modetile:has(input:focus-visible) { outline: 2px solid var(--hub-blue-light); outline-offset: 2px; }
+.hub-modetile-icon { display: grid; place-items: center; width: 26px; height: 26px; flex: none; border-radius: 8px; background: #ffffff0f; color: var(--account-quiet); transition: color 180ms ease, background-color 180ms ease; }
+.hub-modetile.is-selected .hub-modetile-icon { background: var(--hub-blue); color: #fff; box-shadow: 0 4px 12px -4px rgba(var(--hub-blue-rgb), .9); }
+.hub-modetile-name { min-width: 0; font-size: 12px; font-weight: 550; letter-spacing: -.005em; }
+.hub-modetile-check { display: grid; place-items: center; width: 15px; height: 15px; flex: none; margin-left: auto; border-radius: 50%; color: #fff; background: transparent; }
+.hub-modetile.is-selected .hub-modetile-check { background: var(--hub-blue); }
+.hub-modetiles-say { min-height: 2.1em; color: var(--account-quiet); font-size: 12px; line-height: 1.5; }
+
+/* ---------- Comfort zone ---------- */
+.hub-zonefields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.hub-zonefields label { display: grid; gap: 4px; color: var(--account-quiet); font-size: 11px; }
+.hub-zonefield-input { position: relative; display: flex; align-items: center; }
+.hub-zonefield-input i { position: absolute; left: 9px; color: var(--account-quiet); font-style: normal; font-size: 12px; pointer-events: none; }
+.hub-zonefield-input input { width: 100%; min-width: 0; padding: 7px 8px 7px 21px; border: 0; border-radius: 9px; background: #ffffff0a; color: #fff; font: inherit; font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; box-shadow: inset 0 0 0 1px #ffffff14; transition: box-shadow 160ms ease; }
+.hub-zonefield-input input:focus-visible { outline: none; box-shadow: inset 0 0 0 1px rgba(var(--hub-blue-rgb), .7); }
+.hub-zonefield-input input::-webkit-outer-spin-button, .hub-zonefield-input input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.hub-zonefield-input input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+
+/* ---------- Remote access: one switch ---------- */
+.hub-remote { display: grid; gap: 8px; }
+.hub-switch { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.hub-switch:has(input:disabled) { cursor: progress; }
+.hub-switch input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.hub-switch-track { position: relative; display: block; width: 36px; height: 21px; flex: none; margin-top: 1px; border-radius: 999px; background: #ffffff1f; transition: background-color 220ms var(--ease-out); }
+.hub-switch-track i { position: absolute; top: 3px; left: 3px; width: 15px; height: 15px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px #0006; transition: transform 220ms var(--ease-out); }
+.hub-switch:has(input:checked) .hub-switch-track { background: var(--hub-blue); }
+.hub-switch:has(input:checked) .hub-switch-track i { transform: translateX(15px); }
+.hub-switch:has(input:focus-visible) .hub-switch-track { outline: 2px solid var(--hub-blue-light); outline-offset: 2px; }
+.hub-switch:has(input:disabled) .hub-switch-track { opacity: .5; }
+.hub-switch-copy { display: grid; gap: 2px; min-width: 0; }
+.hub-switch-copy strong { color: #fff; font-size: 13px; font-weight: 550; }
+.hub-switch-copy small { color: var(--account-quiet); font-size: 11.5px; line-height: 1.5; }
+.hub-remote-signer { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 10px; border-radius: 9px; background: #ffffff08; font-size: 11.5px; }
+.hub-remote-signer .mono { font-family: var(--font-mono), ui-monospace, monospace; letter-spacing: .02em; color: var(--account-mid); }
+.hub-remote-ok { display: inline-flex; gap: 3px; align-items: center; color: #9ee7b6; }
+.hub-remote-signer button { margin-left: auto; padding: 3px 9px; border-radius: 999px; color: var(--account-quiet); font-size: 11.5px; font-weight: 500; cursor: pointer; transition: background-color 160ms ease, color 160ms ease; }
+.hub-remote-signer button:not(:disabled):hover { background: #ff5f571a; color: #ff9a93; }
+.hub-remote .hub-notice { padding: 9px 11px; border-radius: 9px; background: #ffffff0a; color: var(--account-mid); font-size: 12px; }
+
+/* ---------- Foot ---------- */
+.hub-adjust-foot { display: flex; align-items: center; gap: 6px; padding: 12px 16px 14px; border-top: 1px solid var(--account-line); }
+.hub-adjust-error { flex: 1; min-width: 0; color: #ff9a93; font-size: 12px; line-height: 1.45; }
+.hub-adjust-saved { flex: 1; color: #9ee7b6; font-size: 12px; }
+.hub-adjust-foot > button { margin-left: auto; padding: 8px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 500; cursor: pointer; transition: background-color 160ms ease, transform 160ms var(--ease-out); }
+.hub-adjust-foot > button + button { margin-left: 0; }
+.hub-adjust-save { background: #fff; color: #111; }
+.hub-adjust-save:not(:disabled):hover { background: var(--hub-blue-light); transform: translateY(-1px); }
+.hub-adjust-save:disabled { opacity: .3; cursor: not-allowed; }
+.hub-adjust-done { background: #ffffff14; color: #fff; }
+.hub-adjust-done:hover { background: #ffffff22; }
+.hub-adjust-foot > button:focus-visible { outline: 2px solid var(--hub-blue-light); outline-offset: 2px; }
+
+@media (max-width: 620px) {
+  .hub-modetiles-grid, .hub-zonefields { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-adjust, .hub-adjust-backdrop { animation: none; }
+  .hub-switch-track, .hub-switch-track i, .hub-modetile, .hub-adjust-foot > button { transition: none; }
+}

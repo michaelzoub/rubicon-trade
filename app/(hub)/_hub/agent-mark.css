@@ -1,0 +1,8 @@
+/* Sized by whoever places it, so the same creature can be a face on a waiting
+ * screen or a small mark beside a sentence. */
+.agent-mark { display: block; width: 72px; height: 72px; }
+.agent-mark > svg { display: block; width: 100%; height: 100%; overflow: visible; }
+
+/* Inside the purchase card's light, the mark takes the light's size rather
+ * than its own. The rule lives here because it travels with the mark. */
+.purchase-progress-light > .agent-mark { width: 48px; height: 48px; }

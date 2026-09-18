@@ -4,6 +4,7 @@ import { usePrivy, useSigners } from "@privy-io/react-auth";
 import { useState } from "react";
 import { Check, ShieldCheck } from "lucide-react";
 import { shortAddress } from "@/lib/crypto/chains";
+import type { InvestingProfile, Permission } from "@/lib/socialtrading/profile";
 import { purchaseError } from "@/lib/crypto/readiness";
 import { useHub } from "./hub-provider";
 
@@ -19,8 +20,13 @@ import { useHub } from "./hub-provider";
  *
  * Both are off until the person acts, and the copy says plainly what changes,
  * because "let the agent trade for me" is the most consequential thing anyone
- * will click in this product. */
-export function DelegateSigning() {
+ * will click in this product.
+ *
+ * `draft` is what the surrounding form has selected but not yet saved. The
+ * checkbox still follows the *saved* profile, because that is what the server
+ * enforces — but the copy has to follow the draft, or it ends up telling you to
+ * do the very thing you just did. */
+export function DelegateSigning({ draft }: { draft?: { permission: Permission; limits: InvestingProfile["limits"] } } = {}) {
   const { state, mutate } = useHub();
   const { user } = usePrivy();
   const { addSigners, removeSigners } = useSigners();
@@ -43,6 +49,9 @@ export function DelegateSigning() {
   const limits = state.profile.limits;
   const configured = !!limits?.perTrade && !!limits?.daily;
   const actMode = state.profile.permission === "automatic";
+  /** The unsaved form already satisfies what unattended buying needs, so the only
+   * thing left is to save it — say that, instead of asking for it again. */
+  const drafted = !!draft && draft.permission === "automatic" && !!draft.limits.perTrade && !!draft.limits.daily;
 
   async function grant(address: string) {
     if (!signerId) return;
@@ -105,10 +114,92 @@ export function DelegateSigning() {
       </span>
     </label>
 
-    {!actMode && <p className="hub-notice">Set your agent to <strong>Act within my limits</strong> above first.</p>}
-    {actMode && !configured && <p className="hub-notice">Set a per-trade and daily limit above first.</p>}
+    {(!actMode || !configured) && (drafted
+      ? <p className="hub-notice">Your choices above aren’t saved yet. Save this page and your agent can buy unattended{granted ? " — the signer is already in place" : ", once you grant a signer above"}.</p>
+      : <p className="hub-notice">Choose <strong>Buy for me</strong> above and set a per-trade and daily limit, then save this page.</p>)}
     {actMode && configured && !granted && <p className="socialtrading-caption">Grant a signer above to enable this.</p>}
     {on && <p className="hub-delegate-live"><ShieldCheck size={13} aria-hidden="true" />Your agent may buy on Base while you are away. Every purchase appears in your activity.</p>}
+    {error && <p className="hub-error" role="alert">{error}</p>}
+  </div>;
+}
+
+/**
+ * Remote access as one switch.
+ *
+ * The two consents are still two — a signer inside Privy's enclave, and the
+ * setting that says the agent may use it — but asking for them separately made
+ * a five-step ritual out of one decision, and people got stranded halfway. So
+ * the switch performs the whole decision: save what is in the form (the server
+ * will not accept unattended buying without a mode and real limits), grant the
+ * signer if there is not one, then turn the setting on. Turning it off is the
+ * reverse of the last step only, instantly.
+ *
+ * Revoking stays its own, quieter action, because taking the signer away is
+ * absolute: it does not depend on this app, and nothing here can undo it.
+ */
+export function RemoteAccess({ prepare }: {
+  /** Persists whatever the surrounding form is holding. The switch waits for it,
+   * because the server checks the *saved* mode and limits, not the draft. */
+  prepare?: () => Promise<boolean>;
+}) {
+  const { state, mutate } = useHub();
+  const { user } = usePrivy();
+  const { addSigners, removeSigners } = useSigners();
+  const [busy, setBusy] = useState<"" | "on" | "off" | "revoke">("");
+  const [error, setError] = useState("");
+
+  const signerId = process.env.NEXT_PUBLIC_PRIVY_SIGNER_ID;
+  const policyId = process.env.NEXT_PUBLIC_PRIVY_SIGNER_POLICY_ID;
+  const embedded = (user?.linkedAccounts ?? []).flatMap(a =>
+    a.type === "wallet" && /^privy(-v2)?$/.test(a.walletClientType ?? "")
+      ? [{ address: a.address.toLowerCase(), delegated: (a as { delegated?: boolean }).delegated === true }]
+      : []);
+  const wallet = embedded.find(w => w.delegated) ?? embedded[0];
+  const granted = embedded.some(w => w.delegated);
+  const on = state.profile.autoExecute === true;
+
+  async function toggle(next: boolean) {
+    setError(""); setBusy(next ? "on" : "off");
+    try {
+      if (!next) { await mutate({ action: "agent", autoExecute: false }); return; }
+      if (prepare && !(await prepare())) return;
+      if (!granted && wallet) await addSigners({ address: wallet.address, signers: [{ signerId: signerId!, ...(policyId ? { policyIds: [policyId] } : {}) }] });
+      await mutate({ action: "agent", autoExecute: true });
+    } catch (e) { setError(purchaseError(e)); }
+    finally { setBusy(""); }
+  }
+
+  async function revoke() {
+    if (!wallet) return;
+    setError(""); setBusy("revoke");
+    try {
+      await removeSigners({ address: wallet.address });
+      // A signer that is gone cannot be used, so the setting goes with it.
+      if (on) await mutate({ action: "agent", autoExecute: false });
+    } catch (e) { setError(purchaseError(e)); }
+    finally { setBusy(""); }
+  }
+
+  if (!signerId) return <p className="hub-notice">No signer is configured for this deployment, so unattended buying is unavailable.</p>;
+  if (!embedded.length) return <p className="hub-notice">Needs a Rubicon wallet — an outside wallet like MetaMask can’t delegate signing.</p>;
+
+  const working = busy === "on" || busy === "off";
+  return <div className="hub-remote">
+    <label className="hub-switch">
+      <input type="checkbox" role="switch" checked={on} disabled={busy !== ""} onChange={e => void toggle(e.target.checked)} />
+      <span className="hub-switch-track" aria-hidden="true"><i /></span>
+      <span className="hub-switch-copy">
+        <strong>{working ? (busy === "on" ? "Granting access…" : "Turning off…") : "Let it buy while you’re away"}</strong>
+        <small>{on
+          ? `It may buy on Base under your limits. Every purchase shows in your activity.`
+          : `You’ll sign once, in your wallet. Rubicon never sees your keys.`}</small>
+      </span>
+    </label>
+    {granted && wallet && <div className="hub-remote-signer">
+      <span className="mono">{shortAddress(wallet.address)}</span>
+      <span className="hub-remote-ok"><Check size={12} aria-hidden="true" />Signed</span>
+      <button type="button" disabled={busy !== ""} onClick={() => void revoke()}>{busy === "revoke" ? "Revoking…" : "Revoke"}</button>
+    </div>}
     {error && <p className="hub-error" role="alert">{error}</p>}
   </div>;
 }

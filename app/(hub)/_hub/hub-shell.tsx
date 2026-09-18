@@ -33,6 +33,7 @@ import "./hub-consumer.css";
 import "./quiet-refinement.css";
 import "./instruments.css";
 import "./experience.css";
+import "./purchase.css";
 
 export const NAV = [
   { href: "/", label: "Home", icon: MessageCircle, exact: true },
@@ -52,7 +53,7 @@ export function HubShell({ children }: { children: ReactNode }) {
 
 function Gate({ children }: { children: ReactNode }) {
   const { ready, authenticated, user } = usePrivy();
-  if (!ready) return <Frame><LoadingState label="Loading your session…" /></Frame>;
+  if (!ready) return <Frame><LoadingState label="" randomAgent /></Frame>;
   if (!authenticated || !user) return <div className="landing-page socialtrading-page"><SignInScene /></div>;
   return <Boot key={user.id} userId={user.id} name={user.twitter?.name ?? user.email?.address?.split("@")[0]}>{children}</Boot>;
 }
@@ -98,7 +99,7 @@ function Boot({ userId, name, children }: { userId: string; name?: string; child
     finally { setSaving(false); }
   }
 
-  if (state === undefined) return <Frame><LoadingState label="Loading your profile…" userId={userId} /></Frame>;
+  if (state === undefined) return <Frame><LoadingState label="" randomAgent /></Frame>;
   if (!state) return <Frame><ProfileFlow userId={userId} name={name} onComplete={complete} completing={saving} serverError={error} /></Frame>;
   return <HubProvider userId={userId} name={name} initial={state} initialAccount={account}><Hub>{children}</Hub></HubProvider>;
 }
@@ -228,7 +229,7 @@ export function Hub({ children, path, resolveHref = href => href }: {
       accountStatus={<AccountMenu userId={userId} name={name} planName={planName(account)} account={account}
         themes={state.profile.themes} inferred={state.inferred}
         identity={{ progress: identityStage_.progress, depth: identityStage_.depth, energy: identityStats_.energy }}
-        profileHref={resolveHref("/profile")} plansHref={resolveHref("/plans")} preview={path !== undefined} />}>
+        profileHref={resolveHref("/profile")} plansHref={resolveHref("/plans")} assetsHref={resolveHref("/beliefs")} preview={path !== undefined} />}>
       <GlossProvider>
         <AmbientAgent resolveHref={resolveHref} />
         <PurchaseDialog />

@@ -1,6 +1,5 @@
 "use client";
 import { rememberLoadingAgent } from "../../_components/loading-agent-identity";
-import { openPurchase, purchaseIntent } from "./purchase";
 import type { InvestingProfile } from "@/lib/socialtrading/profile";
 import { agentSelectionKey, type AgentConfig } from "@/lib/socialtrading/agents/config";
 
@@ -12,6 +11,7 @@ import { latestChat } from "@/lib/socialtrading/chats";
 import type { AccountSummary } from "@/lib/socialtrading/plans";
 import { hubApi, HubRequestError, streamChat, type CryptoAction, type CryptoResult, type StateAction } from "./client";
 import type { RunOutcome, RunRecord } from "@/lib/socialtrading/runtime/types";
+import type { JevAnswers } from "@/lib/socialtrading/jev-types";
 import { useAccountSummary } from "./account-state";
 
 export type HubContextValue = {
@@ -26,6 +26,8 @@ export type HubContextValue = {
   /** Wakes an agent now through the same runtime the cron uses. Defaults to the selected agent. */
   runNow: (agentId?: string) => Promise<RunOutcome | null>;
   loadRuns: () => Promise<RunRecord[]>;
+  /** Confidence scores for one chapter of the worldview, from the Jev decision model. Null when it could not be reached, so the view falls back to its own arithmetic. */
+  scoreBeliefs: (frameId: string) => Promise<JevAnswers | null>;
   /** Reads another agent's workspace and recent wake-ups without switching to it. */
   inspectAgent: (id: string) => Promise<{ state: HubState | null; runs: RunRecord[] }>;
   userId: string; name?: string;
@@ -216,6 +218,14 @@ export function HubProvider({ userId, name, initial, initialAccount = null, api:
   const loadRuns = useCallback(async () => {
     try { return (await api.runs(token, activeId.current)).runs; } catch { return []; }
   }, [api, token]);
+  // Advisory and never blocking: a chapter that cannot be scored is drawn from
+  // the strengths already recorded rather than not drawn at all.
+  const scoreBeliefs = useCallback(async (frameId: string) => {
+    try {
+      const result = await api.beliefs(token, frameId, activeId.current);
+      return result.source === "jev" ? result.answers : null;
+    } catch { return null; }
+  }, [api, token]);
   const inspectAgent = useCallback(async (id: string) => {
     const [loaded, runs] = await Promise.all([api.load(token, id).catch(() => ({ state: null })), api.runs(token, id).then(r => r.runs).catch(() => [] as RunRecord[])]);
     return { state: loaded.state, runs };
@@ -306,8 +316,6 @@ export function HubProvider({ userId, name, initial, initialAccount = null, api:
   const send = useCallback(async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || busy || operation.current) return;
-    const purchase = purchaseIntent(trimmed);
-    if (purchase) { openPurchase(purchase); setDraft(""); return; }
     operation.current = true;
     const at = new Date().toISOString(), chatId = activeChat.current;
     let assistant: Message = { id: `pending-assistant`, role: "assistant", at, parts: [], status: "streaming" };
@@ -349,9 +357,9 @@ export function HubProvider({ userId, name, initial, initialAccount = null, api:
   }, [chat, pending]);
 
   const value = useMemo<HubContextValue>(() => ({
-    agents, switchAgent, createAgent, refreshAgents, setAgentEnabled, deleteAgent, runNow, loadRuns, inspectAgent, userId, name, state, account, refreshAccount,
+    agents, switchAgent, createAgent, refreshAgents, setAgentEnabled, deleteAgent, runNow, loadRuns, scoreBeliefs, inspectAgent, userId, name, state, account, refreshAccount,
     chats: state.chats, chat, selectChat, newChat, deleteChat, messages, busy, error, clearError: () => setError(null), send, stop, mutate, crypto, wallets, searchTokens, signal, market, draft, setDraft, lastChange, reload,
-  }), [agents, switchAgent, createAgent, refreshAgents, setAgentEnabled, deleteAgent, runNow, loadRuns, inspectAgent, userId, name, state, account, refreshAccount, chat, selectChat, newChat, deleteChat, messages, busy, error, send, stop, mutate, crypto, wallets, searchTokens, signal, market, draft, lastChange, reload]);
+  }), [agents, switchAgent, createAgent, refreshAgents, setAgentEnabled, deleteAgent, runNow, loadRuns, scoreBeliefs, inspectAgent, userId, name, state, account, refreshAccount, chat, selectChat, newChat, deleteChat, messages, busy, error, send, stop, mutate, crypto, wallets, searchTokens, signal, market, draft, lastChange, reload]);
 
   return <HubContext.Provider value={value}>{children}</HubContext.Provider>;
 }

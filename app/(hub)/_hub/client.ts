@@ -5,6 +5,7 @@ import type { SwapBatch, Transaction } from "@/lib/crypto/types";
 import type { TokenMatch } from "@/lib/crypto/search";
 import type { RunOutcome, RunRecord } from "@/lib/socialtrading/runtime/types";
 import type { AccountSummary, LimitKey } from "@/lib/socialtrading/plans";
+import type { JevAnswers } from "@/lib/socialtrading/jev-types";
 
 /** `code` distinguishes a plan limit (422) or empty credits (402) from a transient failure, so the UI can explain rather than retry. */
 export type HubErrorCode = "limit" | "credits";
@@ -48,7 +49,7 @@ export type CryptoAction =
   | { action: "prepare" | "resume" | "reject" | "status"; tradeId: string }
   | { action: "authorize"; tradeId: string; quoteId: string; signature?: string }
   | { action: "submitted"; tradeId: string; hash: string; userOpHash?: string };
-export type CryptoResult = { state?: HubState; holdings?: import("@/lib/crypto/recovery").Holding[]; route?: import("@/lib/crypto/route-resolver").ResolvedRoute; tradeId?: string; quoteId?: string; permitData?: import("@/lib/crypto/types").PermitData; batch?: SwapBatch; transaction?: Transaction; typedData?: import("@/lib/crypto/bridge-types").TypedData; chainId?: number; step?: "approval" | "swap"; expiresAt?: number };
+export type CryptoResult = { state?: HubState; complete?: boolean; warnings?: string[]; fetchedAt?: string; holdings?: import("@/lib/crypto/recovery").Holding[]; route?: import("@/lib/crypto/route-resolver").ResolvedRoute; tradeId?: string; quoteId?: string; permitData?: import("@/lib/crypto/types").PermitData; batch?: SwapBatch; transaction?: Transaction; typedData?: import("@/lib/crypto/bridge-types").TypedData; chainId?: number; step?: "approval" | "swap"; expiresAt?: number };
 
 export const hubApi = {
   wallets: (token: Token) => request<{ wallets: string[] }>(token, "/api/trade/crypto", { cache: "no-store" }),
@@ -63,6 +64,8 @@ export const hubApi = {
   load: (token: Token, agentId = "default") => request<{ state: HubState | null; account?: AccountSummary }>(token, `/api/trade/state?${new URLSearchParams({ agentId })}`, { cache: "no-store" }),
   post: (token: Token, revision: number, body: StateAction, agentId = "default") => request<{ state: HubState; account?: AccountSummary; chatId?: string }>(token, "/api/trade/state", { method: "POST", body: JSON.stringify({ ...body, revision, agentId }) }),
   market: (token: Token, params: Record<string, string>) => request<{ assets: Asset[] }>(token, `/api/trade/market?${new URLSearchParams(params)}`),
+  /** Confidence scores for one chapter of the worldview, from the Jev decision model. */
+  beliefs: (token: Token, frameId: string, agentId = "default") => request<{ frameId: string; answers: JevAnswers; source: "jev" | "local"; model: string }>(token, "/api/trade/beliefs", { method: "POST", body: JSON.stringify({ frameId, agentId }) }),
 };
 
 /** Incremental server-sent-events parser. Feed raw chunks, receive complete events. */

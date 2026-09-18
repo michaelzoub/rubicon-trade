@@ -7,7 +7,7 @@ import type { ChatEvent, HubState } from "@/lib/socialtrading/types";
 import { PREVIEW_ACCOUNT, PREVIEW_ASSETS, PREVIEW_CHAT, PREVIEW_STATE, PREVIEW_TOKENS, PREVIEW_WALLET } from "../../preview/fixture";
 import { newChat } from "@/lib/socialtrading/chats";
 
-const events = vi.hoisted(() => ({ script: [] as ChatEvent[], posted: [] as unknown[] }));
+const events = vi.hoisted(() => ({ script: [] as ChatEvent[], posted: [] as unknown[], chats: [] as { text: string }[] }));
 const privy = vi.hoisted(() => ({ sendTransaction: vi.fn(), linkWallet: vi.fn(), connectWallet: vi.fn(), createWallet: vi.fn(), switchChain: vi.fn(), logout: vi.fn() }));
 // Signing is exercised against viem in lib/crypto/aa.test.ts; here we only care
 // that the card hands the bundler exactly the batch the server authorized.
@@ -46,7 +46,7 @@ vi.mock("./client", async importOriginal => {
         return { state: { ...PREVIEW_STATE, revision: 15 } };
       },
     },
-    streamChat: async (_token: unknown, _body: unknown, onEvent: (e: ChatEvent) => void) => { for (const e of events.script) { onEvent(e); await Promise.resolve(); } },
+    streamChat: async (_token: unknown, body: { text: string }, onEvent: (e: ChatEvent) => void) => { events.chats.push(body); for (const e of events.script) { onEvent(e); await Promise.resolve(); } },
   };
 });
 import { Hub } from "./hub-shell";
@@ -73,7 +73,7 @@ beforeEach(() => {
   privy.sendTransaction.mockImplementation(async ({ method }: { method: string }) => method === "eth_chainId" ? "0x2105" : method === "eth_accounts" ? [PREVIEW_WALLET] : method === "eth_call" ? "0x3b9aca00" : "0x0");
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(prefers-reduced-motion: reduce)", media: query, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() }));
-  events.script = []; events.posted = [];
+  events.script = []; events.posted = []; events.chats = [];
   routeReply = () => ({ chosen: funded(8453, "500000000"), candidates: [funded(8453, "500000000")] });
   holdingsReply = () => [];
   // The account card teaches itself once per person; tests that are not about
@@ -238,6 +238,7 @@ it.each(["accepted", "declined", "unchanged"])("handles a %s network switch befo
     const sign = Array.from(card.querySelectorAll("button")).find(b => b.textContent === "Review & sign in wallet")!;
     await act(async () => sign.click());
     expect(privy.switchChain).toHaveBeenCalledWith(8453);
+    if (outcome === "unchanged") await act(async () => { await new Promise(resolve => setTimeout(resolve, 2200)); });
     if (outcome === "accepted") {
       expect(events.posted).toContainEqual(expect.objectContaining({ action: "prepare" }));
       expect(events.posted).toContainEqual(expect.objectContaining({ action: "submitted" }));
@@ -255,9 +256,9 @@ it("explains an unfundable buy by naming Base, the only network it spends from",
     { chainId: 8453, wallet: PREVIEW_WALLET, balance: "3340000", reserve: "26400", status: "insufficient" },
   ] });
   await render(PREVIEW_STATE, <TradeView />);
-  await setValue(container.querySelector("#buy-search") as HTMLInputElement, "pepe");
+  await setValue(container.querySelector("#buy-search") as HTMLInputElement, "bnvda");
   await act(async () => { await new Promise(r => setTimeout(r, 350)); });
-  await act(async () => (Array.from(container.querySelectorAll(".hub-buy-result")).find(b => b.textContent?.includes("PEPE")) as HTMLElement).click());
+  await act(async () => (Array.from(container.querySelectorAll(".hub-buy-result")).find(b => b.textContent?.includes("BNVDA")) as HTMLElement).click());
   await setValue(container.querySelector("#buy-amount") as HTMLInputElement, "0.2");
   await act(async () => { await new Promise(r => setTimeout(r, 700)); });
   // Names the shortfall on the one network the app spends from.
@@ -267,15 +268,11 @@ it("explains an unfundable buy by naming Base, the only network it spends from",
   expect(container.querySelector(".hub-buy-form select")).toBeNull();
   expect((container.querySelector(".hub-buy-submit") as HTMLButtonElement).disabled).toBe(true);
 
-  // The arithmetic is inspectable rather than something to take on faith: every
-  // network looked at, what it holds, the live fee, and why it was not used.
-  const rows = Array.from(container.querySelectorAll(".hub-route-detail li")).map(li => li.textContent);
-  expect(rows).toHaveLength(1);
-  expect(rows[0]).toContain("Base");
-  expect(rows[0]).toContain("$3.34");
-  expect(rows[0]).toContain("Not enough USDC");
-  // The live fee, not the stale constant it replaced.
-  expect(rows[0]).toContain("fee $0.03");
+  // The shortfall arrives as a notice with the way out attached, and nothing
+  // else: the per-network breakdown was arithmetic nobody asked to check.
+  expect(container.querySelector(".hub-route .hub-notice")).not.toBeNull();
+  expect(container.querySelector(".hub-route-detail")).toBeNull();
+  expect(container.textContent).toContain("Deposit USDC on Base");
 }, 20000);
 
 it("tells the buyer what is missing instead of letting a short balance reach the wallet", async () => {
@@ -311,7 +308,9 @@ it("lets the user buy a tokenized stock with dollars from the Trade page", async
   // Buying waits for the resolved route: the panel will not submit a purchase
   // before the server has said which wallet and network it pays from.
   await act(async () => { await new Promise(r => setTimeout(r, 700)); });
-  expect(container.textContent).toContain("Paying with USDC on Base");
+  // A route that works says nothing; only a route that cannot pay speaks up.
+  expect(container.textContent).not.toContain("Paying with USDC on Base");
+  expect(container.querySelector(".hub-buy-form .hub-notice")).toBeNull();
   const form = container.querySelector("form.hub-buy-form")!;
   await act(async () => { form!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
   await act(async () => { await new Promise(r => setTimeout(r, 10)); });
@@ -465,7 +464,7 @@ it("opens one account menu on hover: identity, credits, a wallet row that reveal
   expect(menu.querySelector(".hub-account-head")).toBeNull();
   expect(detail.querySelector(".hub-account-qr svg")?.getAttribute("aria-label")).toBe(`QR code for ${PREVIEW_WALLET}`);
   expect(detail.querySelector(".hub-account-address")?.textContent).toBe(PREVIEW_WALLET);
-  expect(Array.from(detail.querySelectorAll(".hub-account-facts div")).map(d => d.textContent)).toEqual(["NetworkBase", "USDC25", "ETH1"]);
+  expect(Array.from(detail.querySelectorAll(".hub-account-facts div")).map(d => d.textContent)).toEqual(["NetworkBase", "USDC25"]);
   expect(document.activeElement).toBe(detail.querySelector(".hub-account-back"));
   const copy = detail.querySelector(".hub-account-copy") as HTMLButtonElement;
   await act(async () => copy.click());
@@ -514,25 +513,18 @@ it("sends from the orb through the shared conversation", async () => {
   expect(input.value).toBe('');
 });
 
-it("opens a contextual purchase from chat with the requested amount and restores focus on close", async () => {
+it("hands a typed purchase to the agent rather than answering it with a form", async () => {
+  events.script = [{ type: "message", id: "a1", at: "2026-09-18T12:00:00Z" }, { type: "text", text: "Lined up $500 of NVDA." }, { type: "done" }] as ChatEvent[];
   await render(PREVIEW_STATE);
   await type("buy $500 of NVDA");
-  const sendButton = container.querySelector<HTMLButtonElement>('[aria-label="Send"]')!;
-  sendButton.focus();
-  await act(async () => sendButton.click());
-  const dialog = container.querySelector<HTMLDialogElement>('.rubicon-purchase')!;
-  expect(dialog.open).toBe(true);
-  expect((dialog.querySelector('#buy-search') as HTMLInputElement).value).toBe('NVDA');
-  expect(events.posted).toHaveLength(0);
-  await act(async () => { await new Promise(r => setTimeout(r, 350)); });
-  await act(async () => dialog.querySelector<HTMLButtonElement>('.hub-buy-result')!.click());
-  expect((dialog.querySelector('#buy-amount') as HTMLInputElement).value).toBe('500');
-  expect(dialog.textContent).toContain('Tokenized stock exposure');
-  expect(events.posted).toHaveLength(0);
-  await act(async () => dialog.querySelector<HTMLButtonElement>('[aria-label="Close purchase"]')!.click());
-  expect(dialog.open).toBe(false);
-  expect(container.querySelector('.hub-conversation')).not.toBeNull();
-  expect(document.activeElement).toBe(container.querySelector('.hub-composer textarea'));
+  const textarea = container.querySelector<HTMLTextAreaElement>('.hub-composer textarea')!;
+  expect(container.querySelector<HTMLButtonElement>('[aria-label="Send"]')!.disabled).toBe(false);
+  await act(async () => container.querySelector('.hub-composer form, form.hub-composer')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+  // Asking for a buy is a request to the agent, which proposes and settles it.
+  // Intercepting the sentence to open a dialog handed the work straight back.
+  expect(container.querySelector<HTMLDialogElement>('.rubicon-purchase')?.open).toBeFalsy();
+  expect(textarea.value).toBe('');
+  expect(events.chats.map(c => c.text)).toEqual(['buy $500 of NVDA']);
 });
 
 it("opens additional destinations by shortcut without duplicating the permanent navigation", async () => {
@@ -540,7 +532,7 @@ it("opens additional destinations by shortcut without duplicating the permanent 
   await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true })));
   const panel = container.querySelector<HTMLElement>('.rubicon-portals')!;
   expect(panel).not.toBeNull();
-  expect(Array.from(panel.querySelectorAll('a')).map(n => n.getAttribute('href'))).toEqual(['/thesis', '/agents']);
+  expect(Array.from(panel.querySelectorAll('a')).map(n => n.getAttribute('href'))).toEqual(['/beliefs', '/agents']);
   expect(panel.textContent).not.toMatch(/Home|Explore|Memory/);
   await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })));
   expect(container.querySelector('.rubicon-portals')).toBeNull();

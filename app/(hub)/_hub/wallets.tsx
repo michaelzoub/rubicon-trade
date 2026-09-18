@@ -3,7 +3,7 @@
 import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { Link2, Plus, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
-import { CHAINS, type ChainId, shortAddress } from "@/lib/crypto/chains";
+import { CHAINS, DEFAULT_CHAIN, type ChainId, shortAddress } from "@/lib/crypto/chains";
 import { useHub } from "./hub-provider";
 
 type Linked = { address: string; embedded: boolean; client: string };
@@ -32,7 +32,7 @@ export function WalletsSection({ compact = false }: { compact?: boolean }) {
         const provider = await w.getEthereumProvider();
         const id = Number(await provider.request({ method: "eth_chainId" })) as ChainId;
         const network = CHAINS[id];
-        if (network) {
+        if (network && id === DEFAULT_CHAIN) {
           const value = await provider.request({ method: "eth_call", params: [{ to: network.usdc, data: `0x70a08231${w.address.slice(2).toLowerCase().padStart(64, "0")}` }, "latest"] });
           if (typeof value === "string" && /^0x[0-9a-f]+$/i.test(value)) label = `${(Number(BigInt(value)) / 1e6).toLocaleString("en-US", { maximumFractionDigits: 2 })} USDC · ${network.name}`;
         }

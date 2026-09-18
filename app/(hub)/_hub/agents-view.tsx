@@ -1,13 +1,14 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { Plus, X } from "lucide-react";
+import { Plus, SlidersHorizontal, X } from "lucide-react";
 import type { AgentConfig } from "@/lib/socialtrading/agents/config";
 import { DEFAULT_PLAN, limitStatus } from "@/lib/socialtrading/plans";
 import { badgePalette, isThemeId, THEMES, type ThemeId } from "@/lib/socialtrading/themes";
 import { avatarTraits } from "@/lib/socialtrading/avatar";
 import type { RunOutcome, RunRecord } from "@/lib/socialtrading/runtime/types";
 import type { HubState } from "@/lib/socialtrading/types";
+import { AgentEdit } from "./agent-edit";
 import { ProfileFlow } from "../social-trading";
 import { ProfileAvatar } from "../profile-avatar";
 import { timeAgo } from "./format";
@@ -40,6 +41,10 @@ export function AgentsView() {
   const limits = account?.limits ?? DEFAULT_PLAN.limits, planName = account?.planName ?? DEFAULT_PLAN.name;
   const [creating, setCreating] = useState(false);
   const [revealed, setRevealed] = useState<string | null>(null);
+  /** The agent whose settings are open. Adjusting one means becoming it first —
+   * the hub edits the agent it is on — so this is only honoured once the switch
+   * has landed. */
+  const [adjusting, setAdjusting] = useState<string | null>(null);
   const [glimpses, setGlimpses] = useState<Record<string, Glimpse>>({});
   const returnTo = useRef<HTMLElement | null>(null);
 
@@ -58,6 +63,7 @@ export function AgentsView() {
   const current = useMemo(() => agents.find(a => a.id === revealed) ?? null, [agents, revealed]);
 
   const open = (agent: AgentConfig, from: HTMLElement | null) => { returnTo.current = from; setRevealed(agent.id); };
+  const adjust = async (agent: AgentConfig) => { setRevealed(null); if (agent.id !== state.agent?.id) await switchAgent(agent.id); setAdjusting(agent.id); };
   const close = () => { setRevealed(null); returnTo.current?.focus(); returnTo.current = null; };
   const wake = async (agent: AgentConfig, enabled: boolean) => { if (await setAgentEnabled(agent.id, enabled)) void glimpse(agent.id); };
 
@@ -109,13 +115,17 @@ export function AgentsView() {
       onWake={enabled => void wake(current, enabled)}
       onLook={async () => { const outcome = await runNow(current.id); void glimpse(current.id); return outcome; }}
       onTalk={async () => { close(); if (current.id !== state.agent?.id) await switchAgent(current.id); router.push("/"); }}
+      onAdjust={() => void adjust(current)}
       onGoodbye={async () => { if (await deleteAgent(current.id)) close(); }} />}
+
+    {adjusting && state.agent?.id === adjusting && <AgentEdit agent={state.agent}
+      onClose={() => { const id = adjusting; setAdjusting(null); void glimpse(id); returnTo.current?.focus(); returnTo.current = null; }} />}
   </div>;
 }
 
-function AgentReveal({ agent, themes, look, busy, canRest, capReached, planName, onClose, onWake, onLook, onTalk, onGoodbye }: {
+function AgentReveal({ agent, themes, look, busy, canRest, capReached, planName, onClose, onWake, onLook, onTalk, onAdjust, onGoodbye }: {
   agent: AgentConfig; themes: ThemeId[]; look?: Glimpse; busy: boolean; canRest: boolean; capReached: boolean; planName: string;
-  onClose: () => void; onWake: (enabled: boolean) => void; onLook: () => Promise<RunOutcome | null>; onTalk: () => Promise<void>; onGoodbye: () => Promise<void>;
+  onClose: () => void; onWake: (enabled: boolean) => void; onLook: () => Promise<RunOutcome | null>; onTalk: () => Promise<void>; onAdjust: () => void; onGoodbye: () => Promise<void>;
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const [outcome, setOutcome] = useState<RunOutcome | null>(null);
@@ -158,6 +168,7 @@ function AgentReveal({ agent, themes, look, busy, canRest, capReached, planName,
       <div className="hub-reveal-actions">
         <button type="button" className="hub-reveal-action is-primary" disabled={busy || looking} onClick={() => void look_()}>{looking ? "Looking…" : "Take a look now"}</button>
         <button type="button" className="hub-reveal-action" disabled={busy} onClick={() => void onTalk()}>Talk to it</button>
+        <button type="button" className="hub-reveal-action" disabled={busy} onClick={onAdjust}><SlidersHorizontal size={13} aria-hidden="true" />Adjust</button>
         <button type="button" className="hub-reveal-action" disabled={busy || (!agent.enabled && capReached)} data-tooltip={!agent.enabled && capReached ? `Two agents can analyze at once on the ${planName} plan. Let one rest first.` : undefined} onClick={() => onWake(!agent.enabled)}>{agent.enabled ? "Let it rest" : "Wake up"}</button>
       </div>
       {canRest && <footer className="hub-reveal-foot">

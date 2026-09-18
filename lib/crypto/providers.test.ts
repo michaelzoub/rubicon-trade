@@ -130,3 +130,23 @@ describe("buyable token search", () => {
     expect(out[0]).toMatchObject({ kind: "stock", thin: true });
   });
 });
+
+describe("agent disclosure to Uniswap", () => {
+  const headerOf = (send: ReturnType<typeof vi.fn>) => JSON.parse((send.mock.calls[0][1] as { headers: Record<string, string> }).headers["x-agent-info"]);
+  const quoteBody = () => ({ routing: "CLASSIC", quote: { tradeType: "EXACT_INPUT", slippage: req.slippageBps / 100, chainId: req.chainId, swapper: req.wallet, input: { token: req.tokenIn, amount: req.amount }, output: { token: req.tokenOut, amount: "1000000", recipient: req.wallet } } });
+
+  it("declares a human decision by default", async () => {
+    vi.stubEnv("UNISWAP_API_KEY", "test-key");
+    const send = vi.fn().mockResolvedValue(Response.json(quoteBody()));
+    await createUniswap(createTransport(send)).quote(req);
+    expect(headerOf(send)).toEqual({ decision_origin: "human_mediated", integration_name: "rubicon-trade" });
+  });
+
+  it("declares an autonomous decision when nobody is present", async () => {
+    vi.stubEnv("UNISWAP_API_KEY", "test-key");
+    const send = vi.fn().mockResolvedValue(Response.json(quoteBody()));
+    await createUniswap(createTransport(send)).quote(req, { autonomous: true });
+    // Uniswap accepts exactly these two words, case-sensitively.
+    expect(headerOf(send)).toEqual({ decision_origin: "autonomous", integration_name: "rubicon-trade" });
+  });
+});

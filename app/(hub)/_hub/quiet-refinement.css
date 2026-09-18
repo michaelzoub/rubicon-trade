@@ -40,3 +40,46 @@
 }
 @media(max-width:420px) { .hub-discovery-lenses.hub-lens { gap:8px; }.hub-discovery-lenses .hub-lens-item { padding:13px 10px; font-size:12px; } }
 @media(prefers-reduced-motion:reduce) { .hub-discovery-lenses .hub-lens-item,.hub-discovery-lenses .hub-lens-item::before,.rubicon-more-trigger,.rubicon-more-trigger svg,.rubicon-portal,.portal-strata,.portal-orbit i { transition:none; }.hub-discovery-lenses .hub-lens-item:hover { transform:none; } }
+
+/* ---------- Which way you are looking ----------
+   The chosen lens should read as chosen from across the row, not merely a
+   shade lighter: it holds its colour, sits forward on its own shadow, and
+   wears the drawn edge the account menu wears. The others go quiet and take
+   turns hopping — a different invitation from the twitch a matched card makes,
+   so the two never look like the same signal. */
+.hub-discovery-lenses .hub-lens-item { color:#6c7d93; }
+.hub-discovery-lenses .hub-lens-item>svg { color:#9dabbe; transition:color .35s,transform .35s var(--dashboard-ease-out,ease); }
+.hub-discovery-lenses .hub-lens-item:hover { color:var(--ink); }
+.hub-discovery-lenses .hub-lens-item:hover>svg { color:var(--lens-hue); transform:translateY(-1px) scale(1.08); }
+.hub-discovery-lenses .hub-lens-item>span { transition:font-weight .2s; }
+
+.hub-discovery-lenses .hub-lens-item.is-active { color:var(--ink); border-color:transparent; transform:translateY(-3px);
+  background:linear-gradient(150deg,#fff,color-mix(in srgb,var(--lens-hue) 9%,#fff));
+  box-shadow:0 20px 34px -26px color-mix(in srgb,var(--lens-hue) 90%,transparent),inset 0 1px 0 #fff; }
+.hub-discovery-lenses .hub-lens-item.is-active:hover { transform:translateY(-5px); }
+.hub-discovery-lenses .hub-lens-item.is-active::before { opacity:.9; }
+.hub-discovery-lenses .hub-lens-item.is-active>svg { color:var(--lens-hue); transform:scale(1.12); }
+.hub-discovery-lenses .hub-lens-item.is-active>span { font-weight:600; letter-spacing:-.01em; }
+/* One hairline of the lens's own colour, swept, and only on the chosen one. */
+.hub-discovery-lenses .hub-lens-item::after { content:""; position:absolute; inset:0; z-index:2; border-radius:inherit; padding:1.5px; pointer-events:none; opacity:0; transition:opacity .3s;
+  background:conic-gradient(from var(--edge-angle,0deg),color-mix(in srgb,var(--lens-hue) 10%,transparent),var(--lens-hue) 18%,color-mix(in srgb,var(--lens-hue) 14%,transparent) 38%,color-mix(in srgb,var(--lens-hue) 10%,transparent) 56%,color-mix(in srgb,var(--lens-hue) 70%,transparent) 76%,color-mix(in srgb,var(--lens-hue) 10%,transparent));
+  -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0); -webkit-mask-composite:xor;
+  mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0); mask-composite:exclude; }
+.hub-discovery-lenses .hub-lens-item.is-active::after { opacity:1; animation:hub-lens-edge 11s linear infinite; }
+@keyframes hub-lens-edge { to { --edge-angle:360deg; } }
+
+.hub-discovery-lenses .hub-lens-item:not(.is-active) { animation:hub-lens-hop 8s var(--dashboard-ease-out,ease-in-out) calc(var(--lens-index,0) * 1.15s) infinite; }
+.hub-discovery-lenses .hub-lens-item:not(.is-active):hover,
+.hub-discovery-lenses .hub-lens-item:not(.is-active):focus-visible { animation:none; transform:translateY(-4px); }
+@keyframes hub-lens-hop {
+  0%,74%,100% { transform:translateY(0) scale(1); }
+  79% { transform:translateY(-6px) scale(1.012); }
+  84.5% { transform:translateY(0) scale(.996); }
+  89% { transform:translateY(-2px) scale(1.005); }
+  94% { transform:translateY(0) scale(1); }
+}
+
+@media(prefers-reduced-motion:reduce) {
+  .hub-discovery-lenses .hub-lens-item:not(.is-active) { animation:none; }
+  .hub-discovery-lenses .hub-lens-item.is-active::after { animation:none; }
+}

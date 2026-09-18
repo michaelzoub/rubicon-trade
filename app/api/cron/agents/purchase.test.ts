@@ -41,24 +41,26 @@ const proposeCryptoSwap = vi.fn(async (args: Record<string, unknown>) => {
 });
 const listBuyable = vi.fn(async () => ({ result: { network: { chainId: BUY_CHAIN }, assets: [{ symbol: "NVDAc", tokenOut: `0x${"b2".repeat(20)}` }] }, parts: [] }));
 
-/** Stands in for the tool that actually spends. */
-const settled: string[] = [];
-const executeCryptoSwap = vi.fn(async (args: Record<string, unknown>) => {
-  settled.push(String(args.tradeId));
-  return { result: { hash: `0x${"ab".repeat(32)}`, status: "confirmed" }, parts: [] };
+/** Stands in for the tool that actually spends. Unattended, deciding to buy and
+ * buying are one call: there is no proposal for anyone to review, so a second
+ * step could only strand a reserved trade. */
+const settled: { symbol: string; usd: string }[] = [];
+const buyAsset = vi.fn(async (args: Record<string, unknown>) => {
+  settled.push({ symbol: String(args.symbol), usd: String(args.usd) });
+  return { result: { bought: true, symbol: String(args.symbol), usd: String(args.usd), status: "confirmed", hash: `0x${"ab".repeat(32)}` }, parts: [] };
 });
 
 const registry = new CapabilityRegistry([
   { id: "market", tools: [{ schema: { type: "function", function: { name: "list_buyable_assets", description: "", parameters: {} } }, execute: listBuyable }] },
   { id: "trading", tools: [
+    { schema: { type: "function", function: { name: "buy_asset", description: "", parameters: {} } }, execute: buyAsset },
     { schema: { type: "function", function: { name: "propose_crypto_swap", description: "", parameters: {} } }, execute: proposeCryptoSwap },
-    { schema: { type: "function", function: { name: "execute_crypto_swap", description: "", parameters: {} } }, execute: executeCryptoSwap },
   ] },
 ]);
 
 /** What the deployment answers when asked whether this user granted unattended
  * buying. Production resolves it from the profile plus Privy. */
-let grant: { allowed: boolean; reason: string } = { allowed: false, reason: "Unattended buying is off." };
+let grant: { allowed: boolean; reason: string; wallet?: string } = { allowed: false, reason: "Unattended buying is off." };
 
 let store: MemoryRuntimeStore;
 let model: ModelClient;
@@ -94,14 +96,14 @@ it("does not buy anything on a scheduled run, and says why", async () => {
   // The decisive one. A scheduled agent has nobody present to sign, so the
   // purchase tool is withheld from the model and refused if called anyway.
   model = scriptedModel([
-    { toolCalls: [call("propose_crypto_swap", { chainId: BUY_CHAIN, wallet: `0x${"11".repeat(20)}`, tokenIn: `0x${"aa".repeat(20)}`, tokenOut: `0x${"b2".repeat(20)}`, amount: "25000000", slippageBps: 50, reasoning: "overnight" })] },
+    { toolCalls: [call("buy_asset", { symbol: "NVDAc", usd: "25", reasoning: "overnight" })] },
     { content: "SILENT" },
   ]);
   const report = await (await fire()).json();
 
   expect(report).toMatchObject({ started: 1, succeeded: 1 });
   // Nothing reached execution, and no trade exists.
-  expect(proposeCryptoSwap).not.toHaveBeenCalled();
+  expect(buyAsset).not.toHaveBeenCalled();
   expect(proposals).toEqual([]);
   expect((await store.loadState(USER, "agent-a"))!.trades.filter(t => t.id === "t-cron")).toEqual([]);
 });
@@ -111,12 +113,11 @@ it("never offers the purchase tool to a scheduled model in the first place", asy
   model = { async complete(input) { seen.push(...input.tools!.map(t => t.function.name)); return { content: "SILENT", toolCalls: [] }; } };
   await fire();
   expect(seen).toContain("list_buyable_assets");
-  expect(seen).not.toContain("propose_crypto_swap");
+  expect(seen).not.toContain("buy_asset");
 });
 
 const buyTurn = () => [
-  { toolCalls: [call("propose_crypto_swap", { chainId: BUY_CHAIN, wallet: `0x${"11".repeat(20)}`, tokenIn: `0x${"aa".repeat(20)}`, tokenOut: `0x${"b2".repeat(20)}`, amount: "25000000", slippageBps: 50, reasoning: "overnight" })] },
-  { toolCalls: [call("execute_crypto_swap", { tradeId: "t-cron" })] },
+  { toolCalls: [call("buy_asset", { symbol: "NVDAc", usd: "25", reasoning: "overnight" })] },
   { content: "SILENT" },
 ];
 
@@ -128,9 +129,9 @@ it("buys on a scheduled run once the user has granted it", async () => {
 
   expect(report).toMatchObject({ started: 1, succeeded: 1, failed: 0 });
   // Proposed and then actually settled, with nobody present.
-  expect(proposals).toHaveLength(1);
-  expect(proposals[0]).toMatchObject({ chainId: BUY_CHAIN });
-  expect(settled).toEqual(["t-cron"]);
+  expect(settled).toEqual([{ symbol: "NVDAc", usd: "25" }]);
+  // The attended pair is never offered to a scheduled run, granted or not.
+  expect(proposeCryptoSwap).not.toHaveBeenCalled();
 });
 
 it("offers the purchase tools only to a granted run", async () => {
@@ -159,7 +160,7 @@ it("refuses to spend when the grant is withdrawn mid-run, and says why", async (
   // so the agent notifies instead of retrying.
   grant = { allowed: true, reason: "" };
   model = scriptedModel([
-    { toolCalls: [call("propose_crypto_swap", { chainId: BUY_CHAIN, wallet: `0x${"11".repeat(20)}`, tokenIn: `0x${"aa".repeat(20)}`, tokenOut: `0x${"b2".repeat(20)}`, amount: "25000000", slippageBps: 50, reasoning: "overnight" })] },
+    { toolCalls: [call("buy_asset", { symbol: "NVDAc", usd: "25", reasoning: "overnight" })] },
     { content: "SILENT" },
   ]);
   // Revoked between listing the tools and calling one.
@@ -168,4 +169,5 @@ it("refuses to spend when the grant is withdrawn mid-run, and says why", async (
     runBackgroundAgent(job, { store, model, registry, services: {}, now: () => NOW, signal, buyUnattended: async () => { const g = grant; grant = revoke; return g; } }));
   await fire();
   expect(settled).toEqual([]);
+  expect(buyAsset).not.toHaveBeenCalled();
 });

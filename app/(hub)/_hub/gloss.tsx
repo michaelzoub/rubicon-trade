@@ -1,15 +1,23 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { convictionsOf, relevance } from "@/lib/socialtrading/worldview";
 import { THEMES } from "@/lib/socialtrading/themes";
 import type { Asset, HubState } from "@/lib/socialtrading/types";
 import { gsap, prefersReducedMotion } from "../../_components/motion";
 import "./gloss.css";
 
-/** One revealed fact. `label` names the kind of thing, `value` is the thing. */
-export type GlossLine = { label: string; value: string };
-export type GlossContent = { title?: string; lines: GlossLine[] };
+/** One revealed fact. `label` names the kind of thing, `value` is the thing.
+ * `lead` marks the one line worth an edge of its own. */
+export type GlossLine = { label: string; value: string; lead?: boolean };
+export type GlossContent = {
+  title?: string;
+  lines: GlossLine[];
+  /** "dark" borrows the account popup's surface, for reveals over a drawn field. */
+  tone?: "dark";
+  /** Colour the gradient edge picks up, so the reveal carries what it describes. */
+  accent?: string;
+};
 
 type Active = { content: GlossContent; rect: DOMRect };
 
@@ -78,19 +86,39 @@ function GlossLayer({ active }: { active: Active | null }) {
     // Beside the object, flipping to whichever side has room.
     const right = active.rect.right + 14;
     const left = right + width > window.innerWidth - 12 ? Math.max(12, active.rect.left - width - 14) : right;
-    const top = Math.min(Math.max(12, active.rect.top), window.innerHeight - node.offsetHeight - 12);
+    // Height is only final once the new content has been laid out, so the same
+    // sum is run again on the next frame. Without it a tall reveal is measured
+    // at the previous content's height and hangs off the bottom of the window.
+    const settle = () => gsap.set(node, { top: Math.min(Math.max(12, active.rect.top), Math.max(12, window.innerHeight - node.offsetHeight - 12)) });
     const from = left < active.rect.left ? 8 : -8;
     gsap.killTweensOf(node);
-    if (prefersReducedMotion()) { gsap.set(node, { autoAlpha: 1, left, top, x: 0 }); return; }
-    gsap.set(node, { left, top });
-    gsap.fromTo(node, { autoAlpha: 0, x: from }, { autoAlpha: 1, x: 0, duration: .12, ease: "power2.out" });
+    gsap.set(node, { left });
+    settle();
+    if (prefersReducedMotion()) { gsap.set(node, { autoAlpha: 1, x: 0 }); }
+    else gsap.fromTo(node, { autoAlpha: 0, x: from }, { autoAlpha: 1, x: 0, duration: .12, ease: "power2.out" });
+    const frame = requestAnimationFrame(settle);
+    return () => cancelAnimationFrame(frame);
   }, [active]);
 
   return (
-    <div ref={surface} id={GLOSS_ID} className="gloss" role="status" aria-live="polite">
+    <div
+      ref={surface}
+      id={GLOSS_ID}
+      className={`gloss${active?.content.tone === "dark" ? " rubicon-hover-surface" : ""}`}
+      data-tone={active?.content.tone}
+      style={active?.content.accent ? { "--account-edge": active.content.accent } as CSSProperties : undefined}
+      role="status"
+      aria-live="polite"
+    >
       {active && <>
         {active.content.title && <p className="gloss-title">{active.content.title}</p>}
-        <dl>{active.content.lines.map(line => <div key={line.label}><dt>{line.label}</dt><dd>{line.value}</dd></div>)}</dl>
+        <dl>{active.content.lines.map(line => (
+          // A value that is a sentence rather than a reading gets the row to
+          // itself; a label squeezed into three wrapped words reads as neither.
+          <div key={line.label} data-lead={line.lead || undefined} data-stacked={line.value.length > 26 || undefined}>
+            <dt>{line.label}</dt><dd>{line.value}</dd>
+          </div>
+        ))}</dl>
       </>}
     </div>
   );

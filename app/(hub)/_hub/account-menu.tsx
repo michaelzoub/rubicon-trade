@@ -21,6 +21,8 @@ type Props = {
   identity: { progress: number; depth: number; energy: number };
   profileHref: string;
   plansHref: string;
+  /** Everything the person owns, in one place: the holdings list on the beliefs page. */
+  assetsHref: string;
   /** Preview seam: no Privy, so balances and sign-out are unavailable. */
   preview: boolean;
 };
@@ -58,7 +60,7 @@ function LiveMenu(props: Props) {
         try {
           const provider = await wallet.getEthereumProvider();
           const network = CHAINS[Number(await provider.request({ method: "eth_chainId" })) as ChainId];
-          if (network) {
+          if (network && network === CHAINS[DEFAULT_CHAIN]) {
             const [usdc, native] = await Promise.all([
               provider.request({ method: "eth_call", params: [{ to: network.usdc, data: `0x70a08231${wallet.address.slice(2).toLowerCase().padStart(64, "0")}` }, "latest"] }),
               provider.request({ method: "eth_getBalance", params: [wallet.address, "latest"] }),
@@ -86,7 +88,7 @@ function LiveMenu(props: Props) {
     signOut={<button type="button" className="hub-account-signout" onClick={() => void logout()}><LogOut size={14} aria-hidden="true" /><span>Sign out</span></button>} />;
 }
 
-function Menu({ userId, name, planName, account, themes, inferred, identity, profileHref, plansHref, preview, wallets, signOut, onOpen }: Props & { wallets: WalletEntry[]; signOut: ReactNode; onOpen?: (open: boolean) => void }) {
+function Menu({ userId, name, planName, account, themes, inferred, identity, profileHref, plansHref, assetsHref, preview, wallets, signOut, onOpen }: Props & { wallets: WalletEntry[]; signOut: ReactNode; onOpen?: (open: boolean) => void }) {
   const id = useId();
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -147,7 +149,7 @@ function Menu({ userId, name, planName, account, themes, inferred, identity, pro
     </button>
     <div ref={pane} id={id} className={`rubicon-hover-surface hub-account-menu${discover ? " is-discovering" : ""}`} hidden={!open} aria-label="Account">
       {shown
-        ? <WalletDetail key={shown.address} wallet={shown} onBack={() => setDetail(null)} />
+        ? <WalletDetail key={shown.address} wallet={shown} assetsHref={assetsHref} onBack={() => setDetail(null)} onLeave={() => change(false)} />
         : <div key="summary" className="hub-account-pane is-summary">
           <Link href={profileHref} className="hub-account-head" data-discover="profile" onClick={() => change(false)}>
             <AccountOrb seed={userId} themes={themes} inferred={inferred} identity={identity} />
@@ -194,7 +196,7 @@ function AccountOrb({ seed, themes, inferred, identity, compact = false }: {
 }
 
 function walletSummary(wallet: WalletEntry): string {
-  if (wallet.balance?.state === "ok") return `${wallet.balance.usdc} USDC · ${wallet.balance.network}`;
+  if (wallet.balance?.state === "ok") return `${wallet.balance.usdc} USDC`;
   if (wallet.balance?.state === "unavailable") return "Unavailable";
   return wallet.connected ? "Checking…" : "Not connected";
 }
@@ -213,14 +215,14 @@ export function BaseSwitch({ wallet, multiple = false }: { wallet: WalletEntry; 
   if (!wallet.switchToBase) return wallet.connect ? <button type="button" className="hub-account-row is-link" onClick={wallet.connect}><span className="hub-account-label">Connect wallet to switch to Base</span><ChevronRight size={14} aria-hidden="true" /></button> : null;
   return <div>
     <button type="button" className="hub-account-row is-link" disabled={busy} onClick={() => void switchNetwork()}>
-      <span className="hub-account-label">{busy ? "Switching…" : "Switch wallet to Base"}{multiple && <small> · {wallet.address.slice(0, 6)}…{wallet.address.slice(-4)}</small>}</span>
+      <span className="hub-account-label">{busy ? "Switching…" : "Switch wallet to Base"}{multiple && <small> ({wallet.address.slice(0, 6)}…{wallet.address.slice(-4)})</small>}</span>
       <ChevronRight size={14} aria-hidden="true" />
     </button>
     {message && <p className="socialtrading-caption" style={{ padding: "4px 12px 8px" }} role="status">{message}</p>}
   </div>;
 }
 
-function WalletDetail({ wallet, onBack }: { wallet: WalletEntry; onBack: () => void }) {
+function WalletDetail({ wallet, assetsHref, onBack, onLeave }: { wallet: WalletEntry; assetsHref: string; onBack: () => void; onLeave: () => void }) {
   const back = useRef<HTMLButtonElement>(null);
   const [copied, setCopied] = useState(false);
   useEffect(() => { back.current?.focus(); }, []);
@@ -236,17 +238,23 @@ function WalletDetail({ wallet, onBack }: { wallet: WalletEntry; onBack: () => v
   return <div className="hub-account-pane is-detail" aria-label="Wallet details">
     <button ref={back} type="button" className="hub-account-back" onClick={onBack}><ChevronLeft size={14} aria-hidden="true" /><span>Wallet</span></button>
     <div className="hub-account-qr"><QrCode value={wallet.address} /></div>
+    <p className="hub-account-deposit-hint">Only send USDC on Base for now!</p>
     <p className="hub-account-address">{wallet.address}</p>
     <button type="button" className={`hub-account-copy${copied ? " is-copied" : ""}`} onClick={() => void copy()} aria-live="polite">
       {copied ? <><Check size={13} aria-hidden="true" /><span>Copied</span></> : <><Copy size={13} aria-hidden="true" /><span>Copy address</span></>}
     </button>
     <dl className="hub-account-facts">
-      <div><dt>Network</dt><dd>{balance?.state === "ok" ? balance.network : wallet.connected ? (balance ? "Unavailable" : "Checking…") : "Not connected"}</dd></div>
+      <div><dt>Network</dt><dd><img src="/base-logo.svg" width={16} height={16} alt="" aria-hidden="true" />Base</dd></div>
       {balance?.state === "ok" && <>
         <div><dt>USDC</dt><dd>{balance.usdc}</dd></div>
-        <div><dt>{balance.symbol}</dt><dd>{balance.native}</dd></div>
+        {/* Native ETH balance hidden; this wallet experience is Base and USDC only. */}
       </>}
     </dl>
+    {/* The wallet card shows USDC only; everything else the person owns lives with their holdings. */}
+    <Link href={assetsHref} className="hub-account-assets" onClick={onLeave}>
+      <span>View all assets</span>
+      <ArrowUpRight size={14} aria-hidden="true" />
+    </Link>
     <BaseSwitch wallet={wallet} />
   </div>;
 }

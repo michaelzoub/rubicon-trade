@@ -1,0 +1,64 @@
+/* Imported by buy-panel.tsx, for the same reason buy-ticker.css is imported
+ * by its own component: the one-press stage styles itself wherever it is
+ * rendered. */
+/* ── One press ──────────────────────────────────────────────────────────────
+ * The plate, the amount, the button. Nothing between them and nothing after. */
+.hub-buy .hub-buy-one { display: grid; gap: 18px; }
+.hub-buy .hub-buy-one .hub-buy-amount { margin: 0; }
+.hub-buy .hub-buy-one .hub-buy-actions { display: grid; gap: 10px; justify-items: center; }
+/* A Rubicon button, at the size this one needs to be. The shape is the
+ * product's, not this screen's: `--radius-ui` is what every other full-width
+ * call to action in Rubicon uses, and a pill here would make the same button
+ * two different things in two places. */
+.hub-buy .hub-buy-one .button.button-primary.hub-buy-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 52px;
+  border-radius: var(--radius-ui, 10px);
+  font-size: 15px;
+}
+.hub-buy .hub-buy-one .hub-buy-submit svg { opacity: .75; }
+.hub-buy .hub-buy-one .hub-buy-swap-target { border: 0; background: transparent; color: var(--quiet, #8d9bac); font-size: 12px; }
+.hub-buy .hub-buy-one .hub-buy-swap-target:not(:disabled):hover { background: transparent; color: inherit; text-decoration: underline; }
+.rubicon-purchase .hub-buy .hub-buy-one .button.button-primary.hub-buy-submit { border-radius: var(--radius-ui, 10px); min-height: 52px; }
+
+/* ── While the agent works ──────────────────────────────────────────────────
+ * The agent, and the one thing it is doing. No progress bar, because none of
+ * it is measurable; no amount, because the plate above already says what is
+ * being bought. */
+.hub-buy-run {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  overflow: hidden;
+  padding: 24px 20px 26px;
+  border-radius: var(--radius-card, 18px);
+  background: #2f7df60f;
+  box-shadow: inset 0 0 0 1px #2f7df62e;
+  text-align: center;
+}
+.hub-buy-run-agent { width: 66px; height: 66px; }
+.hub-buy-run strong { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+.hub-buy-run-rail { position: absolute; inset: auto 0 0 0; height: 2px; overflow: hidden; background: #ffffff14; }
+.hub-buy-run-sweep { display: block; width: 34%; height: 100%; background: linear-gradient(90deg, transparent, #2f7df6, transparent); }
+@media (prefers-reduced-motion: reduce) { .hub-buy-run-rail { display: none; } }
+
+/* The agent hands it over, at the size of an icon. */
+.hub-buy .hub-buy-done-agent { flex-shrink: 0; width: 42px; height: 42px; }
+
+.hub-buy-handback { display: grid; gap: 12px; justify-items: stretch; }
+
+/* What you pay, and what there is to pay it with, on one line: the label reads
+ * from the left, the balance answers from the right. */
+.hub-buy .hub-buy-one .hub-buy-amount-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.hub-buy .hub-buy-one .hub-buy-amount-head > label { margin: 0; }
+.hub-buy .hub-buy-one .hub-buy-balance { color: var(--quiet, #8d9bac); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
