@@ -16,7 +16,7 @@ export const TOPICS = [
   { id: "cloud-software", name: "Cloud & software", themes: ["tech"], keywords: /cloud|software|saas/i, assets: ["msft", "amzn"] },
   { id: "robotics", name: "Robotics & automation", themes: ["tech"], keywords: /robot|automation|warehouse|factory|autonomous/i, assets: ["isrg", "nvda"] },
   { id: "defence-sovereignty", name: "Defence & sovereignty", themes: ["tech", "energy"], keywords: /defen[cs]e|sovereign|tariff|supply chain|reshor|onshor|military/i, assets: ["rtx"] },
-  { id: "climate-adaptation", name: "Climate adaptation", themes: ["energy"], keywords: /climate|adaptation|flood|resilien|infrastructure|weather/i, assets: ["pwr"] },
+  { id: "climate-adaptation", name: "Climate adaptation", themes: ["energy"], keywords: /climate|adaptation|flood|resilien|sea level|extreme weather/i, assets: ["pwr"] },
   { id: "stablecoins", name: "Stablecoins & payments", themes: ["crypto"], keywords: /stablecoin|usdc|payment rail|settle|remittance/i, assets: ["usdc", "coin"] },
   { id: "future-of-work", name: "Work & labour", themes: ["consumer", "tech"], keywords: /\bwork\b|labour|labor|employ|job|workforce|productivity/i, assets: ["now"] },
 ] satisfies { id: string; name: string; themes: ThemeId[]; keywords: RegExp; assets: string[] }[];

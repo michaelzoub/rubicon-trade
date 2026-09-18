@@ -47,4 +47,13 @@ describe("the onboarding topics", () => {
     expect(classifyTopic({ id: "x", name: "Robotics and automation" }).map(t => t.id)).toContain("robotics");
     expect(classifyTopic({ id: "x", name: "Stablecoin payments" }).map(t => t.id)).toContain("stablecoins");
   });
+
+  it("keeps climate adaptation out of results for unrelated infrastructure", () => {
+    // `classifyTopic` returns every match, so a bare `infrastructure`
+    // alternative would tag the power-grid topic's own name as climate.
+    expect(classifyTopic({ id: "x", name: "Power infrastructure" }).map(t => t.id)).not.toContain("climate-adaptation");
+    expect(classifyTopic({ id: "x", name: "cloud infrastructure" }).map(t => t.id)).not.toContain("climate-adaptation");
+    expect(classifyTopic({ id: "x", name: "Climate adaptation" }).map(t => t.id)).toContain("climate-adaptation");
+    expect(classifyTopic({ id: "x", name: "flood defences" }).map(t => t.id)).toContain("climate-adaptation");
+  });
 });
