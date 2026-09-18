@@ -55,12 +55,12 @@ export type Evidence = {
   answer: ProbeAnswer; // the literal answer
 };
 
-/** What we infer. Replaced wholesale each turn; never edited in place. */
+/** What we infer. Replaced wholesale each turn; never edited in place. Every
+ *  belief is Jev's — there is no locally-computed variant of this shape. */
 export type Belief = {
   topic: TopicId;
   p: number;         // 0–1. How far toward holding this claim the evidence puts them.
   certainty: number; // 0–1. Jev's confidence in that reading.
-  source: "jev";
 };
 
 export type ProfileModel = {
@@ -156,7 +156,10 @@ place and flips `source` to `"pending"`.
 ## Sequencing — `lib/socialtrading/profile-probe.ts`
 
 Pure, browser-safe, no model access. This is the layer the brief calls
-`getNextProfileProbe`.
+`getNextProfileProbe`. It takes the answers alongside the model because two of
+the interaction rules read what onboarding has already captured — a horizon on
+`OnboardingAnswers.responses[].years`, and the knowledge level that indexes the
+claim bank.
 
 ```ts
 export type Probe = {
@@ -171,7 +174,7 @@ export type Probe = {
 
 export function getNextProfileProbe(
   model: ProfileModel,
-  ctx: { knowledge: number; confidence: number },
+  ctx: { knowledge: number; confidence: number; answers: OnboardingAnswers },
 ): Probe | null;
 ```
 
@@ -222,7 +225,7 @@ at most once per run.
 | 1 | fewer than three topics have any belief | `choice` | `PredictionDeck` — swipe the top claims |
 | 2 | winning topic is `geographic` | `map` | `GeographyMap` |
 | 3 | `\|p - 0.5\| > 0.25` but `certainty < 0.6` | `spectrum` | `SmoothRange` — direction is read, strength is not |
-| 4 | `p > 0.7`, `certainty > 0.6`, no horizon recorded yet | `pad` | `PredictionPad` — confidence × horizon |
+| 4 | `p > 0.7`, `certainty > 0.6`, and no response in `answers.responses` carries `years` | `pad` | `PredictionPad` — confidence × horizon |
 | 5 | top three candidates within 15% of each other | `chips` | card chips — let them break the tie |
 | 6 | `knowledge >= 2` and `turn >= 4` | `text` | card textarea — they can say it better than we can ask |
 | 7 | otherwise | `choice` | `PredictionDeck` |
@@ -230,6 +233,11 @@ at most once per run.
 Probe copy comes from `claims[knowledge]` on the winning topic. `chips`
 options are the names of the tied topics; `choice` options are the claims of
 the top candidates.
+
+A `spectrum` probe carries exactly four `options`, and its answer is the
+interval `intervalAt(position)` returns rather than the raw 0–1 position. That
+keeps it inside the existing `CardAnswer` `scale` shape, which `applyAnswer`
+reads as `card.options[answer.value]` — a raw fraction would index nothing.
 
 ### Fallback
 
@@ -273,7 +281,7 @@ evidence in its own shape:
 | Kind | Component | Evidence answer |
 | --- | --- | --- |
 | `choice` | `PredictionDeck` | `{ kind: "binary", direction }` |
-| `spectrum` | `SmoothRange` | `{ kind: "scale", value }` |
+| `spectrum` | `SmoothRange` | `{ kind: "scale", value }` — the 0–3 interval |
 | `map` | `GeographyMap` | `{ kind: "map", regions }` |
 | `pad` | `PredictionPad` | `{ kind: "pad", confidence, years }` |
 | `chips` | card chips | `{ kind: "chips", values }` |
