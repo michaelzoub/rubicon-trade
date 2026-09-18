@@ -45,7 +45,7 @@ export const PROBE_TOPICS: readonly ProbeTopic[] = [
       "AI needs enormous new buildings, not just better software.",
       "Data centre capacity is booked out faster than it can be built.",
       "Where you can build a data centre matters more than who builds it.",
-      "Today's data centre build-out overshoots the demand it is sized for.",
+      "Today’s data centre build-out overshoots the demand it is sized for.",
     ],
   },
   {
@@ -145,7 +145,7 @@ export const PROBE_TOPICS: readonly ProbeTopic[] = [
       "We spend more fixing climate damage than preventing it.",
       "Protecting cities from climate damage becomes as big as cutting emissions.",
       "Climate adaptation grows faster than spending to prevent climate change.",
-      "Climate adaptation attracts more money than preventing climate change.",
+      "Cities that cannot afford to adapt get written off.",
     ],
   },
   {
@@ -155,7 +155,7 @@ export const PROBE_TOPICS: readonly ProbeTopic[] = [
       "AI takes over more work than it creates.",
       "People who do not use AI at work fall behind.",
       "AI changes old industries more than it creates new ones.",
-      "The world is overestimating AI's short-term impact and underestimating its long-term reach.",
+      "The world is overestimating AI’s short-term impact and underestimating its long-term reach.",
     ],
   },
   {

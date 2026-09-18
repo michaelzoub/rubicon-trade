@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { onboardingVariant, resolveAssignment, VARIANTS } from "./experiment";
+import { isVariant, onboardingVariant, resolveAssignment, VARIANTS } from "./experiment";
 
 describe("onboarding experiment", () => {
   it("gives the same user the same arm every time", () => {
@@ -10,10 +10,21 @@ describe("onboarding experiment", () => {
   });
 
   it("splits a cohort roughly evenly rather than collapsing onto one arm", () => {
-    const ids = Array.from({ length: 400 }, (_, i) => `did:privy:user-${i}`);
-    const inference = ids.filter(id => onboardingVariant(id) === "inference").length;
-    expect(inference).toBeGreaterThan(140);
-    expect(inference).toBeLessThan(260);
+    const ids = Array.from({ length: 600 }, (_, i) => `did:privy:user-${i}`);
+    // Three arms now, so the even share is a third. The band is wide enough
+    // that the hash does not have to be perfect, narrow enough that a collapse
+    // onto one or two arms still fails.
+    for (const variant of VARIANTS) {
+      const share = ids.filter(id => onboardingVariant(id) === variant).length;
+      expect(share, variant).toBeGreaterThan(120);
+      expect(share, variant).toBeLessThan(280);
+    }
+  });
+
+  it("gives every arm a home, including the adaptive one", () => {
+    expect(VARIANTS).toEqual(["tree", "inference", "adaptive"]);
+    expect(isVariant("adaptive")).toBe(true);
+    expect(resolveAssignment("alice", "?onboarding=adaptive")).toEqual({ variant: "adaptive", forced: true });
   });
 
   it("lets the query string force an arm, and marks that run as forced", () => {

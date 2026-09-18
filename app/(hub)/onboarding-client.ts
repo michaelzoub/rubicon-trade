@@ -2,6 +2,9 @@
 
 import { getAccessToken } from "@privy-io/react-auth";
 import { readCard, readPredictionDeck, type Card, type NextCard } from "@/lib/socialtrading/onboarding-cards";
+import { readProfileModel, type ProfileModel } from "@/lib/socialtrading/profile-model";
+import type { Probe } from "@/lib/socialtrading/profile-probe";
+import type { OnboardingAnswers } from "@/lib/socialtrading/onboarding";
 
 export type CardRequest = { confidence: number | null; knowledge: number | null; priors: { text: string; direction: string; category: string; confidence?: number; years?: number }[]; ownBelief: string; asked: string[]; kinds: string[]; intent?: "swipe" | "card" | "deck"; focusCategory?: string };
 export type CardFetcher = (input: CardRequest, signal?: AbortSignal) => Promise<NextCard>;
@@ -42,4 +45,22 @@ export const fetchPredictionDeck: DeckFetcher = async (input, signal) => {
   const cards = readPredictionDeck(body.predictions);
   if (!cards) throw new Error("The next questions could not be written.");
   return cards;
+};
+
+export type ProbeRequest = { model: ProfileModel; knowledge: number | null; confidence: number | null; answers: OnboardingAnswers };
+export type ProbeResult = { model: ProfileModel; probe: Probe | null };
+export type ProbeFetcher = (input: ProbeRequest, signal?: AbortSignal) => Promise<ProbeResult>;
+
+/** One turn of the adaptive arm. The model travels whole in both directions;
+ * the arm only ever renders what comes back. */
+export const fetchNextProbe: ProbeFetcher = async (input, signal) => {
+  const response = await fetch("/api/trade/onboarding/probe", {
+    method: "POST", signal, headers: await onboardingHeaders(),
+    body: JSON.stringify(input),
+  });
+  const body = await response.json().catch(() => ({})) as { model?: unknown; probe?: Probe; done?: boolean; error?: string };
+  if (!response.ok) throw new Error(body.error ?? "The next question could not be chosen.");
+  const model = readProfileModel(body.model);
+  if (!model) throw new Error("The next question could not be chosen.");
+  return { model, probe: body.done ? null : body.probe ?? null };
 };

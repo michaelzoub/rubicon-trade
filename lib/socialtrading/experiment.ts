@@ -1,9 +1,10 @@
-/** The onboarding A/B layer. Two arms ask for the same profile by different
- * means: `tree` walks the fixed decision tree, `inference` lets the model write
- * each next card from what it has already learned. Assignment is a pure
+/** The onboarding A/B/C layer. Three arms ask for the same profile by
+ * different means: `tree` walks the fixed decision tree, `inference` lets the
+ * model write each next card, and `adaptive` scores the accumulated evidence
+ * with Jev and picks the next probe from what it still does not know. Assignment is a pure
  * function of the user id, so a reload, a second tab, and the compare page all
  * agree on which arm someone is in without storing anything. */
-export const VARIANTS = ["tree", "inference"] as const;
+export const VARIANTS = ["tree", "inference", "adaptive"] as const;
 export type Variant = (typeof VARIANTS)[number];
 
 export const isVariant = (value: unknown): value is Variant => typeof value === "string" && (VARIANTS as readonly string[]).includes(value);

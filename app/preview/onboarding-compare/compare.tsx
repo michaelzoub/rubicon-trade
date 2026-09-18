@@ -5,11 +5,11 @@ import { VARIANTS, type Variant } from "@/lib/socialtrading/experiment";
 import { loadRuns, summarize, RUNS_KEY, type Run } from "@/lib/socialtrading/onboarding-metrics";
 import "../../(hub)/onboarding.css";
 
-const LABEL: Record<Variant, string> = { tree: "Tree", inference: "Inference" };
+const LABEL: Record<Variant, string> = { tree: "Tree", inference: "Inference", adaptive: "Adaptive" };
 const seconds = (ms: number) => ms >= 1000 ? `${Math.round(ms / 1000)}s` : `${ms}ms`;
 const percent = (value: number) => `${Math.round(value * 100)}%`;
 
-/** Both arms side by side. The numbers say which one people finish; the theses
+/** Every arm side by side. The numbers say which one people finish; the theses
  * underneath are what actually decides which onboarding is better, so they are
  * shown in full rather than summarised. */
 export function CompareRuns() {

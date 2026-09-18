@@ -1,0 +1,131 @@
+import { CATEGORIES, type OnboardingAnswers } from "./onboarding";
+import type { ProbeKind, ProfileModel } from "./profile-model";
+import { PROBE_TOPICS, probeTopic, topicName, type ProbeTopic, type TopicId } from "./profile-topics";
+
+/**
+ * The sequencer. Every threshold in adaptive onboarding lives here, in pure
+ * arithmetic over what Jev read — the model is never asked what to do next,
+ * only what the evidence says. That split is the point: a probability is a
+ * judgment, and choosing a question is a policy.
+ */
+
+/** Hard ceiling. A run is seven probes at most, however unsure we still are. */
+export const MAX_PROBES = 7;
+/** Floor. Below this a run always continues, so a decisive person still gets a
+ * sequence with a shape rather than two questions and a summary. */
+export const MIN_PROBES = 3;
+/** Below this probability a topic is never asked about. */
+export const SUPPRESS = 0.15;
+/** A reading this sure, this far from the middle, is knowledge — not a question. */
+export const KNOWN_CERTAINTY = 0.8, KNOWN_MARGIN = 0.3;
+/** Past the floor, a best candidate worth less than this ends the run. */
+export const MIN_VALUE = 0.05;
+/** How close the top three must be before we let the person break the tie. */
+export const TIE = 0.15;
+
+export const probeId = (id: TopicId) => `probe:${id}`;
+
+export type Candidate = { topic: ProbeTopic; p: number; certainty: number; value: number };
+
+export type Probe = {
+  id: string;
+  kind: ProbeKind;
+  title: string;
+  lead: string;
+  topics: TopicId[];
+  category: string;
+  /** `choice`, `spectrum` and `chips` carry labels; the others explain themselves. */
+  options?: string[];
+};
+
+export type ProbeContext = { knowledge: number; confidence: number; answers: OnboardingAnswers };
+
+/** Four stops, because a spectrum answer is stored as a `scale` index and
+ * `applyAnswer` reads it as `options[value]`. A raw fraction would index nothing. */
+export const SPECTRUM_STOPS = ["Strongly against", "Leaning against", "Leaning toward", "Strongly toward"];
+
+/**
+ * Every topic still worth a question, best first.
+ *
+ * Relevance is the probability itself: a topic they probably care about earns
+ * a question, one they probably do not does not. Uncertainty blends two
+ * different ignorances — the reading sits near the middle, or the model is not
+ * sure of its own reading. Importance is the static prior, so a topic that
+ * barely moves a portfolio cannot win on uncertainty alone.
+ */
+export function rankTopics(model: ProfileModel): Candidate[] {
+  const candidates: Candidate[] = [];
+  for (const belief of model.beliefs) {
+    const topic = probeTopic(belief.topic);
+    if (!topic) continue;
+    if (belief.p < SUPPRESS) continue;
+    if (belief.certainty >= KNOWN_CERTAINTY && Math.abs(belief.p - 0.5) > KNOWN_MARGIN) continue;
+    if (model.asked.includes(probeId(topic.id))) continue;
+    const spread = 1 - Math.abs(2 * belief.p - 1);
+    const uncertainty = 0.6 * spread + 0.4 * (1 - belief.certainty);
+    candidates.push({ topic, p: belief.p, certainty: belief.certainty, value: belief.p * uncertainty * topic.importance });
+  }
+  // The id tiebreak keeps the order stable, so a run is reproducible in a test.
+  return candidates.sort((a, b) => b.value - a.value || a.topic.id.localeCompare(b.topic.id));
+}
+
+const level = (knowledge: number) => Math.max(0, Math.min(3, Math.floor(knowledge)));
+const usedKind = (model: ProfileModel, kind: ProbeKind) => model.evidence.some(e => e.kind === kind);
+
+/**
+ * Which interaction closes this particular gap. Ordered, first match wins.
+ * Every kind but `choice` is spent at most once, so a run never repeats an
+ * instrument — variety is a by-product of the gaps, not a goal of its own.
+ */
+function chooseKind(best: Candidate, ranked: Candidate[], model: ProfileModel, ctx: ProbeContext): ProbeKind {
+  if (model.beliefs.length < 3) return "choice";
+  if (best.topic.geographic && !usedKind(model, "map")) return "map";
+  if (Math.abs(best.p - 0.5) > 0.25 && best.certainty < 0.6 && !usedKind(model, "spectrum")) return "spectrum";
+  const hasHorizon = ctx.answers.responses.some(r => r.years !== undefined);
+  if (best.p > 0.7 && best.certainty > 0.6 && !hasHorizon && !usedKind(model, "pad")) return "pad";
+  if (ranked.length >= 3 && best.value - ranked[2].value <= TIE * best.value && !usedKind(model, "chips")) return "chips";
+  if (ctx.knowledge >= 2 && model.turn >= 4 && !usedKind(model, "text")) return "text";
+  return "choice";
+}
+
+function build(best: Candidate, ranked: Candidate[], model: ProfileModel, ctx: ProbeContext): Probe {
+  const kind = chooseKind(best, ranked, model, ctx);
+  const claim = best.topic.claims[level(ctx.knowledge)];
+  const base = { id: probeId(best.topic.id), category: best.topic.category };
+  if (kind === "chips") {
+    const tied = ranked.slice(0, 3);
+    return { ...base, kind, title: "Which of these actually matter to you?", lead: "Pick the ones you would want watched on your behalf.", topics: tied.map(c => c.topic.id), options: tied.map(c => topicName(c.topic.id)) };
+  }
+  if (kind === "spectrum") return { ...base, kind, title: claim, lead: "How strongly?", topics: [best.topic.id], options: SPECTRUM_STOPS };
+  if (kind === "map") return { ...base, kind, title: claim, lead: "Choose where you think this plays out.", topics: [best.topic.id] };
+  if (kind === "pad") return { ...base, kind, title: claim, lead: "How sure are you, and how soon?", topics: [best.topic.id] };
+  if (kind === "text") return { ...base, kind, title: "What have we not asked about?", lead: "In your own words — one or two lines is plenty.", topics: [best.topic.id] };
+  return { ...base, kind: "choice", title: claim, lead: "Take a side.", topics: [best.topic.id] };
+}
+
+/** Jev never answered, so there is nothing to rank. Walk the seven domains in
+ * order — the fixed sequence is the floor under the adaptive one, not a
+ * competing arm. */
+function fallback(model: ProfileModel, ctx: ProbeContext): Probe | null {
+  const covered = new Set(model.evidence.flatMap(e => e.topics.map(id => probeTopic(id)?.category)));
+  const category = CATEGORIES.find(name => !covered.has(name));
+  const topic = category ? PROBE_TOPICS.find(t => t.category === category) : undefined;
+  if (!topic || !category) return null;
+  return { id: probeId(topic.id), kind: "choice", title: topic.claims[level(ctx.knowledge)], lead: "Take a side.", topics: [topic.id], category };
+}
+
+/**
+ * The next thing to ask, or `null` when the run is over.
+ *
+ * Sequencing, length and instrument are all decided here. Jev contributed the
+ * two numbers on each belief and nothing else.
+ */
+export function getNextProfileProbe(model: ProfileModel, ctx: ProbeContext): Probe | null {
+  if (model.turn >= MAX_PROBES) return null;
+  if (!model.beliefs.length) return fallback(model, ctx);
+  const ranked = rankTopics(model);
+  if (!ranked.length) return null;
+  const best = ranked[0];
+  if (model.turn >= MIN_PROBES && best.value < MIN_VALUE) return null;
+  return build(best, ranked, model, ctx);
+}

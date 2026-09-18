@@ -7,6 +7,7 @@ import { resolveAssignment, type Assignment } from "@/lib/socialtrading/experime
 import { LoadingState } from "../_components/ui";
 import { TreeOnboarding } from "./onboarding-tree";
 import { InferenceOnboarding } from "./onboarding-inference";
+import { AdaptiveOnboarding } from "./onboarding-adaptive";
 
 export type ProfileFlowProps = {
   userId: string; name?: string;
@@ -24,6 +25,8 @@ export function ProfileFlow(props: ProfileFlowProps) {
   const [assignment, setAssignment] = useState<Assignment | null>(null);
   useEffect(() => { setAssignment(resolveAssignment(props.userId, window.location.search)); }, [props.userId]);
   if (!assignment) return <LoadingState label="Loading…" />;
-  const Arm = assignment.variant === "inference" ? InferenceOnboarding : TreeOnboarding;
+  // A record rather than a chain, so a fourth arm is one entry and the
+  // compiler checks that every variant has somewhere to go.
+  const Arm = { tree: TreeOnboarding, inference: InferenceOnboarding, adaptive: AdaptiveOnboarding }[assignment.variant];
   return <Arm {...props} variant={assignment.variant} forced={assignment.forced} />;
 }

@@ -13,7 +13,7 @@ export type Run = {
   /** `fallback` means the inference arm ran the tree's questions because the
    * model was unavailable. Counting those as inference would compare an arm
    * against itself. */
-  source: "tree" | "model" | "fallback";
+  source: "tree" | "model" | "jev" | "fallback";
   startedAt: string;
   endedAt: string | null;
   completed: boolean;
@@ -38,7 +38,7 @@ function readRun(raw: unknown): Run | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
   if (!isVariant(r.variant) || typeof r.id !== "string") return null;
-  const source = ["tree", "model", "fallback"].includes(r.source as string) ? r.source as Run["source"] : "tree";
+  const source = ["tree", "model", "jev", "fallback"].includes(r.source as string) ? r.source as Run["source"] : "tree";
   return {
     id: r.id, variant: r.variant, forced: r.forced === true, source,
     startedAt: str(r.startedAt, 40), endedAt: typeof r.endedAt === "string" ? r.endedAt.slice(0, 40) : null,
