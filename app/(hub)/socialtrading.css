@@ -2,6 +2,12 @@
 .socialtrading-page { min-height: 100svh; }
 .socialtrading-main { padding-block: clamp(3rem, 8vh, 6rem); }
 .socialtrading-flow { width: 100%; margin-inline: auto; }
+.socialtrading-page.is-onboarding { height: 100svh; min-height: 0; overflow: hidden; }
+.socialtrading-page.is-onboarding .socialtrading-main,
+.socialtrading-page.is-onboarding .container.socialtrading-main { display: grid; align-items: stretch; height: 100%; min-height: 0; width: 100%; max-width: none; margin: 0; padding: 0; overflow: hidden; }
+.socialtrading-page.is-onboarding .socialtrading-flow { height: 100%; max-height: none; display: grid; min-height: 0; }
+.preview-experience.is-onboarding { display: flex; flex-direction: column; height: 100svh; overflow: hidden; }
+.preview-experience.is-onboarding > .socialtrading-page { flex: 1; height: auto; min-height: 0; }
 .socialtrading-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(17rem, .64fr); gap: clamp(3rem, 7vw, 7rem); align-items: start; }
 .socialtrading-question { min-width: 0; }
 .socialtrading-progress-wrap { display: grid; grid-template-columns: auto minmax(5rem, 11rem); align-items: center; gap: .8rem; width: fit-content; margin-bottom: 2rem; }

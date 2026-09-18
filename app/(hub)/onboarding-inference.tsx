@@ -10,8 +10,10 @@ import { DEFAULT_PLAN } from "@/lib/socialtrading/plans";
 import { suggestedThemes } from "@/lib/socialtrading/themes";
 import { generatedAgentName } from "@/lib/socialtrading/agents/naming";
 import { LoadingState } from "../_components/ui";
-import { ProfileCard } from "./profile-card";
+import { OnboardingAgentPeek } from "./onboarding-agent";
+import { FAMILIARITY_TITLE, familiarityFields, scoreFamiliarity, type FamiliarityResult } from "@/lib/socialtrading/familiarity";
 import { FoundationScale } from "./onboarding-drag";
+import { FamiliarityCheck } from "./familiarity-check";
 import { PredictionPad } from "./onboarding-chart";
 import { PredictionDeck } from "./onboarding-deck";
 import { OnboardingCard } from "./onboarding-card";
@@ -93,7 +95,7 @@ export function InferenceOnboarding({ userId, name, onComplete, completing = fal
   // logging either of those by object identity invented cards that never showed.
   const position = atRules ? { id: "rules", kind: "rules" }
     : index === SEEDS.clarity ? { id: "clarity", kind: "scale" }
-    : index === SEEDS.knowledge ? { id: "knowledge", kind: "scale" }
+    : index === SEEDS.knowledge ? { id: "knowledge", kind: "chips" }
     : card ? { id: card.id, kind: card.kind } : null;
   useEffect(() => {
     if (loaded && position) log.enter(position.id, position.kind);
@@ -103,8 +105,14 @@ export function InferenceOnboarding({ userId, name, onComplete, completing = fal
 
   function next() {
     if (index === SEEDS.clarity && a.confidence === null) return setError("Choose how clear the future feels to you.");
-    if (index === SEEDS.knowledge && knowledge === null) return setError("Choose a stop on your investing journey.");
+    if (index === SEEDS.knowledge) { completeKnowledge(scoreFamiliarity(profile.investorAnswers.selectedConceptIds ?? [])); return; }
     if (card && card.kind === "pad" && !a.responses.some(r => r.confidence !== undefined)) return setError("Place the dot to continue.");
+    setIndex(i => i + 1);
+  }
+  function completeKnowledge(result: FamiliarityResult) {
+    const nextKnowledge = familiarityFields(result);
+    const knowledgeChanged = profile.investorAnswers.knowledge !== nextKnowledge.knowledge;
+    update(knowledgeChanged ? { responses: [], strongest: [] } : {}, { investorAnswers: { ...profile.investorAnswers, ...nextKnowledge } });
     setIndex(i => i + 1);
   }
   function back() { log.back(); setIndex(i => Math.max(SEEDS.clarity, i - 1)); }
@@ -131,7 +139,7 @@ export function InferenceOnboarding({ userId, name, onComplete, completing = fal
   const positive = a.responses.filter(r => r.direction === "yes" && a.strongest.includes(r.id)).map(r => r.text).join(" ");
   const preview: InvestingProfile = { ...profile, thesis: a.strongest.length || a.ownBelief.trim() ? onboardingThesis(a) : "", themes: suggestedThemes(`${positive} ${a.ownBelief}`), step: atRules ? 5 : index >= 1 ? 4 : index >= 0 ? 3 : 2 };
   const step = Math.min(TOTAL, index + 4);
-  const title = index === SEEDS.clarity ? "How much of the future already feels clear to you?" : index === SEEDS.knowledge ? "How familiar does investing feel?" : atRules ? "Your outlook. Your rules." : card?.title ?? "Your agent is thinking…";
+  const title = index === SEEDS.clarity ? "How much of the future already feels clear to you?" : index === SEEDS.knowledge ? FAMILIARITY_TITLE : atRules ? "Your outlook. Your rules." : card?.title ?? "Your agent is thinking…";
   // A generated card may need a second line; the fixed scenes never do, and a
   // card you answer by swiping or dragging explains itself without one.
   const lead = index >= 0 && card && !["binary", "pad"].includes(card.kind) ? card.lead : "";
@@ -152,7 +160,7 @@ export function InferenceOnboarding({ userId, name, onComplete, completing = fal
         >
           <h1 ref={heading} tabIndex={-1} className="sr-only outline-none">{title}</h1>
           {index === SEEDS.clarity && <FoundationScale kind="clarity" value={a.confidence} onChange={confidence => update({ confidence })} />}
-          {index === SEEDS.knowledge && <FoundationScale kind="knowledge" value={knowledge} onChange={value => update({ responses: [], strongest: [] }, { investorAnswers: { ...profile.investorAnswers, knowledge: value } })} />}
+          {index === SEEDS.knowledge && <FamiliarityCheck showTitle={false} hideContinue busy={busy} initialSelectedIds={profile.investorAnswers.selectedConceptIds} onChange={ids => update({}, { investorAnswers: { ...profile.investorAnswers, selectedConceptIds: ids } })} onComplete={completeKnowledge} />}
           {loading && !card && <div className="onb-thinking" role="status"><Sparkles size={18} strokeWidth={1.6} /><span>Reading what you’ve told it so far…</span></div>}
           {card && !atRules && <CardInput card={card} answers={a} onAnswer={value => { answer(card, value); if (value.kind === "binary") setIndex(i => i + 1); }} />}
           {atRules && <>
@@ -163,7 +171,7 @@ export function InferenceOnboarding({ userId, name, onComplete, completing = fal
         </OnboardingCard>
       </div>
     </div>
-    <ProfileCard profile={preview} name={name} agentName={agentCreation ? generatedAgentName(preview, name, userId) : undefined} />
+    <OnboardingAgentPeek profile={preview} name={name} agentName={agentCreation ? generatedAgentName(preview, name, userId) : undefined} />
   </div>;
 }
 

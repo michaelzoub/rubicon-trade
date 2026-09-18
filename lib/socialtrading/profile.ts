@@ -1,3 +1,4 @@
+import { isFamiliarityTier, readSelectedConceptIds, type FamiliarityTier } from "./familiarity";
 import { readOnboarding, type OnboardingAnswers } from "./onboarding";
 import { isThemeId, type ThemeId } from "./themes";
 
@@ -20,6 +21,9 @@ export type Limits = { perTrade: string; daily: string; weekly: string };
 export type InvestorAnswers = {
   onboarding?: OnboardingAnswers;
   knowledge: number | null;
+  familiarityTier?: FamiliarityTier | null;
+  familiarityScore?: number | null;
+  selectedConceptIds?: number[];
   guidedTest: boolean;
   opportunityDrivers: string[];
   esgPriority: number | null;
@@ -107,6 +111,9 @@ export function readProfile(raw: string | null, userId: string): InvestingProfil
       : rawAnswers && typeof rawAnswers === "object" ? {
         onboarding: readOnboarding(rawAnswers.onboarding),
         knowledge: Number.isInteger(rawAnswers.knowledge) && rawAnswers.knowledge >= 0 && rawAnswers.knowledge <= 4 ? rawAnswers.knowledge : null,
+        familiarityTier: isFamiliarityTier(rawAnswers.familiarityTier) ? rawAnswers.familiarityTier : null,
+        familiarityScore: Number.isInteger(rawAnswers.familiarityScore) && rawAnswers.familiarityScore >= 0 && rawAnswers.familiarityScore <= 30 ? rawAnswers.familiarityScore : null,
+        selectedConceptIds: readSelectedConceptIds(rawAnswers.selectedConceptIds),
         guidedTest: !!rawAnswers.guidedTest,
         opportunityDrivers: Array.isArray(rawAnswers.opportunityDrivers) ? rawAnswers.opportunityDrivers.filter((v: unknown): v is string => typeof v === "string").slice(0, 4) : [],
         esgPriority: Number.isInteger(rawAnswers.esgPriority) && rawAnswers.esgPriority >= 0 && rawAnswers.esgPriority <= 4 ? rawAnswers.esgPriority : null,

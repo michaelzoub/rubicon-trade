@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import type { CardFetcher } from "./onboarding-client";
+import { FAMILIARITY_CONCEPTS } from "../../lib/socialtrading/familiarity";
 import { loadRuns } from "../../lib/socialtrading/onboarding-metrics";
 
 vi.mock("@privy-io/react-auth", () => ({ getAccessToken: vi.fn(async () => null) }));
@@ -38,7 +39,8 @@ async function render(nextCard: CardFetcher) {
 /** Through the two shared foundations and the seed view. */
 async function foundations() {
   await click("I know what I believe"); await click("Continue");
-  await click("Experienced"); await click("Continue");
+  for (const concept of FAMILIARITY_CONCEPTS) await click(concept.label);
+  await click("Continue");
   await click("I see it");
 }
 

@@ -40,8 +40,8 @@ export const NAV = [
   { href: "/activity", label: "Memory", icon: Clock, exact: true },
 ] as const;
 
-function Frame({ children, wide = false, accountStatus, nav }: { children: ReactNode; wide?: boolean; accountStatus?: ReactNode; nav?: ReactNode }) {
-  return <div className="landing-page socialtrading-page"><HoverTooltips /><SiteHeader accountStatus={accountStatus} session={!accountStatus} nav={nav} /><main className={`container socialtrading-main${wide ? " is-hub" : ""}`}><div className="dashboard-theme socialtrading-flow">{children}</div></main></div>;
+function Frame({ children, wide = false, onboarding = false, accountStatus, nav }: { children: ReactNode; wide?: boolean; onboarding?: boolean; accountStatus?: ReactNode; nav?: ReactNode }) {
+  return <div className={`landing-page socialtrading-page${onboarding ? " is-onboarding" : ""}`}><HoverTooltips />{!onboarding && <SiteHeader accountStatus={accountStatus} session={!accountStatus} nav={nav} />}<main className={`container socialtrading-main${wide ? " is-hub" : ""}`}><div className="dashboard-theme socialtrading-flow">{children}</div></main></div>;
 }
 
 export function HubShell({ children }: { children: ReactNode }) {
@@ -99,7 +99,7 @@ function Boot({ userId, name, children }: { userId: string; name?: string; child
   }
 
   if (state === undefined) return <Frame><LoadingState label="Loading your profile…" /></Frame>;
-  if (!state) return <Frame><ProfileFlow userId={userId} name={name} onComplete={complete} completing={saving} serverError={error} /></Frame>;
+  if (!state) return <Frame onboarding><ProfileFlow userId={userId} name={name} onComplete={complete} completing={saving} serverError={error} /></Frame>;
   return <HubProvider userId={userId} name={name} initial={state} initialAccount={account}><Hub>{children}</Hub></HubProvider>;
 }
 
