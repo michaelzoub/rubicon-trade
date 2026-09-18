@@ -101,17 +101,10 @@ Append inside the `TOPICS` array in `lib/socialtrading/topics.ts`, after `cloud-
 ```ts
   { id: "robotics", name: "Robotics & automation", themes: ["tech"], keywords: /robot|automation|warehouse|factory|autonomous/i, assets: ["isrg", "nvda"] },
   { id: "defence-sovereignty", name: "Defence & sovereignty", themes: ["tech", "energy"], keywords: /defen[cs]e|sovereign|tariff|supply chain|reshor|onshor|military/i, assets: ["rtx"] },
-  { id: "climate-adaptation", name: "Climate adaptation", themes: ["energy"], keywords: /climate|adaptation|flood|resilien|infrastructure|水|weather/i, assets: ["pwr"] },
+  { id: "climate-adaptation", name: "Climate adaptation", themes: ["energy"], keywords: /climate|adaptation|flood|resilien|infrastructure|weather/i, assets: ["pwr"] },
   { id: "stablecoins", name: "Stablecoins & payments", themes: ["crypto"], keywords: /stablecoin|usdc|payment rail|settle|remittance/i, assets: ["usdc", "coin"] },
   { id: "future-of-work", name: "Work & labour", themes: ["consumer", "tech"], keywords: /\bwork\b|labour|labor|employ|job|workforce|productivity/i, assets: ["now"] },
 ```
-
-Remove the stray `水` character from the `climate-adaptation` regex before saving — it is not intended. The correct regex is:
-
-```ts
-keywords: /climate|adaptation|flood|resilien|infrastructure|weather/i,
-```
-
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run lib/socialtrading/topics.test.ts && npm run typecheck`
@@ -841,12 +834,22 @@ const ctx = (patch: Partial<ProbeContext> = {}): ProbeContext =>
 const spent = (kind: Evidence["kind"], id: string): Evidence =>
   ({ id, at: "2026-09-18T10:00:00.000Z", kind, prompt: "asked", topics: ["robotics"], answer: { kind: "binary", direction: "yes" } });
 
-/** Four known topics, so rule 1 ("fewer than three beliefs") is satisfied. */
+/**
+ * Four low-value beliefs. They exist only to get past rule 1 ("fewer than
+ * three topics read"), so each test's own topic is the one that actually wins
+ * the ranking. Their values are spread apart deliberately, so the chips rule
+ * (top three within 15%) does not fire by accident.
+ *
+ *   medical-technology  0.5 * 0.64 * 0.50 = 0.160
+ *   future-of-work     0.45 * 0.64 * 0.50 = 0.144
+ *   consumer-trends     0.4 * 0.60 * 0.35 = 0.084
+ *   decentralized-fin.  0.3 * 0.52 * 0.45 = 0.070
+ */
 const settled: Belief[] = [
-  { topic: "semiconductors", p: 0.7, certainty: 0.4 },
-  { topic: "power-grid", p: 0.6, certainty: 0.4 },
-  { topic: "ai-applications", p: 0.6, certainty: 0.4 },
-  { topic: "biotech", p: 0.5, certainty: 0.4 },
+  { topic: "medical-technology", p: 0.5, certainty: 0.9 },
+  { topic: "future-of-work", p: 0.45, certainty: 0.75 },
+  { topic: "consumer-trends", p: 0.4, certainty: 0.7 },
+  { topic: "decentralized-finance", p: 0.3, certainty: 0.6 },
 ];
 
 describe("choosing the next probe", () => {
@@ -870,12 +873,14 @@ describe("choosing the next probe", () => {
   });
 
   it("puts a map in front of a geographic topic, once", () => {
+    // 0.95 * 0.44 * 0.8 = 0.334, comfortably above every settled belief.
     const geo: Belief[] = [...settled, { topic: "defence-sovereignty", p: 0.95, certainty: 0.05 }];
     expect(getNextProfileProbe(model(geo, { turn: 2 }), ctx())).toMatchObject({ kind: "map", topics: ["defence-sovereignty"] });
-    expect(getNextProfileProbe(model(geo, { turn: 2, evidence: [spent("map", "probe:climate-adaptation")] }), ctx()).kind).not.toBe("map");
+    expect(getNextProfileProbe(model(geo, { turn: 2, evidence: [spent("map", "probe:climate-adaptation")] }), ctx())!.kind).not.toBe("map");
   });
 
   it("asks how strongly when direction is read but strength is not", () => {
+    // 0.85 * 0.44 * 0.75 = 0.281, the top candidate.
     const leaning: Belief[] = [...settled, { topic: "robotics", p: 0.85, certainty: 0.35 }];
     const probe = getNextProfileProbe(model(leaning, { turn: 2 }), ctx());
     expect(probe).toMatchObject({ kind: "spectrum", topics: ["robotics"] });
@@ -884,6 +889,7 @@ describe("choosing the next probe", () => {
   });
 
   it("asks for conviction and horizon once a view is settled and no horizon exists", () => {
+    // 0.78 * 0.384 * 0.75 = 0.225, the top candidate.
     const strong: Belief[] = [...settled, { topic: "robotics", p: 0.78, certainty: 0.7 }];
     expect(getNextProfileProbe(model(strong, { turn: 2 }), ctx())).toMatchObject({ kind: "pad", topics: ["robotics"] });
   });
@@ -891,7 +897,7 @@ describe("choosing the next probe", () => {
   it("does not ask for a horizon that onboarding already has", () => {
     const strong: Belief[] = [...settled, { topic: "robotics", p: 0.78, certainty: 0.7 }];
     const answers = { ...newOnboarding(), responses: [{ id: "r", category: "Technology", text: "t", direction: "yes" as const, years: 5 }] };
-    expect(getNextProfileProbe(model(strong, { turn: 2 }), ctx({ answers })).kind).not.toBe("pad");
+    expect(getNextProfileProbe(model(strong, { turn: 2 }), ctx({ answers }))!.kind).not.toBe("pad");
   });
 
   it("lets the person break a three-way tie with chips", () => {
@@ -1106,11 +1112,12 @@ describe("reading the evidence", () => {
   it("turns a score into a probability and keeps the confidence as certainty", async () => {
     fetchMock.mockResolvedValue(reply({ "ai-applications": score(4, 0.82), "consumer-trends": score(0, 0.4), robotics: score(2, 0.5) }));
     const beliefs = await inferBeliefs(evidence, { confidence: 2, knowledge: 1 });
-    expect(beliefs).toEqual([
+    expect(beliefs).toHaveLength(3);
+    expect(beliefs).toEqual(expect.arrayContaining([
       { topic: "ai-applications", p: 1, certainty: 0.82 },
       { topic: "consumer-trends", p: 0, certainty: 0.4 },
       { topic: "robotics", p: 0.5, certainty: 0.5 },
-    ].sort((a, b) => a.topic.localeCompare(b.topic)).sort(() => 0));
+    ]));
   });
 
   it("drops a topic Jev did not answer rather than inventing a reading for it", async () => {
@@ -1124,17 +1131,6 @@ describe("reading the evidence", () => {
     expect(await inferBeliefs(evidence, { confidence: 1, knowledge: 1 })).toBeNull();
   });
 });
-```
-
-The third test's trailing `.sort(...)` chain is noise — write the expectation as an unordered comparison instead:
-
-```ts
-    expect(beliefs).toHaveLength(3);
-    expect(beliefs).toEqual(expect.arrayContaining([
-      { topic: "ai-applications", p: 1, certainty: 0.82 },
-      { topic: "consumer-trends", p: 0, certainty: 0.4 },
-      { topic: "robotics", p: 0.5, certainty: 0.5 },
-    ]));
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1595,35 +1591,60 @@ Expected: FAIL — `Cannot find module './onboarding-adaptive'`.
 
 - [ ] **Step 3: Write the arm**
 
-Create `app/(hub)/onboarding-adaptive.tsx`. Start from `app/(hub)/onboarding-inference.tsx` — it already has the profile store, the run log, the two foundation scenes, the rules scene and `finish()` in exactly the shape this arm needs. Replace only the middle.
+Create `app/(hub)/onboarding-adaptive.tsx` by copying `app/(hub)/onboarding-inference.tsx` in full and renaming the component to `AdaptiveOnboarding`. That file already holds the profile store, the run log, the two foundation scenes, the rules scene, `update()` and `finish()` in exactly the shape this arm needs. Keep all of that byte-for-byte and replace only what is listed below.
 
-Structure:
+**Delete** from the copy: the `cards` / `loading` / `requested` state, the `request` callback, the `atRules` derivation, the old `TOTAL` constant, the `fetchDeck` prop, and `CardInput`'s `binary` and `pad` branches. Keep `CardInput`'s `chips` and `text` branches — the adaptive arm renders both.
+
+**Replace the imports** with the inference arm's list minus `fetchPredictionDeck`, `DeckFetcher`, `predictions` and `PREDICTION_COUNT`, plus:
 
 ```tsx
-"use client";
-
-// Imports mirror onboarding-inference.tsx, plus:
-import { MAX_PROBES } from "@/lib/socialtrading/profile-probe";
-import type { Probe } from "@/lib/socialtrading/profile-probe";
+import { getNextProfileProbe, MAX_PROBES, type Probe } from "@/lib/socialtrading/profile-probe";
 import { newProfileModel, recordEvidence, type Evidence, type ProbeAnswer, type ProfileModel } from "@/lib/socialtrading/profile-model";
+import { applyAnswer, type CardKind } from "@/lib/socialtrading/onboarding-cards";
 import { fetchNextProbe, type ProbeFetcher } from "./onboarding-client";
 import { GeographyMap } from "./onboarding-geo";
 import { SmoothRange, intervalAt } from "./onboarding-drag";
+import { PredictionPad } from "./onboarding-chart";
+import { PredictionDeck, DealingDeck } from "./onboarding-deck";
+```
 
-/** Two foundations, up to seven probes, then the rules. */
+**Add** at module scope:
+
+```tsx
+/** Two foundations, up to seven probes, then the rules. Seven is a ceiling:
+ * a run that runs out of worthwhile questions stops short of it. */
 const TOTAL = 2 + MAX_PROBES + 1;
-const SEEDS = { clarity: -2, knowledge: -1 } as const;
 
-export function AdaptiveOnboarding({ /* …ArmProps… */ fetchProbe = fetchNextProbe }: ArmProps & { fetchProbe?: ProbeFetcher }) {
-  // …useProfileStore / useRunLog / update() / finish() exactly as the inference arm…
+/** A probe kind names an interaction; a card kind names an answer shape.
+ * `applyAnswer` speaks the second, so the two are mapped rather than merged. */
+const cardKind = (kind: Probe["kind"]): CardKind =>
+  kind === "spectrum" ? "scale" : kind === "choice" ? "binary" : kind === "map" ? "binary" : kind;
+```
+
+**Change the signature** to:
+
+```tsx
+export function AdaptiveOnboarding({ userId, onComplete, completing = false, serverError = "", persist = true, agentCreation = false, plan = DEFAULT_PLAN, variant, forced, fetchProbe = fetchNextProbe }: ArmProps & { fetchProbe?: ProbeFetcher }) {
+```
+
+**Replace the deck state** with:
+
+```tsx
   const [model, setModel] = useState<ProfileModel>(newProfileModel);
   const [probe, setProbe] = useState<Probe | null>(null);
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [position, setPosition] = useState(0.5);
+  const [regions, setRegions] = useState<string[]>([]);
+  const [pad, setPad] = useState({ confidence: 75, years: 5 });
+```
 
-  /** One turn. A failed turn falls back to the local sequencer over the model
-   * we already hold, so an unreachable endpoint walks the seven domains
-   * instead of stranding anyone mid-run. */
+**Add the turn**, in place of the deleted `request` callback:
+
+```tsx
+  /** One turn. A failed request falls back to the local sequencer over the
+   * model we already hold, so an unreachable endpoint walks the seven domains
+   * rather than stranding anyone mid-run. */
   const advance = useCallback(async (current: ProfileModel) => {
     setLoading(true);
     try {
@@ -1640,40 +1661,69 @@ export function AdaptiveOnboarding({ /* …ArmProps… */ fetchProbe = fetchNext
     } finally { setLoading(false); }
   }, [fetchProbe, knowledge, a, log]);
 
-  /** An answer is two separate writes: evidence into the model, and the same
-   * answer folded into OnboardingAnswers so the thesis reads identically to
-   * the other two arms. Neither one touches beliefs. */
+  /** An answer is two separate writes: the evidence entry, and the same answer
+   * folded into `OnboardingAnswers` so the thesis reads identically to the
+   * other two arms. Neither one touches `beliefs` — deciding what an answer
+   * means is the model's job, on the next turn. */
   function answerProbe(p: Probe, answer: ProbeAnswer) {
     const entry: Evidence = { id: p.id, at: new Date().toISOString(), kind: p.kind, prompt: p.title, topics: p.topics, answer };
     const next = recordEvidence(model, entry);
     setModel(next);
-    if (answer.kind !== "map") update(applyAnswer(a, { id: p.id, kind: cardKind(p.kind), title: p.title, lead: p.lead, category: p.category, ...(p.options ? { options: p.options } : {}) }, answer));
-    else update({ ownBelief: `${a.ownBelief} ${p.title} ${answer.regions.join(", ")}.`.trim().slice(0, 300) });
+    setProbe(null);
+    setPosition(0.5); setRegions([]); setPad({ confidence: 75, years: 5 });
+    if (answer.kind === "map") update({ ownBelief: `${a.ownBelief} ${p.title} ${answer.regions.join(", ")}.`.trim().slice(0, 300) });
+    else update(applyAnswer(a, { id: p.id, kind: cardKind(p.kind), title: p.title, lead: p.lead, category: p.category, ...(p.options ? { options: p.options } : {}) }, answer));
     void advance(next);
   }
-  // …
-}
-
-/** A probe kind names an interaction; a card kind names an answer shape.
- * `applyAnswer` speaks the second, so the two are mapped rather than merged. */
-const cardKind = (kind: Probe["kind"]): CardKind =>
-  kind === "spectrum" ? "scale" : kind === "choice" ? "binary" : kind === "map" ? "binary" : kind;
 ```
 
-Rendering dispatches on `probe.kind`:
+**Replace the `useEffect` that fetched the deck** with one that opens the first turn once the foundations are behind us:
+
+```tsx
+  useEffect(() => {
+    if (!loaded || index < 0 || probe || done || loading) return;
+    void advance(model);
+  }, [loaded, index, probe, done, loading, model, advance]);
+```
+
+**Replace the `position` derivation** — rename it `logged`, so it does not collide with the spectrum's `position` state — so a turn in flight logs nothing:
+
+```tsx
+  const logged = done ? { id: "rules", kind: "rules" }
+    : index === SEEDS.clarity ? { id: "clarity", kind: "scale" }
+    : index === SEEDS.knowledge ? { id: "knowledge", kind: "chips" }
+    : probe ? { id: probe.id, kind: probe.kind } : null;
+  useEffect(() => { if (loaded && logged) log.enter(logged.id, logged.kind); }, [loaded, logged?.id, logged?.kind, log]);
+```
+
+**Replace `next()`** so it no longer walks an index past the foundations — after the second foundation, `advance` drives the run:
+
+```tsx
+  function next() {
+    if (index === SEEDS.clarity && a.confidence === null) return setError("Choose how clear the future feels to you.");
+    if (index === SEEDS.knowledge) { completeKnowledge(scoreFamiliarity(profile.investorAnswers.selectedConceptIds ?? [])); return; }
+    setIndex(0);
+  }
+```
+
+`back()` stays as it is; from the first probe it lands on the knowledge scene, which is where it should.
+
+**Progress** is `Math.min(TOTAL, model.turn + 3)` over `TOTAL`, and every `atRules` in the copied JSX becomes `done`.
+
+**Render** by dispatching on `probe.kind`, in place of the inference arm's single `<CardInput>`:
 
 | Kind | Render | Answer produced |
 | --- | --- | --- |
-| `choice` | `<PredictionDeck card={{ id, category, text: probe.title }} answered={model.turn} total={MAX_PROBES} onVote={d => answerProbe(probe, { kind: "binary", direction: d })} />` | `{ kind: "binary", direction }` |
-| `spectrum` | `<SmoothRange value={position} label={probe.title} valueText={probe.options![intervalAt(position)]} onChange={setPosition} onCommit={() => answerProbe(probe, { kind: "scale", value: intervalAt(position) })} />` | `{ kind: "scale", value }` — the interval, never the raw fraction |
-| `map` | `<GeographyMap selected={regions} thesis="" onSelected={setRegions} onThesis={() => {}} />` with Continue calling `answerProbe(probe, { kind: "map", regions })` | `{ kind: "map", regions }` |
-| `pad` | `<PredictionPad response={{ id: probe.id, category: probe.category, text: probe.title, direction: "yes" }} onChange={setPad} />` with Continue calling `answerProbe(probe, { kind: "pad", confidence, years })` | `{ kind: "pad", confidence, years }` |
-| `chips` | The chip buttons from `CardInput` in `onboarding-inference.tsx:160` | `{ kind: "chips", values }` |
-| `text` | The textarea from `CardInput` in `onboarding-inference.tsx` | `{ kind: "text", value }` |
+| `choice` | `<PredictionDeck card={{ id: probe.id, category: probe.category, text: probe.title }} answered={model.turn} total={MAX_PROBES} onVote={d => answerProbe(probe, { kind: "binary", direction: d })} />` | `{ kind: "binary", direction }` |
+| `spectrum` | `<SmoothRange value={position} label={probe.title} valueText={probe.options![intervalAt(position)]} onChange={setPosition} />`, with Continue calling `answerProbe(probe, { kind: "scale", value: intervalAt(position) })` | `{ kind: "scale", value }` — the interval, never the raw fraction |
+| `map` | `<GeographyMap selected={regions} thesis="" onSelected={setRegions} onThesis={() => {}} />`, with Continue calling `answerProbe(probe, { kind: "map", regions })` | `{ kind: "map", regions }` |
+| `pad` | `<PredictionPad response={{ id: probe.id, category: probe.category, text: probe.title, direction: "yes", ...pad }} onChange={r => setPad({ confidence: r.confidence ?? 75, years: r.years ?? 5 })} />`, with Continue calling `answerProbe(probe, { kind: "pad", ...pad })` | `{ kind: "pad", confidence, years }` |
+| `chips` | The `chips` branch of `CardInput`, kept from the copy | `{ kind: "chips", values }` |
+| `text` | The `text` branch of `CardInput`, kept from the copy | `{ kind: "text", value }` |
+
+`choice` commits itself on the swipe, so it passes `onNext={undefined}` to `OnboardingCard`. Every other kind keeps the Continue button, wired to the call in its row above.
 
 While `loading` and no probe is in hand, render `<DealingDeck backs={2} answered={model.turn} total={MAX_PROBES} />`, exactly as the inference arm does — logging a card id during that gap would invent cards that never showed.
-
-Progress is `Math.min(TOTAL, model.turn + 3)` over `TOTAL`, so the ring reads against the ceiling and a run that ends early simply stops short.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
