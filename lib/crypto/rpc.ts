@@ -47,6 +47,12 @@ export function clearRpcCache() { cache.clear(); pending.clear(); }
 
 /** Statuses that mean "not now" rather than "no". */
 const TRANSIENT = new Set([408, 425, 429, 500, 502, 503, 504]);
+/** One provider refusing us says nothing about the next one: a shared endpoint
+ * throttles with 403 as readily as 429, and a key can be rejected by one host
+ * while another is wide open. Fatal only when it is the last endpoint left —
+ * otherwise a single refusal killed a purchase that two working providers could
+ * have served. */
+const REFUSED = new Set([401, 403, 404, 410, 451]);
 const ATTEMPTS = 4;
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const statusOf = (error: unknown) => typeof (error as { status?: unknown })?.status === "number" ? (error as { status: number }).status : 0;
@@ -89,8 +95,13 @@ async function send<T>(chainId: number, method: string, params: unknown[]): Prom
         return response.result;
       }
     } catch (error) {
-      if (!TRANSIENT.has(statusOf(error))) throw error;
+      const status = statusOf(error);
+      const elsewhere = REFUSED.has(status) && urls.length > 1;
+      if (!TRANSIENT.has(status) && !elsewhere) throw error;
       failure = error;
+      // A refusal is not congestion: the next endpoint is a different company,
+      // so ask it now rather than sleeping first.
+      if (elsewhere && attempt < ATTEMPTS - 1) continue;
     }
     if (attempt === ATTEMPTS - 1) break;
     await sleep(Math.max(retryAfter(failure), backoff(attempt)));

@@ -31,6 +31,7 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
+    ".next-assets/types/**/*.ts",
     ".next-beliefs/types/**/*.ts",
     ".next-build/types/**/*.ts",
     ".next-buy/types/**/*.ts",
@@ -40,7 +41,7 @@
     ".next-verify/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    ".next-assets/types/**/*.ts"
+    ".next-jev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

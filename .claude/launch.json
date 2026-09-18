@@ -84,6 +84,18 @@
       "env": {
         "RUBICON_BUILD_DIR": ".next-assets"
       }
+    },
+    {
+      "name": "web-jev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "autoPort": true,
+      "env": {
+        "RUBICON_BUILD_DIR": ".next-jev"
+      }
     }
   ]
 }

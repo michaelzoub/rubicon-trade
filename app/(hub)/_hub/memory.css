@@ -84,11 +84,20 @@
 .mem-satellite:hover, .mem-satellite:focus-visible { transform: translate(-50%, -50%) scale(1.5); }
 .mem-satellite:focus-visible { outline: 2px solid var(--id-accent, #4b94ed); outline-offset: 3px; }
 
+/* Sits clear of the trunk: while a chapter is being read the trunk is all
+   there is, and a note across the middle of it would be the only thing read. */
 .mem-empty {
-  position: absolute; inset: auto 0 45%; text-align: center;
+  position: absolute; inset: auto 0 18%; text-align: center;
   font-size: 13px; line-height: 1.8; color: var(--muted, #71717a);
   max-width: 440px; margin-inline: auto;
 }
+
+/* The one way out of a chapter the model could not be read for. */
+.mem-reread {
+  padding: 0; border: 0; background: none; cursor: pointer; font: inherit;
+  color: var(--ink, #18181b); text-decoration: underline; text-underline-offset: 3px;
+}
+.mem-reread:hover { color: var(--accent, #2f7df6); }
 
 /* Position feedback, and the only way through time that does not need a pointer. */
 .mem-ticks { display: flex; gap: 4px; justify-content: center; align-items: flex-end; height: 22px; margin-top: 14px; }

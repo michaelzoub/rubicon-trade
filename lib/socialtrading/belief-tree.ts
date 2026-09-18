@@ -15,8 +15,8 @@ import { THEME_BEARING, bearing } from "./worldview";
  * The numbers come from Jev, a decision model that returns a probability
  * distribution and a calibrated confidence instead of prose. This module is
  * pure and browser-safe: it builds the questions, and it builds the tree from
- * whatever came back — including nothing, in which case it falls back to the
- * arithmetic the graph already carried and says so.
+ * what came back. Until something comes back it builds a bare trunk: no reading
+ * on this tree is ever the view's own arithmetic dressed up as the model's.
  */
 
 export type TreeTier = "root" | "pillar" | "idea";
@@ -58,8 +58,10 @@ export type TreeLink = {
 export type BeliefTree = {
   nodes: TreeNode[];
   links: TreeLink[];
-  /** Whether the alignments on this tree were scored by the model or estimated locally. */
-  source: "jev" | "local";
+  /** `"pending"` is the tree before Jev has answered: the trunk alone, nothing
+   * around it. Every reading drawn here is the model's, so there is nothing to
+   * draw until the model has spoken. */
+  source: "jev" | "pending";
 };
 
 export const ROOT_ID = "__thesis";
@@ -254,14 +256,23 @@ const place = (angle: number, radius: number) => ({
   y: 50 + Math.sin(((angle - 90) * Math.PI) / 180) * radius * SQUASH,
 });
 
+/** The trunk on its own: the thesis, at the centre, measuring nothing yet. */
+const trunk = (plan: TreePlan, themes: string[]): TreeNode => ({
+  id: ROOT_ID, label: plan.thesis || "Your thesis", tier: "root", parent: null,
+  alignment: null, certainty: 1, lineage: 1,
+  themes, origin: "Everything below is measured against this.", scored: true, x: 50, y: 50,
+});
+
 /**
- * The tree for one chapter. `answers` is whatever Jev returned; pass `null`
- * when it could not be reached and every alignment falls back to the strength
- * the graph already carried, with `source: "local"` so the view can say so.
+ * The tree for one chapter. `answers` is what Jev returned; pass `null` while it
+ * is still being asked, or when it could not be reached, and the tree comes back
+ * as a bare trunk marked `pending`. A belief's own alignment still falls back to
+ * the strength the graph carried when a partial answer left that one question
+ * out, but a tree with no answers at all draws nothing.
  */
 export function buildTree(frame: GraphFrame, plan: TreePlan, answers: JevAnswers | null): BeliefTree {
   const { themes, beliefs } = plan;
-  const scored = answers !== null;
+  if (!answers) return { nodes: [trunk(plan, themes)], links: [], source: "pending" };
 
   const score = (id: string, levels: number): { value: number; certainty: number } | null => {
     const answer = answers?.[id];
@@ -311,11 +322,7 @@ export function buildTree(frame: GraphFrame, plan: TreePlan, answers: JevAnswers
   const links: TreeLink[] = [];
 
   // The thesis carries no alignment: it is what everything else is aligned to.
-  nodes.push({
-    id: ROOT_ID, label: plan.thesis || "Your thesis", tier: "root", parent: null,
-    alignment: null, certainty: scored ? 1 : 0, lineage: 1,
-    themes, origin: "Everything below is measured against this.", scored, x: 50, y: 50,
-  });
+  nodes.push(trunk(plan, themes));
 
   const angleOf = new Map<string, number>([[ROOT_ID, 0]]);
   const radiusOf = new Map<string, number>([[ROOT_ID, 0]]);
@@ -411,5 +418,5 @@ export function buildTree(frame: GraphFrame, plan: TreePlan, answers: JevAnswers
     links.push({ id: edge.id, from: edge.from, to: edge.to, kind: "contradiction", strength: 1 });
   }
 
-  return { nodes, links, source: scored ? "jev" : "local" };
+  return { nodes, links, source: "jev" };
 }

@@ -6,7 +6,8 @@ import { tradability } from "@/lib/crypto/tradable";
 import { ArrowUpRight, Check, Eye, EyeOff, HelpCircle, X } from "lucide-react";
 import { HubLink as Link } from "./navigation";
 import { useHubRouter as useRouter } from "./navigation";
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import type { Asset, MessagePart, ProfileChange, TradeIntent } from "@/lib/socialtrading/types";
 import { PERMISSIONS } from "@/lib/socialtrading/profile";
 import { followedAssets, limitStatus } from "@/lib/socialtrading/plans";
@@ -156,10 +157,35 @@ function DiscoveryCard({ asset: initial }: { asset: Asset }) {
  * The card is a small instrument: what it is, what it costs, how it moved, and
  * the trace of how it got here running off the bottom edge. Reaching across
  * the trace reads a point off it; the rest of the card stays exactly as it was. */
+/** What a point on a card's trace says, drawn on the page rather than in the card.
+ *
+ * The card clips itself at its rounded edge so the trace can run off the bottom,
+ * which also means a reading drawn inside it loses half of itself the moment the
+ * point sits low. So the reading leaves the card, the way hints escape clipped
+ * cards everywhere else, and is placed against the trace's place on the screen. */
+function TraceReading({ anchor, hit, children }: { anchor: RefObject<HTMLElement | null>; hit: TraceHit; children: ReactNode }) {
+  const [box, setBox] = useState<DOMRect | null>(null);
+  // The trace moves with the page; where the reading is drawn has to follow it.
+  useLayoutEffect(() => {
+    const measure = () => setBox(anchor.current?.getBoundingClientRect() ?? null);
+    measure();
+    window.addEventListener("scroll", measure, { capture: true, passive: true });
+    window.addEventListener("resize", measure);
+    return () => { window.removeEventListener("scroll", measure, { capture: true }); window.removeEventListener("resize", measure); };
+  }, [anchor, hit]);
+  if (!box) return null;
+  // Above the point, unless the top of the window is closer than the reading is tall.
+  const below = box.top + hit.y < 64;
+  const x = box.left + hit.x;
+  return createPortal(<span className={`trace-chip is-loose${below ? " is-below" : ""}`}
+    style={{ left: Math.min(Math.max(x, 52), window.innerWidth - 52), top: box.top + hit.y + (below ? 14 : -12) }}>{children}</span>, document.body);
+}
+
 function QuietAssetCard({ asset: initial }: { asset: Asset }) {
   const asset = useMarketAsset(initial);
   const { signal } = useHub();
   const tilt = useTilt<HTMLElement>(2);
+  const chart = useRef<HTMLSpanElement>(null);
   const [hit, setHit] = useState<TraceHit | null>(null);
   const points = asset.chart.slice(-40);
   const read = hit ? points[hit.index] : null;
@@ -179,12 +205,12 @@ function QuietAssetCard({ asset: initial }: { asset: Asset }) {
         <strong className="quiet-card-price">{asset.price == null ? "Price unavailable" : usd(asset.price)}</strong>
         <span className="quiet-card-delta"><small>today</small><ChangePill value={asset.change}/></span>
       </span>
-      <span className="quiet-card-chart">
+      <span ref={chart} className="quiet-card-chart">
         {points.length > 1 ? <PriceTrace points={points} height={92} pad={{ top: 30, bottom: 0 }} onScrub={setHit} /> : <small>Price history unavailable</small>}
-        {read && hit && <span className={`trace-chip${hit.y < 52 ? " is-below" : ""}`} style={{ left: Math.min(Math.max(hit.x, 64), hit.width - 64), top: hit.y < 52 ? hit.y + 14 : hit.y - 12 }}><small>{traceDate(read.time)}</small><b>{usd(read.price)}</b></span>}
         <span className="quiet-card-signal">{asset.label || "A new connection"}</span>
       </span>
     </Link>
+    {read && hit && <TraceReading anchor={chart} hit={hit}><small>{traceDate(read.time)}</small><b>{usd(read.price)}</b></TraceReading>}
     </article>
   </div>;
 }

@@ -23,6 +23,14 @@ const erc20Abi = parseAbi([
 export type Holding = {
   chainId: number; chainName: string; wallet: string; token: string;
   symbol: string; decimals: number; balance: string; display: string;
+  /** What the contract actually is, when the catalog pinned it. `AAPLc` alone
+   * asks the agent to guess that a trailing lowercase c means Apple, and asked
+   * to "sell my aapl" it guesses wrong and reports an empty wallet. The scan
+   * list was built from these entries, so the join costs nothing and is only
+   * ever present for a contract this app pinned itself. */
+  name?: string;
+  /** For a tokenized stock, the ticker it tracks: `AAPL` behind `AAPLc`. */
+  underlying?: string;
   /** USDC on a chain the app does not buy from is the classic "wrong network"
    * arrival, and worth naming as such rather than listing as a stray token. */
   kind: 'usdc' | 'token';
@@ -50,6 +58,14 @@ export function candidates(chainId: number, state?: HubState): string[] {
   return [...here];
 }
 
+/** The catalog entry that pinned this contract, by address rather than by
+ * symbol: the symbol comes off the chain and is untrusted, the address is what
+ * `candidates` put in the scan list. */
+function pinned(chainId: number, token: string) {
+  const at = token.toLowerCase();
+  return CATALOG_ENTRIES.find(entry => entry.contracts[chainId as ChainId]?.toLowerCase() === at);
+}
+
 async function readChain(chainId: number, wallet: string, tokens: string[]): Promise<Holding[]> {
   if (!tokens.length) return [];
   const calls = tokens.flatMap(token => [
@@ -73,9 +89,11 @@ async function readChain(chainId: number, wallet: string, tokens: string[]): Pro
       decimals = Number(decodeFunctionResult({ abi: erc20Abi, functionName: 'decimals', data: dec.returnData }));
       if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) continue;
     } catch { continue; }
+    const entry = pinned(chainId, token);
     held.push({
       chainId, chainName: chain(chainId).name, wallet, token,
       symbol, decimals, balance: balance.toString(), display: formatUnits(balance.toString(), decimals),
+      ...(entry ? { name: entry.name, ...(entry.underlying ? { underlying: entry.underlying } : {}) } : {}),
       kind: token === chain(chainId).usdc ? 'usdc' : 'token',
     });
   }

@@ -21,6 +21,10 @@ export type ActivityEvent = { id: string; at: string; kind: ActivityKind; text: 
 export type ProfileChange = { field: string; label: string; before?: string; after?: string };
 export type MessagePart =
   | { type: "text"; text: string }
+  /** Take back the text streamed since the last retract or part. Sent when a
+   * round the model narrated turns out to end in a tool call: what it said
+   * before looking is a guess, and the round after it has the answer. */
+  | { type: "retract"; text: string }
   | { type: "assets"; assets: Asset[]; title?: string }
   | { type: "asset"; asset: Asset }
   | { type: "profile_update"; changes: ProfileChange[] }
@@ -66,6 +70,10 @@ export type HubState = {
 export type ChatEvent =
   | { type: "message"; id: string; at: string }
   | { type: "text"; text: string }
+  /** Take back the text streamed since the last retract or part. Sent when a
+   * round the model narrated turns out to end in a tool call: what it said
+   * before looking is a guess, and the round after it has the answer. */
+  | { type: "retract"; text: string }
   | { type: "part"; part: Exclude<MessagePart, { type: "text" }> }
   | { type: "status"; text: string }
   | { type: "state"; state: HubState }

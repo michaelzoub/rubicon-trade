@@ -24,3 +24,6 @@ tsconfig.tsbuildinfo
 
 # All Next.js build output dirs (.next, .next-buy, .next-beliefs, ...)
 .next*/
+
+# Git worktrees created by Claude Code sessions
+.claude/worktrees/

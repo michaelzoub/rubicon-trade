@@ -1,5 +1,6 @@
 import { convictionsOf } from "../worldview";
 import "server-only";
+import { HubError } from "../server";
 import { limitsError, PERMISSIONS, type InvestingProfile, type Interest, type Permission } from "../profile";
 import { FAMILIARITY_TIER_LABELS } from "../familiarity";
 import { EXPERIENCE } from "../onboarding";
@@ -42,6 +43,14 @@ export function profileSummary(state: HubState) {
   return {
     convictions: convictionsOf(state).map(c => ({ belief: c.text, strength: c.strength, origin: c.origin })),
     thesis: p.thesis, themes: p.themes.map(themeName), watching: p.interests.map(i => i.symbol || i.name),
+    /** Assets it worked out for itself. Held apart from `watching`, which the
+     * person chose — but handed over all the same: an agent that has learned
+     * someone follows AAPL and is never told goes looking for "apple" instead,
+     * and a run with an empty watchlist guesses company names it cannot resolve. */
+    learnedInterest: state.inferred
+      .filter(i => !isThemeId(i.id) && i.weight > .25 && i.confidence >= .4)
+      .sort((a, b) => b.weight * b.confidence - a.weight * a.confidence)
+      .map(i => i.id).slice(0, 8),
     onboarding: {
       investmentKnowledge: p.investorAnswers.familiarityTier != null ? FAMILIARITY_TIER_LABELS[p.investorAnswers.familiarityTier]
         : p.investorAnswers.knowledge === null ? "not answered" : EXPERIENCE[p.investorAnswers.knowledge] ?? "very experienced",
@@ -63,8 +72,24 @@ export function profileSummary(state: HubState) {
 
 const compactAsset = (a: Asset) => ({ id: a.id, symbol: a.symbol, name: a.name, kind: a.kind, price: a.price, changePct: a.change === null ? null : Math.round(a.change * 100) / 100, marketCap: a.marketCap, label: a.label, why: a.reason, themes: a.themes.slice(0, 5), asOf: a.asOf });
 const rank = (assets: Asset[], state: HubState) => assets.map(a => personalize(a, state)).filter(a => (a.score ?? 0) > -5).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+/** A ticker if it looks like one, otherwise whatever the name resolves to.
+ *
+ * The agent does not always hold the symbol — it asked for "apple" and
+ * "enphase-energy", and the second was rejected outright for being longer than
+ * a ticker can be. A scheduled run gets six lookups and no one to correct it,
+ * so a name it can spell should not cost it one. */
+async function stockDetail(id: string, services: AgentServices) {
+  const symbol = id.toUpperCase();
+  if (/^[A-Z0-9.\-]{1,12}$/.test(symbol)) {
+    try { return await services.stocks.detail(symbol); }
+    catch (error) { if (!/valid stock symbol|not found|404/i.test(String((error as Error)?.message ?? ""))) throw error; }
+  }
+  const [match] = await services.stocks.search(id);
+  if (!match) throw new HubError(404, `No asset matches “${id.slice(0, 40)}”. Use its ticker.`);
+  return match;
+}
 async function detail(id: string, kind: Asset["kind"], state: HubState, services: AgentServices) {
-  const asset = kind === "crypto" ? await services.crypto.detail(id.toLowerCase()) : await services.stocks.detail(id.toUpperCase());
+  const asset = kind === "crypto" ? await services.crypto.detail(id.toLowerCase()) : await stockDetail(id, services);
   return personalize(asset, state);
 }
 

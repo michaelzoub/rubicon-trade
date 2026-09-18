@@ -77,6 +77,13 @@ export function reduceChatEvent(message: Message, event: ChatEvent): Message {
     else parts.push({ type: "text", text: event.text });
     return { ...message, parts };
   }
+  if (event.type === "retract") {
+    const parts = [...message.parts], last = parts.at(-1);
+    if (last?.type !== "text" || !last.text.endsWith(event.text)) return message;
+    const kept = last.text.slice(0, -event.text.length);
+    if (kept) parts[parts.length - 1] = { type: "text", text: kept }; else parts.pop();
+    return { ...message, parts };
+  }
   if (event.type === "part") return { ...message, parts: [...message.parts, event.part as MessagePart] };
   if (event.type === "message") return { ...message, id: event.id, at: event.at };
   if (event.type === "done") return { ...message, status: "done" };

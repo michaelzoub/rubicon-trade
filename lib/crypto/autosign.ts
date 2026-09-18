@@ -19,8 +19,19 @@ function privy(): PrivyClient {
   if (!appId || !appSecret) throw new Error('Privy is not configured for server-side signing.');
   // An authorization key is what proves this app may use a delegated signer.
   if (!process.env.PRIVY_AUTHORIZATION_KEY) throw new Error('PRIVY_AUTHORIZATION_KEY is not set, so no wallet may be signed for without the user present.');
-  client ??= new PrivyClient({ appId, appSecret, walletApi: { authorizationPrivateKey: process.env.PRIVY_AUTHORIZATION_KEY } } as never);
+  // This SDK has no `walletApi` option: the authorization key is supplied per
+  // call, not on the client. The old shape needed an `as never` to compile and
+  // was then dropped on the floor, so every request went out unsigned and Privy
+  // answered 401 — which nothing reached far enough to see.
+  client ??= new PrivyClient({ appId, appSecret });
   return client;
+}
+
+/** Proves this app may act for a delegated wallet. Privy signs each request with
+ * it and sends the result as `privy-authorization-signature`; it wants raw
+ * base64 PKCS8, so the stored `wallet-auth:` prefix comes off here. */
+function authorization() {
+  return { authorization_private_keys: [String(process.env.PRIVY_AUTHORIZATION_KEY).replace(/^wallet-auth:/, "")] };
 }
 
 export const autoSigningConfigured = () =>
@@ -39,12 +50,21 @@ export function delegatedProvider(walletId: string, address: string, chainId: nu
         case 'personal_sign': {
           // The SDK is not uniform here: `signMessage` flattens its parameter,
           // while the two below keep theirs nested under `params`.
-          const { signature } = await privy().wallets().ethereum().signMessage(walletId, { message: String(params[0]) });
+          const { signature } = await privy().wallets().ethereum().signMessage(walletId, { message: String(params[0]), authorization_context: authorization() });
           return signature;
         }
         case 'eth_signTypedData_v4': {
           const typed = typeof params[1] === 'string' ? JSON.parse(params[1] as string) : params[1];
-          const { signature } = await privy().wallets().ethereum().signTypedData(walletId, { params: { typed_data: typed } });
+          // EIP-712 names this field `primaryType`; Privy's API names it
+          // `primary_type` and rejects the other outright. Callers here build
+          // standards-compliant payloads — the browser signs the very same
+          // object — so the rename belongs at this boundary and nowhere else.
+          // Getting this wrong meant no unattended purchase could ever be
+          // signed, and it failed at the last step, where nothing else had
+          // reached to notice.
+          const { primaryType, primary_type, ...rest } = typed as Record<string, unknown> & { primaryType?: string; primary_type?: string };
+          const typedData = { ...rest, primary_type: primary_type ?? primaryType };
+          const { signature } = await privy().wallets().ethereum().signTypedData(walletId, { params: { typed_data: typedData as never }, authorization_context: authorization() });
           return signature;
         }
         // A delegated wallet never broadcasts a raw transaction here: every
@@ -65,16 +85,17 @@ export function delegatedAuthorization(walletId: string, address: string): SignA
   return async ({ contractAddress, chainId }) => {
     // The signature comes back wrapped in an `authorization`, in snake_case, and
     // carries the nonce Privy used — which is the one the operation must quote.
-    const { authorization } = await privy().wallets().ethereum().sign7702Authorization(walletId, {
+    const { authorization: signed } = await privy().wallets().ethereum().sign7702Authorization(walletId, {
       params: { contract: contractAddress, chain_id: chainId ?? 0 },
+      authorization_context: authorization(),
     });
     return {
-      r: authorization.r as `0x${string}`,
-      s: authorization.s as `0x${string}`,
-      yParity: authorization.y_parity,
+      r: signed.r as `0x${string}`,
+      s: signed.s as `0x${string}`,
+      yParity: signed.y_parity,
       address,
-      chainId: Number(authorization.chain_id),
-      nonce: Number(authorization.nonce),
+      chainId: Number(signed.chain_id),
+      nonce: Number(signed.nonce),
     };
   };
 }

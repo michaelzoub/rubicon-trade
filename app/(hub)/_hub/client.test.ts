@@ -27,3 +27,15 @@ it("reduces streamed events into a single assistant message", () => {
   expect((message.parts[0] as { text: string }).text).toBe("Noted. Nuclear is in.");
   expect(vi.isMockFunction(reduceChatEvent)).toBe(false);
 });
+
+it("takes back prose the agent retracted once its tool answered", () => {
+  let message: Message = { id: "pending", role: "assistant", at: "", parts: [], status: "streaming" };
+  const feed: ChatEvent[] = [
+    { type: "text", text: "You don’t hold " }, { type: "text", text: "any AAPLc." },
+    { type: "retract", text: "You don’t hold any AAPLc." },
+    { type: "text", text: "You hold 0.0084 AAPLc." },
+    { type: "done" },
+  ];
+  for (const event of feed) message = reduceChatEvent(message, event);
+  expect(message.parts).toEqual([{ type: "text", text: "You hold 0.0084 AAPLc." }]);
+});

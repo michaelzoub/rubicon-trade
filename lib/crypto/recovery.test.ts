@@ -1,6 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { encodeAbiParameters, encodeFunctionResult, parseAbi } from 'viem';
 import { CHAINS } from './chains';
+import { CATALOG_ENTRIES } from './catalog';
 
 const wallet = `0x${'11'.repeat(20)}`;
 vi.mock('./wallet', () => ({ ownedWallet: vi.fn(async () => wallet) }));
@@ -58,4 +59,30 @@ it('builds a transfer the user signs, and refuses one that would burn the tokens
   expect(tx.data).toContain('22'.repeat(20));
   expect(() => transferCall(CHAINS[8453].usdc, `0x${'00'.repeat(20)}`, '1')).toThrow('burn');
   expect(() => transferCall(CHAINS[8453].usdc, to, '0')).toThrow('greater than zero');
+});
+
+/** "sell my aapl" reaches a holdings scan that only knows the string `AAPLc`.
+ * The scan list was built from the catalog in the first place, so the entry
+ * that named the contract can name the company too — an agent that has to
+ * infer "Apple" from a trailing lowercase c will sometimes decide it cannot. */
+it('names the company and underlying ticker behind a tokenized stock it holds', async () => {
+  const aapl = CATALOG_ENTRIES.find(e => e.symbol === 'AAPLc')!.contracts[8453]!;
+  call.mockImplementation(async (chainId: number) => {
+    const tokens = candidates(chainId);
+    return answer(tokens.map(t => ({ balance: chainId === 8453 && t === aapl ? 840_000n : 0n, symbol: 'AAPLc', decimals: 8 })));
+  });
+  const [held] = await findHoldings('u1', [wallet]);
+  expect(held).toMatchObject({ symbol: 'AAPLc', underlying: 'AAPL', name: 'Apple', kind: 'token', display: '0.0084' });
+});
+
+it('leaves an unknown token without an invented name', async () => {
+  const stray = `0x${'ab'.repeat(20)}`;
+  call.mockImplementation(async (chainId: number, _m: string, _p: unknown, ) => {
+    const tokens = candidates(chainId).concat(chainId === 8453 ? [stray] : []);
+    return answer(tokens.map(t => ({ balance: t === stray ? 5n : 0n, symbol: 'WAT', decimals: 18 })));
+  });
+  const held = await findHoldings('u1', [wallet], undefined, [{ chainId: 8453, token: stray }]);
+  expect(held).toHaveLength(1);
+  expect(held[0].name).toBeUndefined();
+  expect(held[0].underlying).toBeUndefined();
 });

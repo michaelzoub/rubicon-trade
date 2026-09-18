@@ -21,6 +21,9 @@ import { PREVIEW_ACCOUNT, PREVIEW_ASSETS, PREVIEW_STATE, PREVIEW_TOKENS, PREVIEW
 import { catalogEntry, CATALOG_ENTRIES } from "@/lib/crypto/catalog";
 import { chain, parseUnits } from "@/lib/crypto/chains";
 import { latestChat, newChat } from "@/lib/socialtrading/chats";
+import { buildGraph } from "@/lib/socialtrading/memory-graph";
+import { treePlan } from "@/lib/socialtrading/belief-tree";
+import type { JevAnswers } from "@/lib/socialtrading/jev-types";
 
 import { ProfileFlow } from "../(hub)/social-trading";
 import type { InvestingProfile } from "@/lib/socialtrading/profile";
@@ -37,6 +40,7 @@ export function PreviewExperience({ view, kind, id }: { view: string; kind?: str
       <button className="hub-inline-link" onClick={() => setOnboarding(false)}>View hub</button>
       <a className="hub-inline-link" href="/preview?view=onboarding&onboarding=tree">Tree arm</a>
       <a className="hub-inline-link" href="/preview?view=onboarding&onboarding=inference">Inference arm</a>
+      <a className="hub-inline-link" href="/preview?view=onboarding&onboarding=adaptive">Adaptive arm</a>
       <a className="hub-inline-link" href="/preview/onboarding-compare">Compare A/B</a>
     </div>}
     {onboarding ? <div className="landing-page socialtrading-page is-onboarding"><main className="container socialtrading-main"><div className="dashboard-theme socialtrading-flow"><ProfileFlow key={attempt} userId={PREVIEW_USER} name="Michael" persist={false} onComplete={value => { setProfile(value); setOnboarding(false); }} /></div></main></div>
@@ -118,9 +122,27 @@ export function PreviewHub({ view, profile, kind, id }: { view: string; profile?
         return { outcome: { runId: run.id, status: "succeeded" as const, summary: run.summary, decision: run.decision, notification: { title: "Vertiv is up 3% after raising guidance", body: "", relevance: "high" as const } }, state, runs: [...runsFor[id]] };
       },
       runs: async (_token: unknown, id: string) => ({ runs: [...(runsFor[id] ?? [])] }),
-      // Preview never reaches Jev, so the belief tree draws from the recorded
-      // strengths and says as much in its legend.
-      beliefs: async (_token: unknown, frameId: string) => ({ frameId, answers: {}, source: "local" as const, model: "typesafe/jev-1.13" }),
+      // Preview never reaches Jev, and the tree draws nothing but what a model
+      // returned — so preview answers in Jev's shape, from the strengths the
+      // sample worldview already carries. Sample data, like everything here.
+      beliefs: async (_token: unknown, frameId: string, id = "default") => {
+        const state = states.get(id) ?? initial;
+        const frames = buildGraph(state);
+        const frame = frames.find(f => f.id === frameId) ?? frames.at(-1);
+        const plan = frame ? treePlan(frame, state.profile.themes ?? []) : null;
+        const answers: JevAnswers = {};
+        for (const [key, question] of Object.entries(plan?.questions ?? {})) {
+          const belief = plan!.beliefs[Number(key.slice(1))];
+          if (question.type === "choice") {
+            const options = Object.keys(question.criteria);
+            const chosen = belief?.themes.find(t => options.includes(t)) ?? options[options.length - 1];
+            answers[key] = { type: "choice", choice: chosen, probabilities: { [chosen]: .78 }, confidence: .78 };
+          } else if (question.type === "score") {
+            answers[key] = { type: "score", score: key.startsWith("c") ? Math.max(0, Math.min(4, Math.round((belief?.strength ?? .5) * 4))) : 3, legend: {}, probabilities: {}, confidence: .74 };
+          }
+        }
+        return { frameId, answers, source: "jev" as const, model: "typesafe/jev-1.13" };
+      },
       wallets: async () => ({ wallets: [PREVIEW_WALLET] }),
       searchTokens: async (_token: unknown, q: string) => ({ tokens: PREVIEW_TOKENS.filter(t => `${t.symbol} ${t.name}`.toLowerCase().includes(q.toLowerCase())) }),
       crypto: async (_token: unknown, _revision: number, action: CryptoAction, id = "default") => {

@@ -106,7 +106,7 @@ describe("buildTree with Jev answers", () => {
       [belief("a", "A", ["ai"]), belief("b", "B", ["ai"])],
       [{ id: "against:a->b", from: "a", to: "b", kind: "contradiction" }],
     );
-    const built = buildTree(contradicted, treePlan(contradicted), null);
+    const built = buildTree(contradicted, treePlan(contradicted), { c0: score(4), c1: score(4) });
     expect(built.links.find(l => l.id === "against:a->b")?.kind).toBe("contradiction");
   });
 });
@@ -129,7 +129,7 @@ describe("the first ring", () => {
   it("still points a theme roughly where that theme has always pointed", () => {
     // Energy is north in Explore, so an energy-only worldview stays north here.
     const frame = frameOf([belief("b0", "The grid is the constraint", ["energy"])]);
-    const tree = buildTree(frame, treePlan(frame), null);
+    const tree = buildTree(frame, treePlan(frame), { t0: score(4), c0: score(4), p0: choice("energy") });
     const pillar = tree.nodes.find(n => n.id === "pillar:energy")!;
     expect(pillar.y).toBeLessThan(50);
     expect(Math.abs(pillar.x - 50)).toBeLessThan(1);
@@ -138,27 +138,47 @@ describe("the first ring", () => {
 
 describe("buildTree without Jev", () => {
   const frame = frameOf([belief("nvda", "Growing interest in NVDA", ["ai"], 0.8), belief("stray", "Something unclassified", [], 0.3)]);
-  const tree = buildTree(frame, treePlan(frame), null);
-  const at = (id: string) => tree.nodes.find(n => n.id === id)!;
 
-  it("says so, rather than presenting an estimate as a score", () => {
-    expect(tree.source).toBe("local");
-    expect(at("nvda").scored).toBe(false);
-    expect(at("nvda").certainty).toBe(0);
+  it("draws nothing but the trunk, rather than presenting its own estimate as a reading", () => {
+    const tree = buildTree(frame, treePlan(frame), null);
+    expect(tree.source).toBe("pending");
+    expect(tree.nodes).toHaveLength(1);
+    expect(tree.nodes[0].id).toBe(ROOT_ID);
+    expect(tree.links).toHaveLength(0);
   });
 
-  it("falls back to the recorded strength and to the belief's own themes for lineage", () => {
-    expect(at("nvda").alignment).toBeCloseTo(0.8);
-    expect(at("nvda").parent).toBe("pillar:ai");
-    // Nothing to hang it on, so it hangs on the thesis rather than on nothing.
-    expect(at("stray").parent).toBe(ROOT_ID);
+  it("still names the thesis while it waits, because that is the measure and not a reading", () => {
+    const tree = buildTree(frame, { ...treePlan(frame), thesis: "Power is the bottleneck" }, null);
+    expect(tree.nodes[0].label).toBe("Power is the bottleneck");
+    expect(tree.nodes[0].alignment).toBeNull();
   });
 
   it("gives an empty worldview a trunk and nothing else", () => {
     const empty = frameOf([]);
-    const built = buildTree(empty, treePlan(empty), null);
+    const built = buildTree(empty, treePlan(empty), {});
     expect(built.nodes).toHaveLength(1);
     expect(built.nodes[0].id).toBe(ROOT_ID);
+  });
+});
+
+describe("buildTree on a partial answer", () => {
+  const frame = frameOf([belief("nvda", "Growing interest in NVDA", ["ai"], 0.8), belief("stray", "Something unclassified", [], 0.3)]);
+  // Jev answered about the second belief and said nothing about the first.
+  const tree = buildTree(frame, treePlan(frame), { c1: score(2), p1: choice("__direct") });
+  const at = (id: string) => tree.nodes.find(n => n.id === id)!;
+
+  it("falls back to the recorded strength and to the belief's own themes for the question it skipped", () => {
+    expect(at("nvda").alignment).toBeCloseTo(0.8);
+    expect(at("nvda").scored).toBe(false);
+    expect(at("nvda").certainty).toBe(0);
+    expect(at("nvda").parent).toBe("pillar:ai");
+  });
+
+  it("marks the belief it did answer as scored, so the view can tell them apart", () => {
+    expect(at("stray").scored).toBe(true);
+    expect(at("stray").alignment).toBeCloseTo(0.5);
+    // Nothing to hang it on, so it hangs on the thesis rather than on nothing.
+    expect(at("stray").parent).toBe(ROOT_ID);
   });
 });
 

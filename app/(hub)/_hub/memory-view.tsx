@@ -57,26 +57,40 @@ export function MemoryView() {
 
   const step = useCallback((by: number) => setIndex(current => clamp(current + by, 0, frames.length - 1)), [frames.length]);
 
-  // Scores are cached per chapter and asked for once. A chapter that came back
-  // unscored keeps `null` and is never asked about again in this sitting.
+  // Readings are cached per chapter and asked for once. Absent means the chapter
+  // has not come back yet; `null` means Jev could not be read for it, and until
+  // one of the two resolves the chapter draws a bare trunk. Nothing on this tree
+  // is ever the page's own arithmetic standing in for the model.
   const [scores, setScores] = useState<Record<string, JevAnswers | null>>({});
-  const [scoring, setScoring] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const asked = useRef(new Set<string>());
   const plan = useMemo(() => treePlan(frame, state.profile.themes ?? [], state.profile.thesis), [frame, state.profile.themes, state.profile.thesis]);
-  const tree = useMemo(() => buildTree(frame, plan, scores[frame.id] ?? null), [frame, plan, scores]);
+  /** A chapter with nothing to ask about is answered before it is asked. */
+  const unasked = !Object.keys(plan.questions).length;
+  const answers = scores[frame.id];
+  const reading = !unasked && answers === undefined;
+  const unread = !unasked && answers === null;
+  const tree = useMemo(() => buildTree(frame, plan, answers ?? null), [frame, plan, answers]);
 
   useEffect(() => {
     const id = frame.id;
-    if (asked.current.has(id) || !Object.keys(plan.questions).length) return;
+    if (asked.current.has(id) || unasked) return;
     let live = true;
     const timer = setTimeout(async () => {
       asked.current.add(id);
-      setScoring(true);
-      const answers = await scoreBeliefs(id);
-      if (live) { setScores(current => ({ ...current, [id]: answers })); setScoring(false); }
+      const answered = await scoreBeliefs(id);
+      if (live) setScores(current => ({ ...current, [id]: answered }));
     }, SETTLE_MS);
     return () => { live = false; clearTimeout(timer); };
-  }, [frame.id, plan.questions, scoreBeliefs]);
+  }, [frame.id, unasked, scoreBeliefs, attempt]);
+
+  /** Ask again for a chapter Jev could not be read for, rather than leaving the
+   * trunk bare with no way forward. */
+  const reread = useCallback(() => {
+    asked.current.delete(frame.id);
+    setScores(current => { const next = { ...current }; delete next[frame.id]; return next; });
+    setAttempt(n => n + 1);
+  }, [frame.id]);
 
   // The field is handled like a map: drag to move through the tree, scroll to
   // come closer to it. Time is not a gesture here — it belongs to the chapter
@@ -179,7 +193,7 @@ export function MemoryView() {
         title: brief(node.label),
         lines: [
           { label: "Your thesis", value: "Everything else is measured against it", lead: true },
-          { label: "Rests on", value: `${branches.length} ${branches.length === 1 ? "idea" : "ideas"}` },
+          { label: "Rests on", value: branches.length ? `${branches.length} ${branches.length === 1 ? "idea" : "ideas"}` : reading ? "Reading this chapter…" : "Nothing drawn yet" },
         ],
       };
     }
@@ -310,7 +324,13 @@ export function MemoryView() {
             );
           })}
 
-          {!branches.length && <p className="mem-empty">Your worldview starts the first time something you believe changes. Nothing before that was recorded, so nothing before that is drawn.</p>}
+          {!branches.length && <p className="mem-empty">
+            {reading
+              ? "Reading this chapter. Every idea here is placed by the model, so nothing is drawn until it answers."
+              : unread
+                ? <>This chapter could not be read, so nothing is drawn around your thesis. <button type="button" className="mem-reread" onClick={reread}>Read it again</button></>
+                : "Your worldview starts the first time something you believe changes. Nothing before that was recorded, so nothing before that is drawn."}
+          </p>}
         </div>
 
         {adrift && <button type="button" className="mem-recentre" onClick={recentre}>Recentre</button>}
@@ -322,7 +342,7 @@ export function MemoryView() {
           <button type="button" className="mem-key-help" aria-label="How to read this tree" {...gloss(key)}>?</button>
         </div>
         <span className="mem-key-ends"><b>Barely aligned</b><b>Foundational</b></span>
-        <p>{scoring ? "Reading this chapter…" : tree.source === "local" ? "Alignment estimated from your own recorded strengths." : "Every idea is placed by how closely it lines up with your thesis."}</p>
+        <p>Every idea is placed by how closely it lines up with your thesis.</p>
       </div>}
 
       {selectedNode && <section className="mem-insight" aria-label="Selected belief">

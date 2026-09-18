@@ -374,3 +374,46 @@ it("records tool failures on the run, so a quiet failure is findable afterwards"
   expect(outcome.status).toBe("succeeded");
   expect(outcome.decision?.failures).toEqual(["get_asset: Market data is busy. Try again shortly."]);
 });
+
+it("withholds tools a scheduled run could never satisfy", async () => {
+  // check_purchase_funds needs an exact wallet address, and get_crypto_wallets —
+  // the only source of one — is itself withheld. Offering it wasted two rounds
+  // per run failing, and crowded out the purchase.
+  const model = scriptedModel([{ content: "SILENT" }]);
+  await runBackgroundAgent(job, deps(model));
+  const offered = model.calls[0].tools.map(t => t.function.name);
+  expect(offered).not.toContain("check_purchase_funds");
+  expect(offered).not.toContain("get_crypto_wallets");
+});
+
+it("tells the agent to check what the user follows before sweeping the market", async () => {
+  // A run gets six lookups. Spending them on broad theme searches meant the
+  // watchlist went unchecked — and those sweeps are the calls a rate-limited
+  // provider refuses first.
+  const model = scriptedModel([{ content: "SILENT" }]);
+  await runBackgroundAgent(job, deps(model));
+  const system = (model.calls[0].messages[0] as { content: string }).content;
+  expect(system).toContain("start with what they already follow");
+  expect(system).toMatch(/search_assets sweeps are the last call to make/);
+});
+
+it("hands the agent the assets it has learned, not just the ones it was given", async () => {
+  // This user's explicit watchlist is empty while the agent has worked out that
+  // they follow AAPL and NVDA. Withholding that left it guessing company names
+  // like "apple" and "enphase-energy", which the ticker lookup rejects.
+  const learned = agentState();
+  learned.profile = { ...learned.profile, interests: [] };
+  learned.inferred = [
+    { id: "AAPL", weight: .8, confidence: .9, count: 4, updatedAt: NOW.toISOString() },
+    { id: "NVDA", weight: .6, confidence: .7, count: 3, updatedAt: NOW.toISOString() },
+    { id: "energy", weight: .9, confidence: .9, count: 5, updatedAt: NOW.toISOString() },
+    { id: "PLTR", weight: .1, confidence: .2, count: 1, updatedAt: NOW.toISOString() },
+  ];
+  store.seed(USER, learned);
+  const model = scriptedModel([{ content: "SILENT" }]);
+  await runBackgroundAgent(job, deps(model));
+  const system = (model.calls[0].messages[0] as { content: string }).content;
+  const profile = JSON.parse(system.match(/Their profile: (\{.*?\})\n\n/s)![1]) as { learnedInterest: string[] };
+  expect(profile.learnedInterest).toEqual(["AAPL", "NVDA"]);   // themes and weak signals excluded
+  expect(system).toContain("by its exact ticker");
+});

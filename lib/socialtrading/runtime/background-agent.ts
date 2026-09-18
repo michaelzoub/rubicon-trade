@@ -16,7 +16,12 @@ export const WRITE_TOOLS = new Set(["update_profile", "propose_trade", "quote_cr
   // The attended pair. A proposal is something a person reviews and signs, and
   // nobody is here to do that; `buy_asset` is the unattended equivalent and does
   // both halves in one call, so these would only strand a reserved trade.
-  "propose_crypto_swap", "execute_crypto_swap"]);
+  "propose_crypto_swap", "execute_crypto_swap",
+  // A trap rather than a tool here: it wants an exact wallet address, and the
+  // only tool that hands one out is withheld above, so a scheduled run can
+  // never satisfy it. Offered, it burns rounds failing and crowds out the
+  // purchase — which checks the balance itself anyway.
+  "check_purchase_funds"]);
 
 /** Buying unattended, which is withheld unless the person has granted it.
  *
@@ -91,7 +96,7 @@ export function backgroundSystemPrompt(input: { agent: AgentConfig; state: HubSt
     `Your private notes: ${memory.notes.length ? memory.notes.map(n => `• ${n}`).join(" ") : "none yet"}.`,
     `Quotes from last time: ${watched.length ? watched.join("; ") : "none yet"}. Compare against fresh data.`,
     `Reach-outs: they chose “${threshold.label}” (${threshold.description}). ${NOTIFY_TOOL} only at relevance ${agent.notifications.threshold} or above, once per wake-up. ${input.remainingToday > 0 ? `${input.remainingToday} reach-out${input.remainingToday === 1 ? "" : "s"} left today.` : "No reach-outs left today: research, remember, stay quiet."}`,
-    `Process: 1) Up to six lookups on fresh news relevant to them, including companies and themes beyond their watchlist — get_asset with show_news. Prices inform you; routine moves are not news. 2) Compare against your notes: find something new, not a repeat. 3) If one finding clears the bar, ${NOTIFY_TOOL} once.${act ? " 4) If it also clears the bar for acting, buy it — see Acting below. 5)" : " 4)"} ${REMEMBER_TOOL} once with what you checked and why you stayed quiet. ${act ? "6)" : "5)"} Finish with the feed item: at most 40 words, 1–2 sentences, one fresh development and why it matters to them. Nothing new: finish with exactly SILENT.${act ? " If you bought, the feed item must say so — what you bought, for how much, and why. They must never find out from their balance first." : ""}`,
+    `Process: 1) Up to six lookups on fresh news, and start with what they already follow — get_asset with show_news on each symbol in their profile's “watching” and “learnedInterest” lists, by its exact ticker — before spending anything that is left on companies or themes beyond it. Their watchlist is the thing they asked you to watch; broad search_assets sweeps are the last call to make, not the first. Prices inform you; routine moves are not news. 2) Compare against your notes: find something new, not a repeat. 3) If one finding clears the bar, ${NOTIFY_TOOL} once.${act ? " 4) If it also clears the bar for acting, buy it — see Acting below. 5)" : " 4)"} ${REMEMBER_TOOL} once with what you checked and why you stayed quiet. ${act ? "6)" : "5)"} Finish with the feed item: at most 40 words, 1–2 sentences, one fresh development and why it matters to them. Nothing new: finish with exactly SILENT.${act ? " If you bought, the feed item must say so — what you bought, for how much, and why. They must never find out from their balance first." : ""}`,
     ...(act ? [act] : []),
     `Writing, for feed items and notifications: lead with the news, not your process. Familiar words and company names over tickers and jargon. Favour launches, partnerships, policy changes and earnings surprises. Never list what you checked, small moves, unchanged assets, missing news, or offers to dig deeper. No percentages unless something moved 10%+ and the move is itself the story. Never invent a cause, and never treat a sensational headline as meaningful without a concrete tie to their interests. Style: "Nokia is adopting Nvidia’s AI platform for mobile networks, expanding beyond data centers."`,
     `Portfolio: get_crypto_holdings before discussing what they own. Watchlists and past trades are not holdings. Respect coverage warnings.`,
@@ -215,6 +220,7 @@ export async function runBackgroundAgent<S>(job: RunJob, deps: BackgroundAgentDe
           notes = Array.isArray(args.notes) ? args.notes.filter((n): n is string => typeof n === "string" && n.trim().length > 0).map(n => n.trim().slice(0, 200)).slice(0, 8) : [];
           result = { saved: notes.length };
         } else if (WRITE_TOOLS.has(name)) {
+          (failures ??= []).push(`${name} refused: not available during scheduled runs`);
           result = { error: "Not available during scheduled runs. Ask the user to open the conversation instead." };
         } else {
           // Spending is asked about twice: once when the tools are listed, and
@@ -225,16 +231,27 @@ export async function runBackgroundAgent<S>(job: RunJob, deps: BackgroundAgentDe
             ? (!delegated.allowed ? delegated
               : await deps.buyUnattended?.(state).catch(() => ({ allowed: false, reason: "Could not confirm your delegated wallet." })) ?? { allowed: false, reason: "Unattended buying is not enabled." })
             : { allowed: true, reason: "" };
-          if (!spending.allowed) result = { error: `${spending.reason} Notify the user instead of retrying.` };
+          if (!spending.allowed) {
+            // A refusal is not an exception, so it used to leave no trace: the
+            // run showed the tool called, nothing thrown, and no trade — with
+            // no way to see why. It belongs on the record like any other
+            // failure.
+            (failures ??= []).push(`${name} refused: ${spending.reason}`);
+            result = { error: `${spending.reason} Notify the user instead of retrying.` };
+          }
           else {
             toolCalls++; inspected.push(lookupLabel(name, args));
             try {
               const outcome = await deps.registry.execute(name, args, context);
               for (const part of outcome.parts) { if (part.type === "asset") seen.push(part.asset); if (part.type === "assets") seen.push(...part.assets); }
               result = outcome.result;
-              if (name === "buy_asset" && (result as { bought?: boolean })?.bought === true) {
-                const settled = result as { symbol?: string; usd?: string };
-                if (settled.symbol) purchase = { symbol: settled.symbol, value: Number(settled.usd) };
+              if (name === "buy_asset") {
+                const settled = result as { bought?: boolean; symbol?: string; usd?: string; reason?: string; status?: string; error?: string };
+                if (settled?.bought === true && settled.symbol) purchase = { symbol: settled.symbol, value: Number(settled.usd) };
+                // A purchase that does not happen is the thing most worth being
+                // able to read afterwards, and returning a reason rather than
+                // throwing left no trace of it on the run at all.
+                else (failures ??= []).push(`buy_asset did not buy: ${JSON.stringify(settled ?? null).slice(0, 220)}`);
               }
             } catch (error) {
               const message = error instanceof Error ? error.message : "The tool failed.";
