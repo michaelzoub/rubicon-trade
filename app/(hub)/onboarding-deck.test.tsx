@@ -40,8 +40,10 @@ it("keeps the tree’s category and uses inferred wording from the knowledge pac
   expect(container.textContent).not.toContain("Electricity demand grows");
   expect(container.querySelector(".onb-chip")).toBeNull();
   expect(container.querySelector(".onb-deck")?.getAttribute("data-sector")).toBe("energy");
-  expect(container.textContent).toContain("Swipe or tap to take a side");
-  expect(container.querySelector(".onb-swipe-edge")).toBeTruthy();
+  expect(container.querySelector('.onb-vote[data-dir="no"]')).toBeTruthy();
+  expect(container.querySelector('.onb-vote[data-dir="yes"]')).toBeTruthy();
+  expect(container.querySelector('.onb-vote[data-dir="unsure"]')).toBeTruthy();
+  expect(container.textContent).not.toContain("Swipe or tap to take a side");
   const yes = Array.from(container.querySelectorAll("button")).find(b => b.textContent?.includes("I see it"));
   await act(async () => yes!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
   expect(onVote).toHaveBeenCalledWith("yes", expect.objectContaining({ id: "2-1", category: "Energy", text: "Power will bottleneck AI first." }));

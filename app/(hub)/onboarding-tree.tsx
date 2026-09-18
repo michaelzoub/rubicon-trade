@@ -3,7 +3,7 @@ import { Bell, Check, MessageSquare, Orbit, SlidersHorizontal, Sparkles } from "
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { profileKey, PERMISSIONS, limitsError, type InvestingProfile, type Permission } from "@/lib/socialtrading/profile";
-import { CATEGORIES, DECK_SIZE, DECK_TITLE, DISLIKES, KEYWORDS, SCENE, basePrediction, deckProgress, isBaseId, newOnboarding, nextPrediction, onboardingThesis, resolveScene, sceneOrder, type OnboardingAnswers, type PredictionResponse } from "@/lib/socialtrading/onboarding";
+import { CATEGORIES, CONVICTION_TITLE, DECK_SIZE, DECK_TITLE, DISLIKES, KEYWORDS, SCENE, basePrediction, deckProgress, isBaseId, newOnboarding, nextPrediction, onboardingThesis, resolveScene, sceneOrder, type OnboardingAnswers, type PredictionResponse } from "@/lib/socialtrading/onboarding";
 import { DEFAULT_PLAN } from "@/lib/socialtrading/plans";
 import { suggestedThemes } from "@/lib/socialtrading/themes";
 import { LoadingState } from "../_components/ui";
@@ -23,7 +23,7 @@ const PERMISSION_ICONS = { notify: Bell, approve: MessageSquare, automatic: Slid
 /** One line per scene. Everything else a scene has to say, it says by being
  * touched — there are no leads, eyebrows or helper paragraphs under these.
  * Positional with SCENE; the opening chart borrows the AI question itself. */
-const TITLES = ["How much of the future already feels clear to you?", FAMILIARITY_TITLE, "", "Where could conflict reshape markets?", DECK_TITLE, "Which views do you feel strongest about?", "Draw your prediction.", "What doesn’t belong in your future?", "Your outlook. Your rules."];
+const TITLES = [CONVICTION_TITLE, FAMILIARITY_TITLE, "", "Where could conflict reshape markets?", DECK_TITLE, "Which views do you feel strongest about?", "Draw your prediction.", "What doesn’t belong in your future?", "Your outlook. Your rules."];
 const KINDS = ["scale", "chips", "pad", "map", "binary", "chips", "pad", "chips", "rules"];
 
 /** The decision-tree arm. Everyone answers the same two opening questions — how
@@ -86,7 +86,7 @@ export function TreeOnboarding({ userId, onComplete, completing = false, serverE
     update({ scene: target, ...(knowledgeChanged ? { responses: [], strongest: [] } : {}) }, { investorAnswers: { ...profile.investorAnswers, ...nextKnowledge } });
   }
   function next() {
-    if (scene === SCENE.clarity && a.confidence === null) return setError("Choose how clear the future feels to you.");
+    if (scene === SCENE.clarity && a.confidence === null) return setError("Choose how strong your convictions are.");
     if (scene === SCENE.knowledge) { completeKnowledge(scoreFamiliarity(profile.investorAnswers.selectedConceptIds ?? [])); return; }
     if (scene === SCENE.horizon && !a.responses.some(r => r.id === base.id && r.confidence !== undefined)) return setError("Place the dot to say how sure you are.");
     if (scene === SCENE.strongest && candidates.length && !a.strongest.length) return setError("Choose one or two views to explore more deeply.");

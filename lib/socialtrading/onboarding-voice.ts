@@ -30,10 +30,10 @@ export const KNOWLEDGE_VOICE: Record<VoiceLevel, string> = {
 
 /** How hard the statement should push, given how settled their views feel. */
 export const CONVICTION_VOICE: Record<VoiceLevel, string> = {
-  1: "Conviction 1/4 — exploring. Tentative. Use 'could' or 'might'. A possibility they can try on, not a claim they must defend.",
+  1: "Conviction 1/4 — still exploring. Tentative. Use 'could' or 'might'. A possibility they can try on, not a claim they must defend.",
   2: "Conviction 2/4 — a few hunches. Directional. State a likely change without forcing a bet.",
-  3: "Conviction 3/4 — some things feel clear. A firm, specific change they can agree or disagree with.",
-  4: "Conviction 4/4 — they know what they believe. A decisive, take-a-side statement. No hedging. Make the disagreement costly.",
+  3: "Conviction 3/4 — some convictions. A firm, specific change they can agree or disagree with.",
+  4: "Conviction 4/4 — strong convictions. A decisive, take-a-side statement. No hedging. Make the disagreement costly.",
 };
 
 export function deckSystem() {
@@ -134,7 +134,7 @@ export function nextCardPrompt(input: NextCardInput) {
   const examples = predictions(input.knowledge ?? 1);
   const lines = [
     voiceBlock(input.knowledge, input.confidence),
-    convictionLabel ? `How settled their views feel: ${convictionLabel}.` : null,
+    convictionLabel ? `How strong their convictions are: ${convictionLabel}.` : null,
     knowledgeLabel ? `Investing experience: ${knowledgeLabel}.` : null,
     `Depth to match:\n${examples.map(p => `- [${p.category}] ${p.text}`).join("\n")}`,
     input.asked.length ? `Already shown, do not repeat or rephrase: ${input.asked.join(" | ")}` : null,

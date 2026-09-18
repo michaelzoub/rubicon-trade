@@ -33,8 +33,9 @@
 .onb-card-head { display: grid; gap: .6rem; }
 .onb-card-head.is-quiet { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .onb-card-title { font-size: clamp(1.3rem, 2.2vw, 1.75rem); font-weight: 500; letter-spacing: -.028em; line-height: 1.2; max-width: 26ch; text-wrap: balance; }
-.onb-card:has(.onb-deck) { gap: .85rem; }
-.onb-card:has(.onb-deck) .onb-card-title { font-size: clamp(1.15rem, 2vw, 1.45rem); max-width: none; }
+.onb-card:has(.onb-deck) { gap: .85rem; overflow: visible; }
+.onb-card:has(.onb-deck) .onb-card-head { justify-items: center; text-align: center; }
+.onb-card:has(.onb-deck) .onb-card-title { font-size: clamp(1.15rem, 2vw, 1.45rem); max-width: none; text-align: center; }
 .onb-card-lead { color: var(--muted); font-size: .85rem; line-height: 1.6; max-width: 44ch; }
 /* The stage takes whatever room the question leaves, so the footer sits in the
  * same place on every screen and the Continue button never moves. */
@@ -42,6 +43,7 @@
 .onb-card-body:has(> .onb-geo),
 .onb-card-body:has(> .onb-distance),
 .onb-card-body:has(.onb-deck) { align-content: stretch; grid-template-rows: minmax(0, 1fr); }
+.onb-card-body:has(.onb-deck) { overflow: visible; }
 .onb-card-under { display: grid; gap: .5rem; }
 .onb-card-under:empty, .onb-card-hint:empty { display: none; }
 .onb-card-foot { display: flex; align-items: center; gap: 1rem; padding-top: 1.15rem; border-top: 1px solid var(--line); background: var(--card); position: relative; z-index: 1; }
@@ -146,10 +148,10 @@
 .onb-range:focus-visible::-moz-range-thumb { outline: 2px solid var(--onb-accent); outline-offset: 3px; }
 
 /* ── The prediction deck ─────────────────────────────────────────────────────
- * The swipe card fills the stage. A handle, edge chevrons, and a rest tilt
- * say it throws; labels under it are the same three moves as a flick. Each
- * sector paints its own wash so consecutive cards cannot be mistaken. */
-.onb-deck { --force: 0; --swipe-accent: var(--onb-accent); --swipe-deep: var(--onb-accent-deep); --swipe-wash: var(--onb-accent-wash); display: grid; grid-template-rows: minmax(0, 1fr) auto auto auto; gap: .7rem; min-height: 0; height: 100%; }
+ * Labels sit around the card — left, right, down — matching the throw. The
+ * card is inset so a tilt has room; the body lets that tilt spill into the
+ * gutters instead of clipping it. */
+.onb-deck { --force: 0; --swipe-accent: var(--onb-accent); --swipe-deep: var(--onb-accent-deep); --swipe-wash: var(--onb-accent-wash); display: grid; grid-template-columns: minmax(0, 1fr) minmax(12rem, 24.5rem) minmax(0, 1fr); grid-template-rows: auto auto auto; grid-template-areas: "no stage yes" ". unsure ." ". foot ."; column-gap: .55rem; row-gap: .2rem; align-content: center; min-height: 0; height: 100%; overflow: visible; }
 .onb-deck[data-sector="tech"] { --swipe-accent: #5b5bd6; --swipe-deep: #3f3dc2; --swipe-wash: rgba(91, 91, 214, .14); }
 .onb-deck[data-sector="energy"] { --swipe-accent: #ea8c2f; --swipe-deep: #c46a12; --swipe-wash: rgba(234, 140, 47, .16); }
 .onb-deck[data-sector="money"] { --swipe-accent: #c4a035; --swipe-deep: #8a7010; --swipe-wash: rgba(196, 160, 53, .16); }
@@ -157,7 +159,7 @@
 .onb-deck[data-sector="gov"] { --swipe-accent: #4a678c; --swipe-deep: #2f4666; --swipe-wash: rgba(74, 103, 140, .16); }
 .onb-deck[data-sector="climate"] { --swipe-accent: #3aa35c; --swipe-deep: #1f7a3a; --swipe-wash: rgba(58, 163, 92, .14); }
 .onb-deck[data-sector="work"] { --swipe-accent: #c45b7a; --swipe-deep: #9a3d5c; --swipe-wash: rgba(196, 91, 122, .14); }
-.onb-deck-stage { position: relative; width: 100%; height: 100%; min-height: 0; isolation: isolate; perspective: 920px; }
+.onb-deck-stage { grid-area: stage; position: relative; width: 100%; max-width: 24.5rem; aspect-ratio: 1; height: auto; max-height: 100%; min-height: 0; justify-self: center; align-self: center; overflow: visible; perspective: 920px; }
 .onb-well { position: absolute; z-index: 0; width: 11rem; height: 11rem; border-radius: 50%; pointer-events: none; opacity: 0; filter: blur(18px); }
 .onb-well.is-yes { right: -14%; top: 10%; background: radial-gradient(circle, var(--swipe-accent), transparent 68%); }
 .onb-well.is-no { left: -14%; top: 10%; background: radial-gradient(circle, rgba(24, 24, 27, .3), transparent 68%); }
@@ -165,8 +167,8 @@
 .onb-deck[data-lean="yes"] .onb-well.is-yes,
 .onb-deck[data-lean="no"] .onb-well.is-no,
 .onb-deck[data-lean="unsure"] .onb-well.is-unsure { opacity: calc(.35 + var(--force) * .65); }
-.onb-card-swipe { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; padding: 2.4rem 3.2rem; overflow: hidden; border: 1px solid color-mix(in srgb, var(--swipe-accent) 28%, var(--line)); border-radius: 22px; background: radial-gradient(90% 70% at 100% 0%, var(--swipe-wash), transparent 58%), var(--card); text-align: center; box-shadow: 0 22px 54px -34px rgba(var(--onb-ink-rgb), .55); transform-style: preserve-3d; will-change: transform; }
-.onb-card-swipe[data-sector="tech"] { background: radial-gradient(90% 70% at 100% 0%, var(--swipe-wash), transparent 58%), repeating-linear-gradient(90deg, transparent 0 18px, rgba(91, 91, 214, .055) 18px 19px), var(--card); }
+.onb-card-swipe { position: absolute; inset: .4rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; padding: 2.2rem 2.1rem; overflow: hidden; border: 1px solid color-mix(in srgb, var(--swipe-accent) 28%, var(--line)); border-radius: 22px; background: radial-gradient(90% 70% at 50% 0%, var(--swipe-wash), transparent 58%), var(--card); text-align: center; box-shadow: 0 22px 54px -34px rgba(var(--onb-ink-rgb), .55); transform-origin: 50% 50%; transform-style: preserve-3d; will-change: transform; }
+.onb-card-swipe[data-sector="tech"] { background: radial-gradient(90% 70% at 50% 0%, var(--swipe-wash), transparent 58%), repeating-linear-gradient(90deg, transparent 0 18px, rgba(91, 91, 214, .055) 18px 19px), var(--card); }
 .onb-card-swipe[data-sector="energy"] { background: radial-gradient(circle at 88% 10%, rgba(234, 140, 47, .28), transparent 38%), radial-gradient(circle at 88% 10%, rgba(234, 140, 47, .1), transparent 68%), var(--card); }
 .onb-card-swipe[data-sector="money"] { background: radial-gradient(circle at 50% 130%, transparent 34%, rgba(196, 160, 53, .12) 35% 36%, transparent 37%), radial-gradient(circle at 50% 130%, transparent 52%, rgba(196, 160, 53, .1) 53% 54%, transparent 56%), radial-gradient(80% 50% at 0% 0%, var(--swipe-wash), transparent 55%), var(--card); }
 .onb-card-swipe[data-sector="health"] { background: radial-gradient(ellipse at 50% -10%, var(--swipe-wash), transparent 52%), repeating-radial-gradient(circle at 8% 90%, transparent 0 14px, rgba(26, 163, 142, .07) 14px 15px), var(--card); }
@@ -181,14 +183,8 @@
 .onb-card-swipe h2 { position: relative; max-width: 24ch; font-size: clamp(1.2rem, 2.3vw, 1.65rem); font-weight: 500; letter-spacing: -.028em; line-height: 1.32; text-wrap: balance; }
 .onb-swipe-lead { position: relative; max-width: 34ch; color: var(--muted); font-size: .78rem; line-height: 1.45; text-wrap: pretty; }
 .onb-swipe-topic { position: relative; display: inline-flex; align-items: center; gap: .45rem; padding: .35rem .75rem .35rem .5rem; border-radius: 999px; background: var(--swipe-wash); color: var(--swipe-deep); font-size: .68rem; font-weight: 500; letter-spacing: .01em; }
-.onb-swipe-mark { position: absolute; right: -8%; bottom: -16%; width: 15.5rem; height: 15.5rem; color: var(--swipe-accent); opacity: .12; pointer-events: none; }
+.onb-swipe-mark { position: absolute; left: 50%; bottom: -18%; width: 15.5rem; height: 15.5rem; translate: -50% 0; color: var(--swipe-accent); opacity: .1; pointer-events: none; }
 .onb-swipe-handle { position: absolute; top: .8rem; left: 50%; width: 2.35rem; height: .28rem; translate: -50% 0; border-radius: 999px; background: color-mix(in srgb, var(--swipe-accent) 45%, rgba(var(--onb-ink-rgb), .18)); pointer-events: none; }
-.onb-swipe-edge { position: absolute; top: 50%; z-index: 2; display: grid; place-items: center; width: 2rem; height: 2rem; translate: 0 -50%; border-radius: 50%; color: var(--swipe-deep); background: rgba(255, 255, 255, .72); box-shadow: 0 4px 14px -8px rgba(var(--onb-ink-rgb), .55); opacity: .38; pointer-events: none; }
-.onb-swipe-edge.is-no { left: .65rem; animation: onb-nudge-left 1.55s ease-in-out infinite; }
-.onb-swipe-edge.is-yes { right: .65rem; animation: onb-nudge-right 1.55s ease-in-out infinite; }
-.onb-deck.is-hinting .onb-swipe-edge { opacity: .82; }
-.onb-swipe-cue { min-height: 1.05em; margin: 0; text-align: center; color: var(--muted); font-size: .75rem; letter-spacing: -.01em; }
-.onb-deck.is-hinting .onb-swipe-cue { color: var(--swipe-deep); font-weight: 500; }
 .onb-stamp { position: absolute; top: 1.3rem; padding: .3rem .65rem; border: 2px solid currentColor; border-radius: 8px; font-size: .74rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; opacity: 0; pointer-events: none; }
 .onb-stamp.is-yes { right: 1.3rem; color: var(--swipe-deep); rotate: 10deg; }
 .onb-stamp.is-no { left: 1.3rem; color: rgba(var(--onb-ink-rgb), .75); rotate: -10deg; }
@@ -198,15 +194,16 @@
 .onb-deck[data-lean="unsure"] .onb-stamp.is-unsure { opacity: calc(.3 + var(--force) * .7); scale: calc(.9 + var(--force) * .14); }
 .onb-deck[data-lean="yes"] .onb-card-swipe[data-depth="0"] { border-color: var(--swipe-accent); box-shadow: 0 22px 54px -28px color-mix(in srgb, var(--swipe-accent) 55%, transparent); }
 .onb-deck[data-lean="no"] .onb-card-swipe[data-depth="0"] { border-color: rgba(var(--onb-ink-rgb), .35); }
-.onb-votes { display: flex; justify-content: center; align-items: baseline; gap: clamp(1.5rem, 6vw, 3rem); }
-.onb-votes button { border: 0; background: none; padding: .4rem .1rem; color: var(--muted); font-size: .82rem; letter-spacing: -.01em; transition: color 140ms ease; }
-.onb-votes button:hover { color: var(--ink); }
-.onb-votes .is-yes { color: var(--swipe-deep); font-weight: 500; }
-.onb-deck[data-lean="yes"] .onb-votes button[data-dir="yes"],
-.onb-deck[data-lean="no"] .onb-votes button[data-dir="no"],
-.onb-deck[data-lean="unsure"] .onb-votes button[data-dir="unsure"] { color: var(--ink); }
-.onb-votes button:disabled { opacity: .5; }
-.onb-deck-foot { display: grid; justify-items: center; gap: .7rem; }
+.onb-vote { min-width: 0; border: 0; background: none; color: var(--muted); font-size: .76rem; font-weight: 400; letter-spacing: -.015em; line-height: 1.2; white-space: nowrap; transition: color 140ms ease, opacity 140ms ease; }
+.onb-vote[data-dir="no"] { grid-area: no; align-self: center; justify-self: end; }
+.onb-vote[data-dir="yes"] { grid-area: yes; align-self: center; justify-self: start; }
+.onb-vote[data-dir="unsure"] { grid-area: unsure; justify-self: center; padding: .1rem .35rem; }
+.onb-deck[data-lean="yes"] .onb-vote[data-dir="yes"],
+.onb-deck[data-lean="no"] .onb-vote[data-dir="no"],
+.onb-deck[data-lean="unsure"] .onb-vote[data-dir="unsure"] { color: var(--ink); }
+.onb-vote:hover { color: var(--ink); }
+.onb-vote:disabled { opacity: .5; }
+.onb-deck-foot { grid-area: foot; display: grid; justify-items: center; gap: .7rem; }
 .onb-dots { display: flex; justify-content: center; gap: .35rem; }
 .onb-dots i { width: 5px; height: 5px; border-radius: 50%; background: rgba(var(--onb-ink-rgb), .12); transition: background-color 200ms ease, width 200ms var(--onb-ease), border-radius 200ms ease; }
 .onb-dots i.active { background: var(--onb-accent); }
@@ -458,8 +455,10 @@
   .onb-familiarity-inner { width: 92%; height: 88%; }
   .onb-familiarity-art { width: 2.8rem; height: 1.5rem; }
   .onb-familiarity-name { font-size: .68rem; }
-  .onb-card-swipe { padding: 1.8rem 1.4rem; }
+  .onb-card-swipe { padding: 1.6rem 1.15rem; inset: .3rem; }
   .onb-card-swipe h2 { font-size: clamp(1.2rem, 5.4vw, 1.55rem); }
+  .onb-deck { grid-template-columns: minmax(0, 1fr) minmax(10rem, 20rem) minmax(0, 1fr); column-gap: .35rem; }
+  .onb-vote { font-size: .68rem; }
   .onb-geo-map { aspect-ratio: 1.35; }
   .onb-geo-find input { width: 5rem; }
   .onb-geo-selected { right: 3.5rem; }
