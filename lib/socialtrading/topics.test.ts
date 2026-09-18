@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { topicSuggestions } from "./topics";
+import { TOPICS, classifyTopic, topicSuggestions } from "./topics";
 import { topicRecommendations } from "./suggestions";
 import { GET } from "@/app/api/trade/interests/route";
 
@@ -24,5 +24,27 @@ describe("onboarding interest discovery", () => {
     expect((await response.json()).recommendations[0].symbol).toBe("NVDA");
     expect((await GET(new Request("http://localhost/api/trade/interests?name="))).status).toBe(400);
     expect((await GET(new Request(`http://localhost/api/trade/interests?name=${"x".repeat(101)}`))).status).toBe(400);
+  });
+});
+
+describe("the onboarding topics", () => {
+  it("covers the five domains onboarding asks about that discovery lacked", () => {
+    const ids = TOPICS.map(t => t.id);
+    expect(ids).toEqual(expect.arrayContaining(["robotics", "defence-sovereignty", "climate-adaptation", "stablecoins", "future-of-work"]));
+  });
+
+  it("keeps every topic well formed, so a new entry cannot half-exist", () => {
+    for (const topic of TOPICS) {
+      expect(topic.id).toMatch(/^[a-z-]+$/);
+      expect(topic.name.length).toBeGreaterThan(0);
+      expect(topic.themes.length).toBeGreaterThan(0);
+      expect(topic.assets.length).toBeGreaterThan(0);
+    }
+    expect(new Set(TOPICS.map(t => t.id)).size).toBe(TOPICS.length);
+  });
+
+  it("routes the new topics through the existing keyword classifier", () => {
+    expect(classifyTopic({ id: "x", name: "Robotics and automation" }).map(t => t.id)).toContain("robotics");
+    expect(classifyTopic({ id: "x", name: "Stablecoin payments" }).map(t => t.id)).toContain("stablecoins");
   });
 });
