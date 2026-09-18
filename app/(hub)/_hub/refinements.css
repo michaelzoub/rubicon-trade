@@ -48,3 +48,104 @@
 .rubicon-command header svg:first-child { color: color-mix(in srgb, var(--id-accent, #7b8ea6) 70%, transparent); }
 .rubicon-command footer { display: none; }
 .command-results > button:hover, .command-results > button:focus-visible { background: color-mix(in srgb, var(--id-wash, #eaf2ff) 70%, transparent); }
+
+/* Purchase surface: explicit grid areas keep labels, prices and actions apart. */
+.purchase-backdrop { display: grid; place-items: center; padding: 16px; overflow-y: auto; }
+.purchase-backdrop .rubicon-purchase { position: relative; inset: auto; margin: auto; width: min(100%, 520px); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; border-radius: 24px; }
+.purchase-heading > button { display: grid; place-items: center; min-width: 40px; min-height: 40px; border: 1px solid #ffffff20; border-radius: 50%; color: #dce9fa; cursor: pointer; }
+.purchase-heading > button:hover { background: #ffffff12; }
+.rubicon-purchase .hub-trade-head { gap: 12px; flex-wrap: wrap; }
+.rubicon-purchase .purchase-progress { display: flex; flex-wrap: wrap; gap: 12px; padding: 0; margin: 0 0 20px; list-style: none; font-size: 11px; color: #8195ac; }
+.rubicon-purchase .purchase-progress li[aria-current=step] { color: #dce9fa; }
+.rubicon-purchase .hub-buy .hub-buy-result { grid-template-columns: 40px minmax(0, 1fr) minmax(55px, auto) 20px; grid-template-areas: "logo identity price go" "logo tags price go"; gap: 5px 10px; cursor: pointer; border: 1px solid #ffffff14; transform: none; }
+.rubicon-purchase .hub-buy .hub-buy-result:hover, .rubicon-purchase .hub-buy .hub-buy-result:focus-visible { background: #b7d2f512; border-color: #b7d2f5; box-shadow: none; }
+.rubicon-purchase .hub-buy-result .hub-asset-logo { grid-area: logo; width: 40px; height: 40px; }
+.rubicon-purchase .hub-buy-result-id { grid-area: identity; min-width: 0; }
+.rubicon-purchase .hub-buy-result-tags { grid-area: tags; min-width: 0; }
+.rubicon-purchase .hub-buy-result-price { grid-area: price; display: grid; justify-items: end; gap: 3px; }
+.rubicon-purchase .hub-buy-result-go { grid-area: go; color: #b7d2f5; display: grid; place-items: center; }
+.rubicon-purchase .hub-buy-target { flex-wrap: wrap; }
+.rubicon-purchase .hub-buy-target-copy { min-width: 120px; overflow-wrap: anywhere; }
+.rubicon-purchase .hub-buy-target-symbol span { display: block; }
+.rubicon-purchase .hub-buy-chain { max-width: 100%; }
+.rubicon-purchase .hub-buy .hub-buy-amount-row input.socialtrading-input { width: min(10ch, 100%); min-width: 0; field-sizing: fixed; font-size: clamp(32px, 8vw, 52px); letter-spacing: -.04em; text-align: center; }
+.rubicon-purchase .hub-buy-currency { position: static; flex-shrink: 0; }
+.rubicon-purchase .hub-buy-amount-row { min-width: 0; }
+.rubicon-purchase .purchase-refresh { justify-self: start; font-size: 11px; }
+.rubicon-purchase .hub-disclosure { color: #acb7c5; border-color: #ffffff20; }
+.rubicon-purchase .hub-disclosure summary { cursor: pointer; padding-block: 10px; }
+.rubicon-purchase .hub-trade-raw dd, .rubicon-purchase .purchase-requirements, .rubicon-purchase .hub-trade-brokerage { overflow-wrap: anywhere; }
+.rubicon-purchase select option { background: #171c22; color: #f1f4f8; }
+@media (max-width: 380px) {
+ .rubicon-purchase .hub-buy .hub-buy-result { grid-template-columns: 32px minmax(0, 1fr) 20px; grid-template-areas: "logo identity go" "logo tags go" ". price ."; }
+ .rubicon-purchase .hub-buy-result-price { display: flex; justify-content: flex-start; gap: 10px; }
+ .rubicon-purchase .hub-buy-result .hub-asset-logo { width: 32px; height: 32px; }
+}
+.purchase-route-steps { padding-left: 20px; display: grid; gap: 12px; font-size: 12px; }
+.purchase-route-steps li { padding-left: 4px; }
+.purchase-route-steps small { display: block; color: #aebbc9; margin-top: 4px; }
+.purchase-route-steps li[aria-current=step] { color: #b7d2f5; }
+.rubicon-purchase .hub-buy.has-target .hub-buy-target { padding: 12px; border-radius: 16px; background: #ffffff07; box-shadow: inset 0 0 0 1px #ffffff18; }
+.rubicon-purchase .hub-buy.has-target .hub-buy-target .hub-asset-logo { box-shadow: none; }
+.rubicon-purchase .purchase-readiness { background: #ffffff06; border-color: #ffffff20; }
+.rubicon-purchase .purchase-readiness strong { color: #dce9fa; }
+.rubicon-purchase .hub-buy .hub-buy-amount-row input.socialtrading-input { width: var(--amount-width, 3ch); max-width: calc(100% - 30px); text-align: left; }
+.rubicon-purchase .hub-buy .hub-buy-amount-row { gap: 4px; }
+
+/* The arithmetic behind the resolved route, for anyone who wants to check it. */
+.hub-route { display: grid; gap: 6px; }
+.hub-route-detail { font-size: 11px; color: #9daabb; }
+.hub-route-detail summary { cursor: pointer; padding-block: 6px; list-style: none; color: #b7d2f5; }
+.hub-route-detail summary::-webkit-details-marker { display: none; }
+.hub-route-detail summary::before { content: "⌄ "; display: inline-block; transition: transform .2s; }
+.hub-route-detail[open] summary::before { transform: rotate(180deg); }
+.hub-route-detail ul { display: grid; gap: 2px; margin: 6px 0 0; padding: 0; list-style: none; }
+.hub-route-detail li { display: grid; grid-template-columns: minmax(64px, auto) minmax(56px, auto) 1fr auto; gap: 10px; align-items: baseline; padding: 7px 9px; border-radius: 9px; }
+.hub-route-detail li[data-chosen] { background: #b7d2f514; box-shadow: inset 0 0 0 1px #b7d2f52e; }
+.hub-route-net { color: #dce9fa; }
+.hub-route-bal { font-variant-numeric: tabular-nums; color: #dce9fa; }
+.hub-route-why { color: #8fa0b3; }
+.hub-route-fee { font-variant-numeric: tabular-nums; color: #7e8ea1; }
+@media (max-width: 380px) {
+  .hub-route-detail li { grid-template-columns: 1fr auto; }
+  .hub-route-why { grid-column: 1 / -1; }
+}
+
+/* The primary action keeps its light face on hover: `.dashboard-theme
+   .button-primary:hover` in globals.css paints it near-black, which on this
+   surface reads as the button switching off rather than responding. */
+.rubicon-purchase .button.button-primary:not(:disabled):hover,
+.rubicon-purchase .hub-buy .button.button-primary:not(:disabled):hover {
+  background: linear-gradient(#eaf3ff, #bcd6f3);
+  border-color: #e8f2ff99;
+  color: #132035;
+  box-shadow: 0 4px 0 #65809f, 0 10px 28px #0006;
+}
+.rubicon-purchase .button.button-primary:not(:disabled):active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #65809f, 0 4px 14px #0005;
+}
+/* One guarantee, not a second copy of the details list. */
+.rubicon-purchase .purchase-readiness { display: grid; gap: 4px; padding: 12px 14px; border-radius: 12px; }
+.rubicon-purchase .purchase-readiness strong { font-size: 13px; }
+.rubicon-purchase .purchase-readiness span { font-size: 11px; color: #9daabb; }
+
+/* Sending something out. Calm by default, deliberate at the moment it matters. */
+.hub-recover { display: grid; gap: 10px; }
+.hub-recover-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.hub-recover-row { display: grid; grid-template-columns: minmax(0, auto) 1fr auto; gap: 10px; align-items: baseline; width: 100%; padding: 12px 14px; text-align: left; cursor: pointer; border: 1px solid var(--line, #e3eaf3); border-radius: 12px; background: transparent; font: inherit; color: inherit; }
+.hub-recover-row:hover, .hub-recover-row:focus-visible { border-color: #b7d2f5; background: color-mix(in srgb, #b7d2f5 8%, transparent); }
+.hub-recover-row[aria-pressed="true"] { border-color: #b7d2f5; background: color-mix(in srgb, #b7d2f5 12%, transparent); }
+.hub-recover-amount { font-variant-numeric: tabular-nums; font-weight: 500; }
+.hub-recover-where { color: var(--quiet, #7b8ea6); font-size: 12px; }
+.hub-recover-go { color: #2f7df6; font-size: 12px; }
+.hub-recover-form { display: grid; gap: 10px; padding: 14px; border-radius: 14px; border: 1px solid var(--line, #e3eaf3); }
+.hub-recover-title { font-weight: 500; }
+.hub-recover-field { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+.hub-recover-field > span { grid-column: 1 / -1; font-size: 12px; color: var(--quiet, #7b8ea6); }
+.hub-recover-field input { min-width: 0; }
+.hub-recover-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.hub-recover-confirm { display: grid; gap: 8px; padding: 12px; border-radius: 12px; background: color-mix(in srgb, #f6b73c 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, #f6b73c 40%, transparent); }
+.hub-recover-confirm p { font-size: 12px; line-height: 1.6; }
+.hub-recover-sent { display: flex; gap: 8px; align-items: baseline; font-size: 12px; }
+.rubicon-purchase .hub-recover-row, .hub-recover-row { transition: border-color .15s, background .15s; }

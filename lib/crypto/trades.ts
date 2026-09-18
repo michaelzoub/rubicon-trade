@@ -34,7 +34,13 @@ export async function proposeSwap(state: HubState, userId: string, input: SwapRe
   ]);
   const policy = tradePolicy(state.profile, value, state.trades, false, Date.now(), initiator), at = new Date().toISOString();
   const status: TradeIntent["status"] = policy.allowed ? "reserved" : policy.needsApproval ? "approval_required" : "blocked";
-  const detail = status === "blocked" ? `Blocked: ${policy.reason}` : initiator === "user" ? "Review and sign with your wallet when you’re ready. Native network fees are additional." : status === "reserved" ? "Within your agent’s limits and reserved against them. It still settles only when you sign in your wallet." : "Waiting for you to review and sign in your wallet. Network fees are additional.";
+  // The fee sentence has to match the one the card prints above it: on a
+  // sponsored chain nothing is "additional" — it comes out of the same USDC.
+  const fee = gaslessChain(request.chainId) ? "The network fee comes out of your USDC." : `Network fees are paid in ${chain(request.chainId).nativeSymbol}.`;
+  const detail = status === "blocked" ? `Blocked: ${policy.reason}`
+    : initiator === "user" ? `Review and sign in your wallet when you’re ready. ${fee}`
+    : status === "reserved" ? "Within your agent’s limits and reserved against them. It still settles only when you sign in your wallet."
+    : `Waiting for you to review and sign in your wallet. ${fee}`;
   const trade: TradeIntent = { id: crypto.randomUUID(), initiator, asset: { id: `${request.chainId}:${request.tokenOut}`, symbol: tokenOut.symbol.toUpperCase(), name: `${tokenOut.symbol.toUpperCase()} on ${chain(request.chainId).name}`, kind: "crypto" }, side: "buy", value, estimatedPrice: null, estimatedQuantity: null, resultingExposure: null, createdAt: at, reasoning: reasoning.slice(0, 600), policy: { ...policy, at }, status,
     crypto: { request, outputAmount: quote.outputAmount, minimumOutput: quote.minimumOutput, expiresAt: quote.expiresAt, phase: "ready", detail, display: { tokenIn, tokenOut } } };
   state.trades.push(trade);

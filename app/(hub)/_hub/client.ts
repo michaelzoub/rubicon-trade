@@ -38,11 +38,17 @@ export type StateAction =
 
 /** Onchain swap actions. `propose` is the user's own swap; the rest drive a proposal through signing and verification. */
 export type CryptoAction =
-  | { action: "propose"; chainId: number; wallet: string; tokenIn: string; tokenOut: string; amount: string; slippageBps?: number; note?: string }
+  | { action: "purchase_route"; destinationChainId: number; tokenOut: string; amount: string }
+  | { action: "holdings"; extra?: { chainId: number; token: string }[] }
+  | { action: "withdraw"; chainId: number; wallet: string; token: string; to: string; amount: string }
+  | { action: "bridge_prepare" | "bridge_resume" | "bridge_status"; tradeId: string }
+  | { action: "bridge_signed"; tradeId: string; signature: string }
+  | { action: "bridge_submitted"; tradeId: string; hash: string; userOpHash?: string }
+  | { action: "propose"; destinationChainId?: number; chainId: number; wallet: string; tokenIn: string; tokenOut: string; amount: string; slippageBps?: number; note?: string }
   | { action: "prepare" | "resume" | "reject" | "status"; tradeId: string }
   | { action: "authorize"; tradeId: string; quoteId: string; signature?: string }
   | { action: "submitted"; tradeId: string; hash: string; userOpHash?: string };
-export type CryptoResult = { state: HubState; tradeId?: string; quoteId?: string; permitData?: import("@/lib/crypto/types").PermitData; batch?: SwapBatch; transaction?: Transaction; step?: "approval" | "swap"; expiresAt?: number };
+export type CryptoResult = { state?: HubState; holdings?: import("@/lib/crypto/recovery").Holding[]; route?: import("@/lib/crypto/route-resolver").ResolvedRoute; tradeId?: string; quoteId?: string; permitData?: import("@/lib/crypto/types").PermitData; batch?: SwapBatch; transaction?: Transaction; typedData?: import("@/lib/crypto/bridge-types").TypedData; chainId?: number; step?: "approval" | "swap"; expiresAt?: number };
 
 export const hubApi = {
   wallets: (token: Token) => request<{ wallets: string[] }>(token, "/api/trade/crypto", { cache: "no-store" }),

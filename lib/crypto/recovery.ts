@@ -1,0 +1,107 @@
+import 'server-only';
+import { encodeFunctionData, decodeFunctionResult, parseAbi } from 'viem';
+import { address, chain, CHAIN_IDS, formatUnits, type ChainId } from './chains';
+import { rpc } from './rpc';
+import { ownedWallet } from './wallet';
+import { CATALOG_ENTRIES } from './catalog';
+import type { HubState } from '@/lib/socialtrading/types';
+
+/** Deployed at the same address on every chain here, verified by reading its
+ * code on each. One call answers a whole chain's worth of balances, which is
+ * what makes this affordable against public RPCs. */
+export const MULTICALL3 = '0xca11bde05977b3631167028862be2a173976ca11';
+
+const multicallAbi = parseAbi(['function aggregate3((address target, bool allowFailure, bytes callData)[] calls) view returns ((bool success, bytes returnData)[])']);
+const erc20Abi = parseAbi([
+  'function balanceOf(address owner) view returns (uint256)',
+  'function symbol() view returns (string)',
+  'function decimals() view returns (uint8)',
+  'function transfer(address to, uint256 amount) returns (bool)',
+]);
+
+export type Holding = {
+  chainId: number; chainName: string; wallet: string; token: string;
+  symbol: string; decimals: number; balance: string; display: string;
+  /** USDC on a chain the app does not buy from is the classic "wrong network"
+   * arrival, and worth naming as such rather than listing as a stray token. */
+  kind: 'usdc' | 'token';
+};
+
+/** Which contracts to look for on a chain.
+ *
+ * There is no indexer behind these RPCs, so an exhaustive scan is not possible
+ * and pretending otherwise would be worse than a bounded one. This covers what
+ * actually goes wrong: USDC that landed on the wrong network, something bought
+ * earlier, or anything in the catalog. Anything else is reachable by pasting its
+ * contract address, which is the honest escape hatch. */
+export function candidates(chainId: number, state?: HubState): string[] {
+  const here = new Set<string>([chain(chainId).usdc]);
+  for (const entry of CATALOG_ENTRIES) {
+    const at = entry.contracts[chainId as ChainId];
+    if (at) here.add(at.toLowerCase());
+  }
+  for (const trade of state?.trades ?? []) {
+    const r = trade.crypto?.request;
+    if (r && r.chainId === chainId) { here.add(r.tokenOut.toLowerCase()); here.add(r.tokenIn.toLowerCase()); }
+    const b = trade.crypto?.bridge?.request;
+    if (b?.destinationChainId === chainId) here.add(b.tokenOut.toLowerCase());
+  }
+  return [...here];
+}
+
+async function readChain(chainId: number, wallet: string, tokens: string[]): Promise<Holding[]> {
+  if (!tokens.length) return [];
+  const calls = tokens.flatMap(token => [
+    { target: token as `0x${string}`, allowFailure: true, callData: encodeFunctionData({ abi: erc20Abi, functionName: 'balanceOf', args: [wallet as `0x${string}`] }) },
+    { target: token as `0x${string}`, allowFailure: true, callData: encodeFunctionData({ abi: erc20Abi, functionName: 'symbol' }) },
+    { target: token as `0x${string}`, allowFailure: true, callData: encodeFunctionData({ abi: erc20Abi, functionName: 'decimals' }) },
+  ]);
+  const raw = await rpc<string>(chainId, 'eth_call', [{ to: MULTICALL3, data: encodeFunctionData({ abi: multicallAbi, functionName: 'aggregate3', args: [calls] }) }, 'latest']);
+  const results = decodeFunctionResult({ abi: multicallAbi, functionName: 'aggregate3', data: raw as `0x${string}` }) as readonly { success: boolean; returnData: `0x${string}` }[];
+
+  const held: Holding[] = [];
+  for (const [i, token] of tokens.entries()) {
+    const [bal, sym, dec] = [results[i * 3], results[i * 3 + 1], results[i * 3 + 2]];
+    if (!bal?.success) continue;
+    let balance: bigint, symbol: string, decimals: number;
+    try {
+      balance = decodeFunctionResult({ abi: erc20Abi, functionName: 'balanceOf', data: bal.returnData }) as bigint;
+      if (balance <= 0n) continue;
+      symbol = sym?.success ? String(decodeFunctionResult({ abi: erc20Abi, functionName: 'symbol', data: sym.returnData })).slice(0, 12) : 'Token';
+      decimals = dec?.success ? Number(decodeFunctionResult({ abi: erc20Abi, functionName: 'decimals', data: dec.returnData })) : 18;
+      if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) decimals = 18;
+    } catch { continue; }
+    held.push({
+      chainId, chainName: chain(chainId).name, wallet, token,
+      symbol, decimals, balance: balance.toString(), display: formatUnits(balance.toString(), decimals),
+      kind: token === chain(chainId).usdc ? 'usdc' : 'token',
+    });
+  }
+  return held;
+}
+
+/** Everything of the user's that is sitting somewhere, across every supported
+ * network. Read-only: it never moves anything and never asks a wallet to switch
+ * networks. Sending is the user's own signature, from the client. */
+export async function findHoldings(userId: string, wallets: string[], state?: HubState, extra?: { chainId: number; token: string }[]): Promise<Holding[]> {
+  const list = [...new Set(wallets.map(address))].slice(0, 3);
+  if (!list.length) return [];
+  await Promise.all(list.map(w => ownedWallet(userId, w)));
+
+  const pairs = list.flatMap(wallet => CHAIN_IDS.map(chainId => ({ wallet, chainId })));
+  const results = await Promise.all(pairs.map(async ({ wallet, chainId }) => {
+    const tokens = [...new Set([...candidates(chainId, state), ...(extra ?? []).filter(e => e.chainId === chainId).map(e => address(e.token))])];
+    // One chain failing is not a reason to report nothing about the others.
+    try { return await readChain(chainId, wallet, tokens.slice(0, 40)); } catch { return []; }
+  }));
+  return results.flat().sort((a, b) => Number(b.kind === 'usdc') - Number(a.kind === 'usdc') || a.chainName.localeCompare(b.chainName) || a.symbol.localeCompare(b.symbol));
+}
+
+/** Calldata for an ERC-20 transfer the user signs themselves. The server never
+ * holds a key and never sends this; it only says what a correct transfer is. */
+export function transferCall(token: string, to: string, amount: string) {
+  const target = address(token), recipient = address(to);
+  if (!/^[1-9][0-9]{0,77}$/.test(amount)) throw new Error('Enter an amount greater than zero.');
+  if (recipient === '0x0000000000000000000000000000000000000000') throw new Error('That address would burn the tokens. Check it and try again.');
+  return { to: target, value: '0', data: encodeFunctionData({ abi: erc20Abi, functionName: 'transfer', args: [recipient as `0x${string}`, BigInt(amount)] }) };
+}

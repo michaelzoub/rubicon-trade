@@ -1,3 +1,4 @@
+import { resolvePurchaseRoute } from "./route-resolver";
 import "server-only";
 import { cryptoServices } from "./services";
 import { userWallets, ownedWallet } from "./wallet";
@@ -10,6 +11,7 @@ const token = { chainId: { type: "integer", enum: Object.keys(CHAINS).map(Number
 const swap = { chainId: token.chainId, tokenIn: token.address, tokenOut: token.address, amount: { type: "string", description: "Exact integer input amount in base units. Resolve token decimals first. Never use floating-point arithmetic for base-unit conversion." }, slippageBps: { type: "integer", minimum: 1, maximum: 100 }, wallet: { type: "string", description: "A wallet returned by get_crypto_wallets." } };
 function tool(name: string, description: string, properties: object, required: string[] = []): ToolSchema { return { type: "function", function: { name, description, parameters: { type: "object", properties, required, additionalProperties: false } } }; }
 export const CRYPTO_TOOLS = [
+  tool("check_purchase_bridges", "Answer 'can I afford this?' for a purchase. Reads USDC across every supported network and resolves the route the app would take, returning the chosen route and why each other network was rejected. Read-only; reports failures individually. Never claim funds were moved. Amount is human USDC units. The user signs from Buy; no network is chosen by hand.", { wallet: swap.wallet, destinationChainId: token.chainId, tokenOut: token.address, amount: { type: "string" } }, ["wallet", "destinationChainId", "tokenOut", "amount"]),
   tool("discover_crypto_pairs", "Discover live DEX pairs, token contract identities, liquidity, volume, and price changes. Results are market data, not a safety endorsement.", { query: { type: "string" } }, ["query"]),
   tool("research_crypto_token", "Research an exact chain + contract with DexScreener, CoinGecko metadata (including decimals), and DefiLlama. Partial provider failures are reported.", token, ["chainId", "address"]),
   tool("crypto_history", "CoinGecko price, market cap, and volume history for a CoinGecko id.", { id: { type: "string" }, days: { type: "integer", minimum: 1, maximum: 365 } }, ["id"]),
@@ -18,11 +20,12 @@ export const CRYPTO_TOOLS = [
   tool("quote_crypto_swap", "Get a fresh exact-input Uniswap quote. Read-only: does not execute or reserve funds. Same-chain EVM V2/V3 swaps only.", swap, Object.keys(swap)),
   tool("propose_crypto_swap", "Propose a Uniswap swap through the user's Privy-linked wallet. Enforces server-valued USD limits and shows a review/sign card. Wallet confirmation is required even in automatic mode. Never claim execution from a quote or proposal.", { ...swap, reasoning: { type: "string" } }, [...Object.keys(swap), "reasoning"]),
 ];
-export const cryptoToolGroup = (name: string) => ["get_crypto_wallets", "quote_crypto_swap", "propose_crypto_swap"].includes(name) ? "trading" : "market";
+export const cryptoToolGroup = (name: string) => ["check_purchase_bridges", "get_crypto_wallets", "quote_crypto_swap", "propose_crypto_swap"].includes(name) ? "trading" : "market";
 export async function executeCryptoTool(name: string, args: Record<string, unknown>, context: AgentContext<import("@/lib/socialtrading/agents/services").AgentServices>): Promise<{ result: unknown; parts: MessagePart[] }> {
   const services = context.services.onchain ?? cryptoServices;
   const text = (v: unknown, fallback = "") => typeof v === "string" ? v.slice(0, 100) : fallback;
   switch (name) {
+    case "check_purchase_bridges": return { result: await resolvePurchaseRoute(context.userId, { wallets: [text(args.wallet)], destinationChainId: args.destinationChainId as number, tokenOut: text(args.tokenOut), amount: text(args.amount) }), parts: [] };
     case "discover_crypto_pairs": return { result: await services.discovery.search(text(args.query)), parts: [] };
     case "research_crypto_token": return { result: await services.research({ chainId: args.chainId as number, address: text(args.address) }), parts: [] };
     case "crypto_history": {

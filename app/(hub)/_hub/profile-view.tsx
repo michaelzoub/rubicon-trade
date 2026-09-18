@@ -19,6 +19,7 @@ import { ThemeCards } from "../theme-cards";
 import { timeAgo } from "./format";
 import { useHub } from "./hub-provider";
 import { useLinkedWallets, WalletsSection } from "./wallets";
+import { RecoverFunds } from "./recover-funds";
 import { HubLink as Link } from "./navigation";
 
 const TELL = ["I’m becoming more interested in nuclear", "Stop showing me memecoins", "Add VRT to things I’m watching", "Change my daily limit to $200"];
@@ -266,6 +267,11 @@ export function ProfileView() {
             <p>Wallets for onchain swaps</p>
             <WalletsSection compact />
             <p className="socialtrading-caption">Swaps settle from your own wallet on Uniswap. Your agent can propose them under the mode above; you always sign.</p>
+          </div>
+          <div className="hub-field">
+            <p>Send something out</p>
+            <p className="socialtrading-caption">Anything sitting in your wallets, on any network Rubicon supports. Useful when something arrived on the wrong one.</p>
+            <RecoverFunds />
           </div>
         </Facet>
       </div>

@@ -1,6 +1,7 @@
 import { extraNetworkFee } from './network-fee';
 import { chain } from './chains';
 import type { SwapRequest, Transaction, PermitData } from './types';
+import type { TypedData } from './bridge-types';
 import type { WalletProvider } from './gasless';
 import { permitPayload, validatePermit } from './permit';
 
@@ -43,4 +44,27 @@ export async function sendPurchaseTransaction(provider: WalletProvider, r: SwapR
   if (typeof hash !== 'string' || !/^0x[0-9a-f]{64}$/i.test(hash)) throw new Error('Wallet returned no transaction hash. Check the wallet before retrying.');
   // Persist a broadcast hash even if the wallet switched after submitting.
   return hash;
+}
+
+/** Signs one route step's EIP-712 request.
+ *
+ * `eth_signTypedData_v4` wants JSON with `EIP712Domain` spelled out and the
+ * payload under `message`; Uniswap sends `values` and names no primary type.
+ * Nothing is broadcast and no gas is spent, so this step cannot strand funds. */
+export async function signStepTypedData(provider: WalletProvider, wallet: string, chainId: number, typed: TypedData, expiresAt?: number) {
+  const assert = async () => {
+    if (expiresAt && Date.now() >= expiresAt) throw new Error('The step expired. Check the purchase status.');
+    if (Number(await provider.request({ method: 'eth_chainId' })) !== chainId) throw new Error(`Switch to ${chain(chainId).name} in your wallet, then continue. No network was changed.`);
+    const accounts = await provider.request({ method: 'eth_accounts' });
+    if (!Array.isArray(accounts) || !accounts.some(a => typeof a === 'string' && a.toLowerCase() === wallet.toLowerCase())) throw new Error('Reconnect the selected wallet before continuing. The active account changed.');
+  };
+  await assert();
+  const domainTypes = [['name', 'string'], ['version', 'string'], ['chainId', 'uint256'], ['verifyingContract', 'address'], ['salt', 'bytes32']]
+    .filter(([key]) => typed.domain[key] !== undefined).map(([name, type]) => ({ name, type }));
+  const payload = JSON.stringify({ domain: typed.domain, types: { EIP712Domain: domainTypes, ...typed.types }, primaryType: typed.primaryType, message: typed.values },
+    (_k, v) => typeof v === 'bigint' ? v.toString() : v);
+  const signature = await provider.request({ method: 'eth_signTypedData_v4', params: [wallet, payload] });
+  await assert();
+  if (typeof signature !== 'string' || !/^0x[0-9a-fA-F]{130}$/.test(signature)) throw new Error('Your wallet returned no usable signature for this step.');
+  return signature;
 }

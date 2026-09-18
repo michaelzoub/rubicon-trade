@@ -124,11 +124,19 @@ export function CryptoTradeCard({ trade, expanded = false }: { trade: TradeInten
       <span className="hub-trade-line-in">{formatUnits(c.outputAmount, tokenOut.decimals)} {tokenOut.symbol.toUpperCase()}</span>
       <small>≈ {usd(trade.value, 2)} · network fee paid in {gaslessChain(r.chainId) ? "USDC" : net.nativeSymbol}</small>
     </p>
-    <div className="purchase-readiness"><strong>{net.name} · {shortAddress(r.wallet)}</strong><p>Receive at least {formatUnits(c.minimumOutput, tokenOut.decimals)} {tokenOut.symbol.toUpperCase()} · {r.slippageBps / 100}% maximum slippage</p><p>{funds || "Wallet and network funds are checked again before signing."}</p><p role="status">{busy ? stage : cryptoStatus(trade)}</p></div>
+    {/* One guarantee before signing: the worst case you have agreed to. Wallet,
+      * network and slippage repeat inside Details, so printing them here as
+      * well only buries the number that actually protects the buyer. */}
+    <p className="purchase-readiness"><strong>At least {formatUnits(c.minimumOutput, tokenOut.decimals)} {tokenOut.symbol.toUpperCase()}</strong>{funds ? <span>{funds}</span> : null}</p>
     {operation && <p className="purchase-requirements">Submitted operation: <span className="mono">{operation}</span>. Keep this reference if confirmation takes longer. <button type="button" className="hub-chip-button" disabled={busy} onClick={() => void act("operation")}>Check submitted purchase</button></p>}
-    {trade.reasoning && <p className="hub-trade-reasoning">{trade.reasoning}</p>}
-    <p className="hub-trade-policy">{trade.policy.reason}</p>
-    <p className="hub-trade-brokerage">{c.detail}</p>
+    {/* A trade the person placed already says what it is in the line above, and
+      * the agent's limits are not a fact about it. Both are worth reading when
+      * the agent proposed it, or when policy is the reason it cannot proceed. */}
+    {trade.initiator !== "user" && trade.reasoning && <p className="hub-trade-reasoning">{trade.reasoning}</p>}
+    {(trade.initiator !== "user" || !trade.policy.allowed) && <p className="hub-trade-policy">{trade.policy.reason}</p>}
+    {/* While a step is running its progress is the status; the resting copy is
+      * only worth the space once there is nothing more useful to say. */}
+    {busy ? <p className="hub-trade-brokerage" role="status">{stage}</p> : c.detail && <p className="hub-trade-brokerage">{c.detail}</p>}
     {c.history?.map((entry, i) => <p className="hub-trade-brokerage" key={`${entry.hash}:${i}`}>{entry.step === "approval" ? "Token approval" : "Swap"} {entry.result}: <a className="mono hub-inline-link" href={explorerTx(r.chainId, entry.hash)} target="_blank" rel="noopener noreferrer">{entry.hash}</a></p>)}
     {c.hash && <p className="hub-trade-brokerage">Transaction <a className="mono hub-inline-link" href={explorerTx(r.chainId, c.hash)} target="_blank" rel="noopener noreferrer">{shortAddress(c.hash)}<ArrowUpRight size={12} aria-hidden="true" /></a></p>}
     <details className="hub-disclosure hub-trade-disclosure" open={expanded}>

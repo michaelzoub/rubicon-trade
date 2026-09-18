@@ -36,6 +36,9 @@ vi.mock("./client", async importOriginal => {
       searchTokens: async (_t: unknown, q: string) => ({ tokens: PREVIEW_TOKENS.filter(t => t.symbol.toLowerCase().includes(q.toLowerCase())) }),
       crypto: async (_t: unknown, _r: number, body: Record<string, unknown>) => {
         events.posted.push(body);
+        if (body.action === "purchase_route") return { route: routeReply(String(body.amount)) };
+        // Read-only, like the server: it answers without a workspace.
+        if (body.action === "holdings") return { holdings: holdingsReply() };
         if (body.action === "prepare") return authorized.sponsored
           ? { state: { ...PREVIEW_STATE, revision: 13 }, batch: BATCH, step: "swap", expiresAt: Date.now() + 60_000 }
           : { state: { ...PREVIEW_STATE, revision: 13 }, transaction: { chainId: 8453, from: BATCH.sender, ...BATCH.calls[0] }, step: "swap", expiresAt: Date.now() + 60_000 };
@@ -59,12 +62,20 @@ import { ProfileView } from "./profile-view";
 import { ActivityView } from "./activity-view";
 import type { AccountSummary } from "@/lib/socialtrading/plans";
 
+/** What the server says about where the money is. Tests that care about
+ * funding describe it; everything else buys from a funded Base wallet. */
+const funded = (chainId: number, balance: string) => ({ chainId, wallet: PREVIEW_WALLET, balance, reserve: "20000", status: "same_chain" as const });
+let routeReply: (amount: string) => { chosen: unknown; candidates: unknown[] } = () => ({ chosen: funded(8453, "500000000"), candidates: [funded(8453, "500000000")] });
+let holdingsReply: () => unknown[] = () => [];
+
 let container: HTMLDivElement, root: Root;
 beforeEach(() => {
   privy.sendTransaction.mockImplementation(async ({ method }: { method: string }) => method === "eth_chainId" ? "0x2105" : method === "eth_accounts" ? [PREVIEW_WALLET] : method === "eth_call" ? "0x3b9aca00" : "0x0");
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(prefers-reduced-motion: reduce)", media: query, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() }));
   events.script = []; events.posted = [];
+  routeReply = () => ({ chosen: funded(8453, "500000000"), candidates: [funded(8453, "500000000")] });
+  holdingsReply = () => [];
   // The account card teaches itself once per person; tests that are not about
   // that moment start on the far side of it.
   localStorage.setItem("rubicon:account-discovered:v1", "1");
@@ -212,39 +223,56 @@ it("shows an onchain swap in human units and walks prepare → sign → submitte
 });
 
 it("explains that a small mainnet buy is blocked by the fee, not by the price", async () => {
-  // The exact case from the field: plenty of USDC for the purchase, nowhere near
-  // enough for Ethereum gas, and the panel used to quote Base's fee at them.
-  privy.sendTransaction.mockImplementation(async ({ method }: { method: string }) =>
-    method === "eth_chainId" ? "0x1" : method === "eth_accounts" ? [PREVIEW_WALLET] : method === "eth_call" ? `0x${(3340000).toString(16)}` : "0x0"); // 3.34 USDC, no ETH
+  // The exact case from the field: the money is on Ethereum, and moving a couple
+  // of dollars of it costs more than the purchase is worth. The resolver says so
+  // by name rather than leaving a disabled button unexplained.
+  routeReply = () => ({ chosen: null, candidates: [
+    { chainId: 1, wallet: PREVIEW_WALLET, balance: "3340000", reserve: "191600", status: "fee_exceeds_amount" },
+    { chainId: 8453, wallet: PREVIEW_WALLET, balance: "0", reserve: "26400", status: "insufficient" },
+  ] });
   await render(PREVIEW_STATE, <TradeView />);
   await setValue(container.querySelector("#buy-search") as HTMLInputElement, "pepe");
   await act(async () => { await new Promise(r => setTimeout(r, 350)); });
   await act(async () => (Array.from(container.querySelectorAll(".hub-buy-result")).find(b => b.textContent?.includes("PEPE")) as HTMLElement).click());
   await setValue(container.querySelector("#buy-amount") as HTMLInputElement, "0.2");
-  await act(async () => { await new Promise(r => setTimeout(r, 10)); });
-  // The fee quoted is Ethereum's, never the default chain's.
-  expect(container.textContent).toContain("up to $16");
-  expect(container.textContent).not.toContain("$0.5 is held back");
-  expect(container.textContent).toContain("the network fee on Ethereum is up to $16");
-  // And it points somewhere the same money would actually work.
-  expect(container.textContent).toMatch(/on (Base|Arbitrum|Optimism|Polygon) costs about \$/);
+  await act(async () => { await new Promise(r => setTimeout(r, 700)); });
+  // Named the chain the money is actually on, and offered somewhere it works.
+  expect(container.textContent).toContain("Your USDC is on Ethereum");
+  expect(container.textContent).toContain("costs more than it is worth");
+  expect(container.textContent).toContain("hold USDC on Base");
+  // No network picker survives: the route is resolved, not chosen.
+  expect(container.querySelector(".hub-buy-form select")).toBeNull();
   expect((container.querySelector(".hub-buy-submit") as HTMLButtonElement).disabled).toBe(true);
+
+  // The arithmetic is inspectable rather than something to take on faith: every
+  // network looked at, what it holds, the live fee, and why it was not used.
+  const rows = Array.from(container.querySelectorAll(".hub-route-detail li")).map(li => li.textContent);
+  expect(rows).toHaveLength(2);
+  expect(rows[0]).toContain("Ethereum");
+  expect(rows[0]).toContain("$3.34");
+  expect(rows[0]).toContain("Fee is more than this buy");
+  // The live fee, not the stale $16 constant it replaced.
+  expect(rows[0]).toContain("fee $0.19");
+  expect(rows[1]).toContain("Base");
+  expect(rows[1]).toContain("No USDC");
 });
 
 it("tells the buyer what is missing instead of letting a short balance reach the wallet", async () => {
-  privy.sendTransaction.mockImplementation(async ({ method }: { method: string }) =>
-    method === "eth_chainId" ? "0x2105" : method === "eth_accounts" ? [PREVIEW_WALLET] : method === "eth_call" ? "0x2faf080" : "0x0"); // 50 USDC, no ETH
+  // 50 USDC on Base, and no native ETH anywhere: $100 is short, $25 is fine.
+  routeReply = (amount: string) => Number(amount) > 50
+    ? { chosen: null, candidates: [{ chainId: 8453, wallet: PREVIEW_WALLET, balance: "50000000", reserve: "20000", status: "insufficient" }] }
+    : { chosen: funded(8453, "50000000"), candidates: [funded(8453, "50000000")] };
   await render(PREVIEW_STATE, <TradeView />);
   await setValue(container.querySelector("#buy-search") as HTMLInputElement, "bnvda");
   await act(async () => { await new Promise(r => setTimeout(r, 350)); });
   await act(async () => (Array.from(container.querySelectorAll(".hub-buy-result")).find(b => b.textContent?.includes("BNVDA")) as HTMLElement).click());
   await setValue(container.querySelector("#buy-amount") as HTMLInputElement, "100");
-  await act(async () => { await new Promise(r => setTimeout(r, 10)); });
-  expect(container.textContent).toContain("You have 50.00 USDC");
+  await act(async () => { await new Promise(r => setTimeout(r, 700)); });
+  expect(container.textContent).toContain("You have 50.00 USDC on Base");
   expect((container.querySelector(".hub-buy-submit") as HTMLButtonElement).disabled).toBe(true);
   // Having no ETH is no longer a reason to stop: the fee comes out of USDC.
   await setValue(container.querySelector("#buy-amount") as HTMLInputElement, "25");
-  await act(async () => { await new Promise(r => setTimeout(r, 10)); });
+  await act(async () => { await new Promise(r => setTimeout(r, 700)); });
   expect((container.querySelector(".hub-buy-submit") as HTMLButtonElement).disabled).toBe(false);
 });
 
@@ -259,6 +287,10 @@ it("lets the user buy a tokenized stock with dollars from the Trade page", async
   await act(async () => option.click());
   expect(container.textContent).toContain("Backed NVIDIA");
   await setValue(container.querySelector("#buy-amount") as HTMLInputElement, "25");
+  // Buying waits for the resolved route: the panel will not submit a purchase
+  // before the server has said which wallet and network it pays from.
+  await act(async () => { await new Promise(r => setTimeout(r, 700)); });
+  expect(container.textContent).toContain("Paying from Base");
   const form = container.querySelector("form.hub-buy-form")!;
   await act(async () => { form!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
   await act(async () => { await new Promise(r => setTimeout(r, 10)); });

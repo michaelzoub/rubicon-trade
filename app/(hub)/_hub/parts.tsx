@@ -1,4 +1,5 @@
 "use client";
+import { BridgeTradeCard } from "./bridge-trade-card";
 import { openPurchase } from "./purchase";
 
 import { ArrowUpRight, Check, Eye, EyeOff, HelpCircle, X } from "lucide-react";
@@ -241,6 +242,7 @@ export function TradeCard({ tradeId, expanded = false }: { tradeId: string; expa
     gsap.fromTo(status.current, { opacity: 0, y: -4 }, { opacity: 1, y: 0, duration: .3, ease: rubiconMotion.ease.enter, clearProps: "all" });
   }, [trade]);
   if (!trade) return <div className="hub-notice">This trade is no longer available.</div>;
+  if (trade.crypto?.bridge) return <BridgeTradeCard trade={trade} />;
   if (trade.crypto) return <CryptoTradeCard trade={trade} expanded={expanded} />;
   const pending = trade.status === "approval_required";
   const connected = state.brokerage?.connected ?? false;

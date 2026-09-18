@@ -111,7 +111,18 @@ export function PreviewHub({ view, profile, kind, id }: { view: string; profile?
       searchTokens: async (_token: unknown, q: string) => ({ tokens: PREVIEW_TOKENS.filter(t => `${t.symbol} ${t.name}`.toLowerCase().includes(q.toLowerCase())) }),
       crypto: async (_token: unknown, _revision: number, action: CryptoAction, id = "default") => {
         const state = structuredClone(states.get(id)!);
+        if (action.action === "holdings") {
+          // Preview: USDC that landed on Ethereum instead of Base, the classic case.
+          return { holdings: [{ chainId: 1, chainName: "Ethereum", wallet: PREVIEW_WALLET, token: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", symbol: "USDC", decimals: 6, balance: "4250000", display: "4.25", kind: "usdc" as const }] };
+        }
+        if (action.action === "withdraw") throw new Error("Preview does not send transactions. Connect a live wallet to move funds.");
+        if (action.action === "purchase_route") {
+          // Preview funds sit on Base, so the panel shows a resolved same-chain route.
+          const chosen = { chainId: 8453, wallet: PREVIEW_WALLET, balance: "500000000", reserve: "20000", status: "same_chain" as const };
+          return { route: { chosen, candidates: [chosen] } };
+        }
         if (action.action === "propose") {
+          if (action.destinationChainId && action.destinationChainId !== action.chainId) throw new Error("Cross-network execution requires a connected live wallet. Preview does not submit transactions.");
           const trade: HubState["trades"][number] = { ...structuredClone(PREVIEW_STATE.trades[1]), id: crypto.randomUUID(), initiator: "user", createdAt: new Date().toISOString(), status: "reserved", reasoning: action.note ?? "Placed by you.", policy: { allowed: true, reason: "You placed this yourself. Your agent’s mode and limits apply only to trades it proposes.", at: new Date().toISOString() } };
           trade.crypto!.request = { chainId: action.chainId, wallet: action.wallet, tokenIn: action.tokenIn, tokenOut: action.tokenOut, amount: action.amount.replace(".", "") + "0000", slippageBps: action.slippageBps ?? 50 };
           trade.crypto!.detail = "Preview: review and sign with your wallet when you’re ready.";

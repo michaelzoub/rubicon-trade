@@ -99,7 +99,7 @@ export const PREVIEW_STATE: HubState = {
     id: "t2", initiator: "agent", asset: { id: "8453:0x4200000000000000000000000000000000000006", symbol: "WETH", name: "WETH on Base", kind: "crypto" }, side: "buy", value: 25, estimatedPrice: null, estimatedQuantity: null, resultingExposure: null,
     createdAt: ago(1), status: "approval_required", reasoning: "You asked for ETH exposure from your own wallet. Small and reversible.",
     policy: { allowed: false, reason: "Your approval is required.", at: ago(1) },
-    crypto: { request: { chainId: 8453, wallet: "0x1111111111111111111111111111111111111111", tokenIn: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", tokenOut: "0x4200000000000000000000000000000000000006", amount: "25000000", slippageBps: 50 }, outputAmount: "6100000000000000", minimumOutput: "6069500000000000", expiresAt: NOW + 60_000, phase: "ready", detail: "Waiting for you to review and sign in your wallet. Network fees are additional.", display: { tokenIn: { symbol: "USDC", decimals: 6 }, tokenOut: { symbol: "WETH", decimals: 18 } } },
+    crypto: { request: { chainId: 8453, wallet: "0x1111111111111111111111111111111111111111", tokenIn: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", tokenOut: "0x4200000000000000000000000000000000000006", amount: "25000000", slippageBps: 50 }, outputAmount: "6100000000000000", minimumOutput: "6069500000000000", expiresAt: NOW + 60_000, phase: "ready", detail: "Waiting for you to review and sign in your wallet. The network fee comes out of your USDC.", display: { tokenIn: { symbol: "USDC", decimals: 6 }, tokenOut: { symbol: "WETH", decimals: 18 } } },
   }],
   brokerage: { provider: "robinhood", connected: false },
 };

@@ -23,9 +23,15 @@ const bought = (status: HubState["trades"][number]["status"]): HubState => {
   if (status === "confirmed") swap.crypto = { ...swap.crypto!, phase: "complete", hash: `0x${"cd".repeat(32)}` };
   return { ...structuredClone(PREVIEW_STATE), revision: 20, trades: [...PREVIEW_STATE.trades, swap] };
 };
+/** The server resolves where the money is; the panel only renders the answer. */
+const seat = { chainId: 8453, wallet: PREVIEW_WALLET, balance: "500000000", reserve: "20000", status: "same_chain" as const };
+const route = { chosen: seat, candidates: [seat] };
 const api = {
   searchTokens: async (_t: unknown, q: string) => ({ tokens: PREVIEW_TOKENS.filter(t => `${t.symbol} ${t.name}`.toLowerCase().includes(q.toLowerCase())) }),
-  crypto: async (_t: unknown, _r: number, body: { action: string }) => body.action === "propose" ? { state: bought("reserved"), tradeId: "t9" } : { state: bought("confirmed") },
+  crypto: async (_t: unknown, _r: number, body: { action: string }) =>
+    body.action === "purchase_route" ? { route }
+      : body.action === "propose" ? { state: bought("reserved"), tradeId: "t9" }
+      : { state: bought("confirmed") },
 };
 beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -35,6 +41,8 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); reduced = true; });
 const setValue = async (input: HTMLInputElement, value: string) => act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); });
 const tick = () => act(async () => { await new Promise(r => setTimeout(r, 350)); });
+/** Long enough for the debounced route resolution to land. */
+const resolved = () => act(async () => { await new Promise(r => setTimeout(r, 700)); });
 
 async function buyThenSettle() {
   await act(async () => root.render(<HubProvider userId="preview-user" name="Michael" initial={PREVIEW_STATE} initialAccount={PREVIEW_ACCOUNT} api={api}><BuyPanel /></HubProvider>));
@@ -43,6 +51,10 @@ async function buyThenSettle() {
   await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>(".hub-buy-result")).find(b => b.textContent?.includes("BNVDA"))!.click());
   expect(container.querySelector("#buy-search")).toBeNull();
   expect(container.querySelector(".hub-buy-estimate")?.textContent).toContain("BNVDA at today’s price");
+  await resolved();
+  // The network, the wallet and the fee are one sentence, not four controls.
+  expect(container.querySelector(".hub-buy-form")!.textContent).toContain("Paying from Base");
+  expect(container.querySelector("select")).toBeNull();
   await act(async () => { container.querySelector("form.hub-buy-form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
   await tick();
   expect(container.querySelector(".hub-swap-result .hub-trade--crypto")).not.toBeNull();
@@ -51,6 +63,26 @@ async function buyThenSettle() {
   await act(async () => decline.click());
   await tick();
 }
+
+it("shows a purchase you placed without restating it or the agent's limits", async () => {
+  await act(async () => root.render(<HubProvider userId="preview-user" name="Michael" initial={PREVIEW_STATE} initialAccount={PREVIEW_ACCOUNT} api={api}><BuyPanel /></HubProvider>));
+  await setValue(container.querySelector("#buy-search") as HTMLInputElement, "bnvda");
+  await tick();
+  await act(async () => Array.from(container.querySelectorAll<HTMLButtonElement>(".hub-buy-result")).find(b => b.textContent?.includes("BNVDA"))!.click());
+  await resolved();
+  await act(async () => { container.querySelector("form.hub-buy-form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+  await tick();
+  const card = container.querySelector(".hub-swap-result .hub-trade--crypto")!;
+
+  // The line above already says what this is, and the agent's limits are not a
+  // fact about a trade the person placed themselves.
+  expect(card.textContent).not.toContain("Your agent’s mode and limits");
+  expect(card.querySelector(".hub-trade-reasoning")).toBeNull();
+  // The status belongs in one place, not beside itself.
+  expect(card.textContent!.match(/Ready to sign/g) ?? []).toHaveLength(1);
+  // The guarantee that matters before signing survives.
+  expect(card.querySelector(".purchase-readiness")!.textContent).toContain("At least");
+});
 
 it("celebrates in words when the buy settles onchain, and keeps the burst quiet under reduced motion", async () => {
   await buyThenSettle();

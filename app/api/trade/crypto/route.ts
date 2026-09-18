@@ -1,7 +1,11 @@
+import { advanceBridge, proposeBridge } from "@/lib/crypto/bridges";
+import { resolvePurchaseRoute } from "@/lib/crypto/route-resolver";
+import { findHoldings, transferCall } from "@/lib/crypto/recovery";
 import { authenticate, bodyOf, failure, HubError, loadState, requestedAgent, saveState } from "@/lib/socialtrading/server";
 import { authorizeSwap, prepareSwap, resumeSwap, userSwap } from "@/lib/crypto/trades";
-import { verifyTransaction, verifyUserOperation } from "@/lib/crypto/rpc";
-import { userWallets } from "@/lib/crypto/wallet";
+import { rpc as rpcCall, verifyTransaction, verifyUserOperation } from "@/lib/crypto/rpc";
+import { ownedWallet, userWallets } from "@/lib/crypto/wallet";
+import { chain } from "@/lib/crypto/chains";
 import { cryptoServices } from "@/lib/crypto/services";
 import { normalizeMatches } from "@/lib/crypto/search";
 import { recordEvent } from "@/lib/socialtrading/personalization";
@@ -29,14 +33,42 @@ export async function POST(request: Request) {
     const state = await loadState(userId, requestedAgent(body.agentId));
     if (!state) throw new HubError(404, "Workspace not found.");
     if (body.revision !== state.revision) throw new HubError(409, "Your workspace changed. Refresh and try again.");
+    if (body.action === "holdings") {
+      // Read-only: reports what is sitting where. Moving any of it is a
+      // transaction the user signs in their own wallet.
+      const wallets = await userWallets(userId);
+      const extra = Array.isArray(body.extra) ? (body.extra as { chainId: number; token: string }[]).slice(0, 5) : undefined;
+      return Response.json({ holdings: await findHoldings(userId, wallets, state, extra) });
+    }
+    if (body.action === "withdraw") {
+      const wallet = String(body.wallet);
+      await ownedWallet(userId, wallet);
+      const chainId = Number(body.chainId);
+      chain(chainId);
+      const call = transferCall(String(body.token), String(body.to), String(body.amount));
+      // The nonce is reserved here, exactly as a swap's is, so a lost wallet
+      // response can never be resent as a second transfer.
+      const nonce = await rpcCall<string>(chainId, "eth_getTransactionCount", [wallet, "pending"]);
+      if (!/^0x[0-9a-f]+$/i.test(nonce)) throw new HubError(502, "Could not prepare the transfer. Try again.");
+      return Response.json({ transaction: { chainId, from: wallet, ...call, nonce } });
+    }
+    if (body.action === "purchase_route") {
+      // The wallets are whatever Privy has verified for this user, never a client claim.
+      const wallets = await userWallets(userId);
+      return Response.json({ route: await resolvePurchaseRoute(userId, { wallets, destinationChainId: Number(body.destinationChainId), tokenOut: String(body.tokenOut), amount: String(body.amount) }) });
+    }
     if (body.action === "propose") {
       // The user's own swap: their decision, their signature. Agent mode does not gate it.
-      const trade = await userSwap(state, userId, body);
+      const trade = body.destinationChainId !== undefined && Number(body.destinationChainId) !== Number(body.chainId) ? await proposeBridge(state, userId, body) : await userSwap(state, userId, body);
       return Response.json({ state: await saveState(userId, state), tradeId: trade.id });
     }
     if (typeof body.tradeId !== "string") throw new HubError(400, "Choose a swap proposal.");
     const trade = state.trades.find(t => t.id === body.tradeId), c = trade?.crypto;
     if (!trade || !c) throw new HubError(404, "Swap not found.");
+    if (c.bridge) {
+      const result = await advanceBridge(state, userId, trade, body);
+      return Response.json({ state: await saveState(userId, state), ...result });
+    }
     if (body.action === "prepare") {
       const result = await prepareSwap(state, userId, trade);
       // Optimistic revision update is the cross-process claim: only one caller receives calldata.

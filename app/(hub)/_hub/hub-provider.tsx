@@ -260,7 +260,9 @@ export function HubProvider({ userId, name, initial, initialAccount = null, api:
     let result: CryptoResult;
     try { result = await run(); }
     catch (e) { if (e instanceof HubRequestError && e.status === 409) { await reload(); result = await run(); } else throw e; }
-    if (epoch === generation.current) { revision.current = result.state.revision; setState(result.state); }
+    // A read-only answer carries no workspace, and adopting a stale one would
+    // quietly discard whatever the person changed while it was in flight.
+    if (result.state && epoch === generation.current) { revision.current = result.state.revision; setState(result.state); }
     return result;
   }, [api, token, reload]);
   const wallets = useCallback(async () => (await api.wallets(token)).wallets, [api, token]);
