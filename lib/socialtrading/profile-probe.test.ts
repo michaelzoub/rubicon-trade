@@ -13,10 +13,11 @@ const spent = (kind: Evidence["kind"], id: string): Evidence =>
   ({ id, at: "2026-09-18T10:00:00.000Z", kind, prompt: "asked", topics: ["robotics"], answer: { kind: "binary", direction: "yes" } });
 
 /**
- * Four low-value beliefs. They exist only to get past rule 1 ("fewer than
- * three topics read"), so each test's own topic is the one that actually wins
- * the ranking. Their values are spread apart deliberately, so the chips rule
- * (top three within 15%) does not fire by accident.
+ * Four low-value beliefs. They are filler: each test's own topic is the one
+ * that should win the ranking, and these only make the field realistic. Their
+ * values are spread apart deliberately, so the chips rule (top three within
+ * 15%) does not fire by accident. All four sit in domains no test touches, so
+ * the funnel's novelty term applies to them uniformly and cannot reorder them.
  *
  *   medical-technology  0.5 * 0.64 * 0.50 = 0.160
  *   future-of-work     0.45 * 0.64 * 0.50 = 0.144
@@ -95,7 +96,7 @@ describe("choosing the next probe", () => {
     expect(getNextProfileProbe(model([{ topic: "semiconductors", p: 0.05, certainty: 0.2 }], { turn: 1 }), ctx())).toBeNull();
   });
 
-  it("opens with a swipe deck while fewer than three topics have been read", () => {
+  it("opens wide: the first probes are always a swipe, whatever the readings say", () => {
     const probe = getNextProfileProbe(model([{ topic: "semiconductors", p: 0.6, certainty: 0.4 }]), ctx());
     expect(probe).toMatchObject({ kind: "choice", topics: ["semiconductors"], category: "Technology" });
   });
@@ -119,13 +120,13 @@ describe("choosing the next probe", () => {
   it("asks for conviction and horizon once a view is settled and no horizon exists", () => {
     // 0.78 * 0.384 * 0.75 = 0.225, the top candidate.
     const strong: Belief[] = [...settled, { topic: "robotics", p: 0.78, certainty: 0.7 }];
-    expect(getNextProfileProbe(model(strong, { turn: 2 }), ctx())).toMatchObject({ kind: "pad", topics: ["robotics"] });
+    expect(getNextProfileProbe(model(strong, { turn: 4 }), ctx())).toMatchObject({ kind: "pad", topics: ["robotics"] });
   });
 
   it("does not ask for a horizon that onboarding already has", () => {
     const strong: Belief[] = [...settled, { topic: "robotics", p: 0.78, certainty: 0.7 }];
     const answers = { ...newOnboarding(), responses: [{ id: "r", category: "Technology", text: "t", direction: "yes" as const, years: 5 }] };
-    expect(getNextProfileProbe(model(strong, { turn: 2 }), ctx({ answers }))!.kind).not.toBe("pad");
+    expect(getNextProfileProbe(model(strong, { turn: 4 }), ctx({ answers }))!.kind).not.toBe("pad");
   });
 
   it("lets the person break a three-way tie with chips", () => {
@@ -159,5 +160,40 @@ describe("choosing the next probe", () => {
     expect(first).toMatchObject({ kind: "choice", category: "Technology" });
     const second = getNextProfileProbe({ ...pending, turn: 1, evidence: [{ ...spent("choice", first!.id), topics: first!.topics }] }, ctx());
     expect(second!.category).toBe("Energy");
+  });
+});
+
+describe("the funnel", () => {
+  it("keeps the opening probes broad even when a sharper instrument would fit", () => {
+    // A geographic topic at a lopsided reading would take the map immediately
+    // if the stages did not exist.
+    const geo: Belief[] = [...settled, { topic: "defence-sovereignty", p: 0.95, certainty: 0.05 }];
+    expect(getNextProfileProbe(model(geo, { turn: 0 }), ctx())!.kind).toBe("choice");
+    expect(getNextProfileProbe(model(geo, { turn: 1 }), ctx())!.kind).toBe("choice");
+    expect(getNextProfileProbe(model(geo, { turn: 2 }), ctx())!.kind).toBe("map");
+  });
+
+  it("holds conviction and freeform back until the shape is known", () => {
+    const strong: Belief[] = [...settled, { topic: "robotics", p: 0.78, certainty: 0.7 }];
+    expect(getNextProfileProbe(model(strong, { turn: 3 }), ctx({ knowledge: 3 }))!.kind).not.toBe("pad");
+    expect(getNextProfileProbe(model(strong, { turn: 4 }), ctx({ knowledge: 3 }))!.kind).toBe("pad");
+  });
+
+  it("spreads early, then digs into the domains already engaged with", () => {
+    const beliefs: Belief[] = [
+      { topic: "semiconductors", p: 0.6, certainty: 0.4 },   // Technology
+      { topic: "power-grid", p: 0.6, certainty: 0.4 },       // Energy
+    ];
+    const asked: Evidence = { ...spent("choice", "probe:data-centers"), topics: ["data-centers"] }; // Technology
+    // Early: Energy is untouched, so it outranks the Technology sibling.
+    expect(rankTopics({ ...model(beliefs, { turn: 1, evidence: [asked] }) })[0].topic.id).toBe("power-grid");
+    // Late: the same evidence now pulls back toward the touched domain.
+    expect(rankTopics({ ...model(beliefs, { turn: 6, evidence: [asked] }) })[0].topic.id).toBe("semiconductors");
+  });
+
+  it("never lets the funnel resurrect a topic the evidence suppressed", () => {
+    const beliefs: Belief[] = [{ topic: "cloud-software", p: 0.05, certainty: 0.3 }];
+    expect(rankTopics(model(beliefs, { turn: 0 }))).toEqual([]);
+    expect(rankTopics(model(beliefs, { turn: 6 }))).toEqual([]);
   });
 });

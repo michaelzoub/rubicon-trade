@@ -22,6 +22,13 @@ export const KNOWN_CERTAINTY = 0.8, KNOWN_MARGIN = 0.3;
 export const MIN_VALUE = 0.05;
 /** How close the top three must be before we let the person break the tie. */
 export const TIE = 0.15;
+/** The funnel. Early probes are about coverage, so they go wide: an untouched
+ * domain outranks a marginally better question inside one we have already been
+ * in. By the end that inverts and the run digs into the domains the person
+ * actually engaged with. `FUNNEL` is how much of a candidate's score this can
+ * move — enough to steer the order, never enough to resurrect a topic the
+ * evidence has already suppressed. */
+export const BROAD_TURNS = 2, DEEP_TURN = 4, FUNNEL = 0.4;
 
 export const probeId = (id: TopicId) => `probe:${id}`;
 
@@ -54,6 +61,10 @@ export const SPECTRUM_STOPS = ["Strongly against", "Leaning against", "Leaning t
  * barely moves a portfolio cannot win on uncertainty alone.
  */
 export function rankTopics(model: ProfileModel): Candidate[] {
+  // Which domains have already been asked about. Early in a run this pushes the
+  // next question out of them; late it pulls the next question back in.
+  const touched = new Set(model.evidence.flatMap(e => e.topics.map(id => probeTopic(id)?.category)));
+  const stage = Math.min(1, model.turn / MAX_PROBES);
   const candidates: Candidate[] = [];
   for (const belief of model.beliefs) {
     const topic = probeTopic(belief.topic);
@@ -63,7 +74,9 @@ export function rankTopics(model: ProfileModel): Candidate[] {
     if (model.asked.includes(probeId(topic.id))) continue;
     const spread = 1 - Math.abs(2 * belief.p - 1);
     const uncertainty = 0.6 * spread + 0.4 * (1 - belief.certainty);
-    candidates.push({ topic, p: belief.p, certainty: belief.certainty, value: belief.p * uncertainty * topic.importance });
+    const novel = touched.has(topic.category) ? 0 : 1;
+    const funnel = (1 - stage) * novel + stage * (1 - novel);
+    candidates.push({ topic, p: belief.p, certainty: belief.certainty, value: belief.p * uncertainty * topic.importance * (1 - FUNNEL + FUNNEL * funnel) });
   }
   // The id tiebreak keeps the order stable, so a run is reproducible in a test.
   return candidates.sort((a, b) => b.value - a.value || a.topic.id.localeCompare(b.topic.id));
@@ -76,15 +89,27 @@ const usedKind = (model: ProfileModel, kind: ProbeKind) => model.evidence.some(e
  * Which interaction closes this particular gap. Ordered, first match wins.
  * Every kind but `choice` is spent at most once, so a run never repeats an
  * instrument — variety is a by-product of the gaps, not a goal of its own.
+ *
+ * The three stages are the funnel. Opening probes are always a swipe, because
+ * the job is a wide read and one gesture is the fastest way to take it. The
+ * middle asks where, and how strongly. Conviction, horizon and freeform come
+ * last, once there is a shape worth deepening — asking someone how sure they
+ * are before you know what they think is asking them to invent an opinion.
+ *
+ * This is keyed on `turn`, not on how many beliefs exist. The first reading
+ * scores every topic in the catalog, so a belief count would be fifteen from
+ * turn one and the broad stage would never happen.
  */
 function chooseKind(best: Candidate, ranked: Candidate[], model: ProfileModel, ctx: ProbeContext): ProbeKind {
-  if (model.beliefs.length < 3) return "choice";
+  if (model.turn < BROAD_TURNS) return "choice";
   if (best.topic.geographic && !usedKind(model, "map")) return "map";
   if (Math.abs(best.p - 0.5) > 0.25 && best.certainty < 0.6 && !usedKind(model, "spectrum")) return "spectrum";
-  const hasHorizon = ctx.answers.responses.some(r => r.years !== undefined);
-  if (best.p > 0.7 && best.certainty > 0.6 && !hasHorizon && !usedKind(model, "pad")) return "pad";
+  if (model.turn >= DEEP_TURN) {
+    const hasHorizon = ctx.answers.responses.some(r => r.years !== undefined);
+    if (best.p > 0.7 && best.certainty > 0.6 && !hasHorizon && !usedKind(model, "pad")) return "pad";
+    if (ctx.knowledge >= 2 && !usedKind(model, "text")) return "text";
+  }
   if (ranked.length >= 3 && best.value - ranked[2].value <= TIE * best.value && !usedKind(model, "chips")) return "chips";
-  if (ctx.knowledge >= 2 && model.turn >= 4 && !usedKind(model, "text")) return "text";
   return "choice";
 }
 
