@@ -3,20 +3,19 @@ import { Bell, Check, MessageSquare, Orbit, SlidersHorizontal, Sparkles } from "
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { profileKey, PERMISSIONS, limitsError, type InvestingProfile, type Permission } from "@/lib/socialtrading/profile";
-import { CATEGORIES, DECK_SIZE, DISLIKES, KEYWORDS, SCENE, basePrediction, deckProgress, isBaseId, newOnboarding, nextPrediction, onboardingThesis, resolveScene, sceneOrder, type OnboardingAnswers, type PredictionResponse } from "@/lib/socialtrading/onboarding";
+import { CATEGORIES, DECK_SIZE, DECK_TITLE, DISLIKES, KEYWORDS, SCENE, basePrediction, deckProgress, isBaseId, newOnboarding, nextPrediction, onboardingThesis, resolveScene, sceneOrder, type OnboardingAnswers, type PredictionResponse } from "@/lib/socialtrading/onboarding";
 import { DEFAULT_PLAN } from "@/lib/socialtrading/plans";
 import { suggestedThemes } from "@/lib/socialtrading/themes";
-import { generatedAgentName } from "@/lib/socialtrading/agents/naming";
 import { LoadingState } from "../_components/ui";
-import { OnboardingAgentPeek } from "./onboarding-agent";
 import { FAMILIARITY_TITLE, familiarityFields, scoreFamiliarity, type FamiliarityResult } from "@/lib/socialtrading/familiarity";
 import { FoundationScale } from "./onboarding-drag";
 import { FamiliarityCheck } from "./familiarity-check";
-import { PredictionDeck, iconFor } from "./onboarding-deck";
+import { InferredSwipeDeck, iconFor, type DeckCard, type Direction } from "./onboarding-deck";
 import { DislikeVoid } from "./onboarding-void";
 import { PredictionPad } from "./onboarding-chart";
 import { GeographyMap } from "./onboarding-geo";
 import { OnboardingCard } from "./onboarding-card";
+import { fetchPredictionDeck, type DeckFetcher } from "./onboarding-client";
 import { useProfileStore, useRunLog, type ArmProps } from "./onboarding-session";
 import "./onboarding.css";
 
@@ -24,14 +23,14 @@ const PERMISSION_ICONS = { notify: Bell, approve: MessageSquare, automatic: Slid
 /** One line per scene. Everything else a scene has to say, it says by being
  * touched — there are no leads, eyebrows or helper paragraphs under these.
  * Positional with SCENE; the opening chart borrows the AI question itself. */
-const TITLES = ["How much of the future already feels clear to you?", FAMILIARITY_TITLE, "", "Where could conflict reshape markets?", "Which futures do you see?", "Which views do you feel strongest about?", "Draw your prediction.", "What doesn’t belong in your future?", "Your outlook. Your rules."];
+const TITLES = ["How much of the future already feels clear to you?", FAMILIARITY_TITLE, "", "Where could conflict reshape markets?", DECK_TITLE, "Which views do you feel strongest about?", "Draw your prediction.", "What doesn’t belong in your future?", "Your outlook. Your rules."];
 const KINDS = ["scale", "chips", "pad", "map", "binary", "chips", "pad", "chips", "rules"];
 
 /** The decision-tree arm. Everyone answers the same two opening questions — how
  * far AI goes, on the chart, and where in the world it lands, on the map — and
- * every question after that is chosen from how those were answered. It is the
- * control in the onboarding experiment. */
-export function TreeOnboarding({ userId, name, onComplete, completing = false, serverError = "", persist = true, agentCreation = false, plan = DEFAULT_PLAN, variant, forced }: ArmProps) {
+ * then swipes the other six domains at their knowledge level. Those answers
+ * shape the profile and the scenes after the deck, not the next swipe. */
+export function TreeOnboarding({ userId, onComplete, completing = false, serverError = "", persist = true, agentCreation = false, plan = DEFAULT_PLAN, variant, forced, fetchDeck = fetchPredictionDeck }: ArmProps & { fetchDeck?: DeckFetcher }) {
   const router = useRouter();
   const { profile, setProfile, loaded, storageError } = useProfileStore(userId, persist);
   const log = useRunLog(variant, forced);
@@ -70,9 +69,9 @@ export function TreeOnboarding({ userId, name, onComplete, completing = false, s
       ? current.responses.map(r => r.id === base.id ? { ...r, ...patch } : r)
       : [{ ...base, direction: "yes" as const, ...patch }, ...current.responses] }));
   }
-  function vote(direction: PredictionResponse["direction"]) {
+  function vote(direction: Direction, card: DeckCard) {
     if (!upcoming) return;
-    const responses = [...a.responses, { ...upcoming, direction }];
+    const responses = [...a.responses, { id: upcoming.id, category: upcoming.category, text: card.text, direction }];
     update({ responses, scene: nextPrediction({ ...a, responses }, knowledge) ? SCENE.deck : SCENE.strongest });
   }
   function go(direction: 1 | -1) {
@@ -120,9 +119,7 @@ export function TreeOnboarding({ userId, name, onComplete, completing = false, s
     } catch { setError("Your profile could not be saved. Please try again."); }
     finally { setSaving(false); }
   }
-  if (!loaded) return <LoadingState label="Loading your profile…" />;
-  // The card on the right builds itself from the answers as they land.
-  const preview: InvestingProfile = { ...profile, thesis: a.strongest.length || a.ownBelief.trim() ? onboardingThesis(a) : "", themes: suggestedThemes(`${positive} ${a.ownBelief}`), step: scene >= SCENE.dislikes ? 5 : scene >= SCENE.strongest ? 4 : scene >= SCENE.deck ? 3 : 2 };
+  if (!loaded) return <LoadingState label="Loading…" />;
   const index = order.indexOf(scene);
   const step = index + (scene === SCENE.deck ? deckProgress(a) / DECK_SIZE : 1);
   const title = scene === SCENE.horizon ? base.text : TITLES[scene];
@@ -143,7 +140,9 @@ export function TreeOnboarding({ userId, name, onComplete, completing = false, s
           {scene === SCENE.knowledge && <FamiliarityCheck showTitle={false} hideContinue busy={busy} initialSelectedIds={profile.investorAnswers.selectedConceptIds} onChange={ids => update({}, { investorAnswers: { ...profile.investorAnswers, selectedConceptIds: ids } })} onComplete={completeKnowledge} />}
           {scene === SCENE.horizon && <PredictionPad stance response={seeded} onChange={placeBase} />}
           {scene === SCENE.geography && <GeographyMap selected={profile.investorAnswers.conflictCountries} thesis={profile.investorAnswers.geopoliticalThesis} onSelected={conflictCountries => answers({ conflictCountries })} onThesis={geopoliticalThesis => answers({ geopoliticalThesis })} />}
-          {scene === SCENE.deck && upcoming && <PredictionDeck card={upcoming} backs={Math.max(0, DECK_SIZE - deckProgress(a) - 1)} answered={deckProgress(a)} total={DECK_SIZE} onVote={vote}
+          {scene === SCENE.deck && upcoming && <InferredSwipeDeck
+            upcoming={upcoming} knowledge={profile.investorAnswers.knowledge} confidence={a.confidence}
+            fetchDeck={fetchDeck} backs={Math.max(0, DECK_SIZE - deckProgress(a) - 1)} answered={deckProgress(a)} total={DECK_SIZE} onVote={vote}
             onUndo={a.responses.length > 1 ? () => { log.back(); update({ responses: a.responses.slice(0, -1), strongest: [] }); } : undefined} />}
           {scene === SCENE.strongest && <>
             {!candidates.length && <div className="onb-empty"><Orbit size={34} strokeWidth={1.4} /><h2>Curiosity is a good starting point.</h2><p>Your agent can explore these possibilities with you.</p></div>}
@@ -173,6 +172,5 @@ export function TreeOnboarding({ userId, name, onComplete, completing = false, s
         </OnboardingCard>
       </div>
     </div>
-    <OnboardingAgentPeek profile={preview} name={name} agentName={agentCreation ? generatedAgentName(preview, name, userId) : undefined} />
   </div>;
 }

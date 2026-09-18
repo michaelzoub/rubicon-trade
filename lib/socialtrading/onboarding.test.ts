@@ -35,31 +35,44 @@ describe("decision-tree onboarding", () => {
     expect(a.scene).toBe(0); expect(a.confidence).toBeNull(); expect(a.dislikes).toEqual(["Tobacco"]); expect(a.openToEverything).toBe(false); expect(a.strongest).toEqual([]); expect(a.responses[0].confidence).toBeUndefined();
     expect(readOnboarding({ ...newOnboarding(), scene: 8 })!.scene).toBe(8);
   });
-  it("opens every run on the same AI question and then follows what was answered", () => {
+  it("opens every run on the same AI question, then walks the other domains in a fixed order", () => {
     for (let level = 0; level < 4; level++) expect(basePrediction(level).category).toBe("Society and work");
     const a = newOnboarding();
-    // The base answer is the deck's first branch point, not a question of its own.
     a.responses = [{ ...basePrediction(0), direction: "yes", confidence: 80, years: 6 }];
     expect(deckProgress(a)).toBe(0);
     expect(nextPrediction(a, 0)!.category).toBe("Technology");
-    // The same question answered the other way sends the run somewhere else.
-    expect(nextPrediction({ ...a, responses: [{ ...basePrediction(0), direction: "no" }] }, 0)!.category).toBe("Health and demographics");
-    expect(nextPrediction({ ...a, responses: [{ ...basePrediction(0), direction: "unsure" }] }, 0)!.category).toBe("Health and demographics");
+    expect(nextPrediction({ ...a, responses: [{ ...basePrediction(0), direction: "no" }] }, 0)!.category).toBe("Technology");
+    expect(nextPrediction({ ...a, responses: [{ ...basePrediction(0), direction: "unsure" }] }, 0)!.category).toBe("Technology");
   });
-  it("never repeats a domain and stops once the deck has asked enough", () => {
-    let a = newOnboarding();
-    a = { ...a, responses: [{ ...basePrediction(2), direction: "yes" }] };
-    const seen: string[] = [];
-    for (let i = 0; i < DECK_SIZE; i++) {
-      const card = nextPrediction(a, 2)!;
-      expect(card, `card ${i}`).toBeTruthy();
-      seen.push(card.category);
-      a = { ...a, responses: [...a.responses, { ...card, direction: i % 2 ? "no" : "yes" }] };
-    }
-    expect(new Set(seen).size).toBe(DECK_SIZE);
-    expect(seen).not.toContain("Society and work");
-    expect(deckProgress(a)).toBe(DECK_SIZE);
-    expect(nextPrediction(a, 2)).toBeUndefined();
+  it("covers every remaining domain regardless of how cards were swiped", () => {
+    const walk = (direction: "yes" | "no") => {
+      let a = { ...newOnboarding(), responses: [{ ...basePrediction(2), direction }] };
+      const seen: string[] = [];
+      for (let i = 0; i < DECK_SIZE; i++) {
+        const card = nextPrediction(a, 2)!;
+        expect(card, `card ${i}`).toBeTruthy();
+        seen.push(card.category);
+        a = { ...a, responses: [...a.responses, { ...card, direction }] };
+      }
+      expect(nextPrediction(a, 2)).toBeUndefined();
+      return seen;
+    };
+    const yesPath = walk("yes"), noPath = walk("no");
+    expect(yesPath).toEqual(noPath);
+    expect(yesPath).toEqual(CATEGORIES.filter(c => c !== "Society and work"));
+  });
+  it("writes easier futures at knowledge 1 and sharper tensions at knowledge 4", () => {
+    expect(predictions(0).map(p => p.text)).toEqual([
+      "Robots take more physical jobs than they create.",
+      "Electricity becomes harder to get than oil.",
+      "Crypto becomes everyday money, not just something people trade.",
+      "Living healthy into your nineties becomes normal.",
+      "Countries make more of their own goods, even if it costs more.",
+      "We spend more fixing climate damage than preventing it.",
+      "AI takes over more work than it creates.",
+    ]);
+    expect(predictions(3).find(p => p.category === "Society and work")!.text).toContain("overestimating");
+    expect(predictions(0)[0].text).not.toEqual(predictions(3)[0].text);
   });
   it("orders scenes around what was answered and lands stored scenes on a visible one", () => {
     const a = newOnboarding();

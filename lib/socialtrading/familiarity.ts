@@ -4,14 +4,14 @@ export const FAMILIARITY_CONCEPTS = [
   { id: 1, label: "Stock", weight: 1 },
   { id: 2, label: "Interest rate", weight: 1 },
   { id: 3, label: "Diversification", weight: 2 },
-  { id: 4, label: "ETF (exchange-traded fund)", weight: 2 },
+  { id: 4, label: "ETF", weight: 2 },
   { id: 5, label: "Compound interest", weight: 2 },
   { id: 6, label: "Dividend", weight: 2 },
   { id: 7, label: "Index fund", weight: 3 },
   { id: 8, label: "Risk tolerance", weight: 3 },
   { id: 9, label: "Asset allocation", weight: 3 },
   { id: 10, label: "Expense ratio", weight: 3 },
-  { id: 11, label: "P/E ratio (price-to-earnings)", weight: 4 },
+  { id: 11, label: "P/E ratio", weight: 4 },
   { id: 12, label: "Options contract", weight: 4 },
 ] as const;
 

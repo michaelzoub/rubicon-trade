@@ -23,7 +23,7 @@ export type ProfileFlowProps = {
 export function ProfileFlow(props: ProfileFlowProps) {
   const [assignment, setAssignment] = useState<Assignment | null>(null);
   useEffect(() => { setAssignment(resolveAssignment(props.userId, window.location.search)); }, [props.userId]);
-  if (!assignment) return <LoadingState label="Loading your profile…" />;
+  if (!assignment) return <LoadingState label="Loading…" />;
   const Arm = assignment.variant === "inference" ? InferenceOnboarding : TreeOnboarding;
   return <Arm {...props} variant={assignment.variant} forced={assignment.forced} />;
 }

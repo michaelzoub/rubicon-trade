@@ -6,13 +6,17 @@ export const CATEGORIES = ["Technology", "Energy", "Money and crypto", "Health a
 /** One word per domain, so a view can be picked as an object rather than read
  * as a sentence. Positional with CATEGORIES. */
 export const KEYWORDS = ["Robots", "Power", "Crypto", "Longevity", "Sovereignty", "Climate", "AI"];
-// One question per domain. Knowledge changes depth, never domain coverage.
+/** One statement per domain. Knowledge changes depth, never domain coverage:
+ * level 1 is an easy directional bet, 2 is real-world adoption with a loser,
+ * 3 is a second-order effect, 4 is a sharper opposing view — still in normal
+ * language. Every line has a side a reasonable person could reject. */
 const QUESTIONS = [
-  ["Robots become common in physical work.", "Electricity becomes much more important.", "Crypto becomes useful beyond trading.", "Biotechnology helps people live healthier for longer.", "Countries produce more essential goods at home.", "Climate change forces major infrastructure upgrades.", "AI becomes part of most people’s jobs within five years."],
-  ["Robots take over repetitive work in factories and warehouses.", "Electricity demand grows faster than power systems can adapt.", "Stablecoins become a normal way to move money.", "Ageing populations make healthcare much more important.", "Governments spend more on defence and domestic manufacturing.", "Climate adaptation becomes as important as reducing emissions.", "Most companies use AI in their everyday operations."],
-  ["Robotics creates more value in industrial work than in consumer products.", "Power availability becomes a bigger constraint on AI than computing chips.", "Crypto succeeds mainly through infrastructure people barely notice.", "Ageing populations reshape labour markets as much as healthcare.", "Energy security matters more to governments than cheap energy.", "Climate adaptation grows faster than climate-prevention spending.", "AI transforms traditional industries more than it creates new ones."],
-  ["Robotics changes the physical economy more than AI changes office work.", "Electricity infrastructure becomes a longer-lasting trend than the current AI boom.", "Digital finance adopts blockchain even if most cryptocurrencies disappear.", "Healthcare innovation accelerates, but regulation prevents rapid adoption.", "Deglobalization proves more expensive and slower than governments expect.", "Climate adaptation attracts more investment than preventing climate change.", "The biggest AI winners will be companies adopting it, not companies selling AI products."],
+  ["Robots take more physical jobs than they create.", "Electricity becomes harder to get than oil.", "Crypto becomes everyday money, not just something people trade.", "Living healthy into your nineties becomes normal.", "Countries make more of their own goods, even if it costs more.", "We spend more fixing climate damage than preventing it.", "AI takes over more work than it creates."],
+  ["Factories and warehouses run with far fewer people.", "New power cannot keep up with AI and electric everything.", "Stablecoins become a normal way to pay, even for people who dislike crypto.", "Caring for ageing populations costs more than any other public service.", "Governments spend more on defence and making things at home than on cheap imports.", "Protecting cities from climate damage becomes as big as cutting emissions.", "People who do not use AI at work fall behind."],
+  ["Robotics creates more value in factories than in homes.", "Power availability holds AI back more than computing chips do.", "Crypto succeeds mainly through systems people barely notice.", "Ageing populations reshape who works more than they reshape healthcare.", "Energy security matters more to governments than cheap energy.", "Climate adaptation grows faster than spending to prevent climate change.", "AI changes old industries more than it creates new ones."],
+  ["Robotics changes the physical economy more than AI changes office work.", "Electricity infrastructure outlasts the current AI boom.", "Digital finance keeps blockchain even if most cryptocurrencies disappear.", "Healthcare innovation accelerates, but rules stop it spreading fast.", "Bringing production home costs more and takes longer than governments expect.", "Climate adaptation attracts more money than preventing climate change.", "The world is overestimating AI’s short-term impact and underestimating its long-term reach."],
 ];
+export const DECK_TITLE = "Which futures do you see?";
 export type PredictionResponse = { id: string; category: string; text: string; direction: "yes" | "no" | "unsure"; confidence?: number; years?: number };
 export type OnboardingAnswers = { version: 1; scene: number; confidence: number | null; responses: PredictionResponse[]; strongest: string[]; dislikes: string[]; openToEverything: boolean; ownBelief: string };
 export const newOnboarding = (): OnboardingAnswers => ({ version: 1, scene: 0, confidence: null, responses: [], strongest: [], dislikes: [], openToEverything: false, ownBelief: "" });
@@ -29,7 +33,7 @@ export function readOnboarding(raw: unknown): OnboardingAnswers | undefined {
   return { version: 1, scene: Number.isInteger(r.scene) && bounded(r.scene, 0, 8) ? r.scene : 0, confidence: Number.isInteger(r.confidence) && bounded(r.confidence, 0, 3) ? r.confidence : null, responses, strongest: Array.isArray(r.strongest) ? [...new Set(r.strongest.filter(id => responses.some(p => p.id === id && p.direction !== "unsure")))].slice(0, 2) : [], dislikes: Array.isArray(r.dislikes) ? DISLIKES.filter(d => r.dislikes.includes(d)) : [], openToEverything: r.openToEverything === true && !r.dislikes?.length, ownBelief: typeof r.ownBelief === "string" ? r.ownBelief.slice(0, 300) : "" };
 }
 // Scenes: 0 clarity · 1 knowledge · 2 the AI chart · 3 the world map ·
-// 4 the branching deck · 5 strongest views · 6 conviction · 7 dislikes · 8 rules.
+// 4 the seven-domain deck · 5 strongest views · 6 conviction · 7 dislikes · 8 rules.
 export const SCENE = { clarity: 0, knowledge: 1, horizon: 2, geography: 3, deck: 4, strongest: 5, chart: 6, dislikes: 7, rules: 8 } as const;
 
 /** The index of the AI question inside a level's deck. Everybody answers it
@@ -42,32 +46,17 @@ export const basePrediction = (knowledge: number) => predictions(knowledge)[AI];
  * and must not vanish mid-gesture the moment a dot is placed. */
 export const isBaseId = (id: string) => id.endsWith(`-${AI}`);
 
-/** Where a decided view leads next. Agreeing follows the consequence of the
- * belief; anything else crosses to the tension it leaves behind. A domain is
- * never asked twice, and nobody is asked all seven. */
-const FOLLOW: Record<string, [string, string]> = {
-  "Society and work": ["Technology", "Health and demographics"],
-  "Technology": ["Energy", "Society and work"],
-  "Energy": ["Climate and infrastructure", "Government and geopolitics"],
-  "Government and geopolitics": ["Energy", "Money and crypto"],
-  "Money and crypto": ["Government and geopolitics", "Technology"],
-  "Health and demographics": ["Society and work", "Climate and infrastructure"],
-  "Climate and infrastructure": ["Energy", "Health and demographics"],
-};
-/** Follow-ups after the two base questions. Four is enough to reach a corner of
- * the map that the base answers did not already give away. */
-export const DECK_SIZE = 4;
+/** One prediction per domain. The opening chart already takes Society and work,
+ * so the swipe deck is the other six — answers never skip or reorder them. */
+export const PREDICTION_COUNT = CATEGORIES.length;
+export const DECK_SIZE = PREDICTION_COUNT - 1;
 
-/** The next question this particular run has earned, or nothing when the deck
- * has said what it needs to. Pure, so the scene order can look one step ahead. */
+/** The next uncovered domain, in CATEGORIES order. How the last card was
+ * swiped does not change which question comes next; that answer is for the
+ * profile and for the scenes after the deck. */
 export function nextPrediction(a: OnboardingAnswers, knowledge: number) {
-  const deck = predictions(knowledge);
   const asked = new Set(a.responses.map(r => r.category));
-  if (asked.size > DECK_SIZE) return undefined;
-  const last = a.responses.at(-1);
-  const wanted = last ? FOLLOW[last.category]?.[last.direction === "yes" ? 0 : 1] : undefined;
-  return (wanted && !asked.has(wanted) ? deck.find(p => p.category === wanted) : undefined)
-    ?? deck.find(p => !asked.has(p.category));
+  return predictions(knowledge).find(p => !asked.has(p.category));
 }
 /** How many follow-ups have been answered, ignoring the base question. */
 export const deckProgress = (a: OnboardingAnswers) => Math.max(0, a.responses.length - 1);
