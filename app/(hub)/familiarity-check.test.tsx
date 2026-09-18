@@ -40,7 +40,7 @@ it("toggles chips, marks the selected state accessibly, and scores on Continue",
   expect(container.textContent).not.toContain(FAMILIARITY_TITLE);
   await click("Stock");
   await click("Options contract");
-  const stock = Array.from(container.querySelectorAll<HTMLButtonElement>(".onb-familiarity-chip")).find(b => b.textContent?.includes("Stock"));
+  const stock = Array.from(container.querySelectorAll<HTMLButtonElement>(".onb-familiarity-chip")).find(b => b.getAttribute("aria-label") === "Stock");
   expect(stock?.getAttribute("aria-pressed")).toBe("true");
   expect(stock?.querySelector(".onb-check")).toBeNull();
   await click("Stock");
@@ -55,7 +55,7 @@ it("hides its own Continue when a host card already has one", async () => {
 });
 
 it("randomizes display order without changing the concept set", async () => {
-  const order = () => Array.from(container.querySelectorAll(".onb-familiarity-chip")).map(b => b.textContent?.trim());
+  const order = () => Array.from(container.querySelectorAll(".onb-familiarity-chip")).map(b => b.getAttribute("aria-label"));
   await act(async () => root.render(<FamiliarityCheck onComplete={vi.fn()} />));
   const first = order();
   await act(async () => root.unmount());

@@ -10,7 +10,7 @@ export { ProfileFlow } from "./onboarding-flow";
 import "./socialtrading.css";
 
 function Frame({ children, onboarding = false }: { children: ReactNode; onboarding?: boolean }) {
-  return <div className={`landing-page socialtrading-page${onboarding ? " is-onboarding" : ""}`}><SiteHeader /><main className="container socialtrading-main"><div className="dashboard-theme socialtrading-flow">{children}</div></main></div>;
+  return <div className={`landing-page socialtrading-page${onboarding ? " is-onboarding" : ""}`}>{!onboarding && <SiteHeader />}<main className="container socialtrading-main"><div className="dashboard-theme socialtrading-flow">{children}</div></main></div>;
 }
 
 export function SocialTrading() {

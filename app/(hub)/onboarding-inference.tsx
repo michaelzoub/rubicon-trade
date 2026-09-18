@@ -4,46 +4,38 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, Check, MessageSquare, SlidersHorizontal, Sparkles } from "lucide-react";
 import { profileKey, PERMISSIONS, limitsError, type InvestingProfile, type Permission } from "@/lib/socialtrading/profile";
-import { newOnboarding, onboardingThesis, predictions, type OnboardingAnswers } from "@/lib/socialtrading/onboarding";
+import { newOnboarding, onboardingThesis, predictions, PREDICTION_COUNT, DECK_TITLE, type OnboardingAnswers } from "@/lib/socialtrading/onboarding";
 import { applyAnswer, type Card, type CardAnswer } from "@/lib/socialtrading/onboarding-cards";
 import { DEFAULT_PLAN } from "@/lib/socialtrading/plans";
 import { suggestedThemes } from "@/lib/socialtrading/themes";
-import { generatedAgentName } from "@/lib/socialtrading/agents/naming";
 import { LoadingState } from "../_components/ui";
-import { OnboardingAgentPeek } from "./onboarding-agent";
 import { FAMILIARITY_TITLE, familiarityFields, scoreFamiliarity, type FamiliarityResult } from "@/lib/socialtrading/familiarity";
 import { FoundationScale } from "./onboarding-drag";
 import { FamiliarityCheck } from "./familiarity-check";
 import { PredictionPad } from "./onboarding-chart";
-import { PredictionDeck } from "./onboarding-deck";
+import { PredictionDeck, DealingDeck } from "./onboarding-deck";
 import { OnboardingCard } from "./onboarding-card";
-import { fetchNextCard, type CardFetcher } from "./onboarding-client";
+import { fetchPredictionDeck, type DeckFetcher } from "./onboarding-client";
 import { useProfileStore, useRunLog, type ArmProps } from "./onboarding-session";
 import "./onboarding.css";
 
 const PERMISSION_ICONS = { notify: Bell, approve: MessageSquare, automatic: SlidersHorizontal };
-/** Two foundations, one seed view, up to four written cards, then the rules. */
-const MAX_GENERATED = 4, TOTAL = 3 + MAX_GENERATED + 1;
-const SEEDS = { clarity: -3, knowledge: -2, seed: -1 } as const;
+/** Two foundations, then seven inferred swipe cards — one per domain — then the rules. */
+const TOTAL = 2 + PREDICTION_COUNT + 1;
+const SEEDS = { clarity: -2, knowledge: -1 } as const;
 
-const seedCard = (knowledge: number): Card => {
-  const first = predictions(knowledge)[0];
-  return { id: "seed-0", kind: "binary", title: first.text, lead: "", category: first.category };
-};
-
-/** The inference arm: after three shared foundations, the agent writes each next
- * question from what it has already learned. When the model is unavailable it
- * falls back to the tree's questions and records that, so a fallback run is
+/** The inference arm: after two shared foundations, the agent writes the seven
+ * domain predictions from the person's knowledge level. Swipes fill the
+ * profile; they do not choose the next swipe. When the model is unavailable it
+ * falls back to the knowledge-level bank and records that, so a fallback run is
  * never counted as inference. */
-export function InferenceOnboarding({ userId, name, onComplete, completing = false, serverError = "", persist = true, agentCreation = false, plan = DEFAULT_PLAN, variant, forced, nextCard = fetchNextCard }: ArmProps & { nextCard?: CardFetcher }) {
+export function InferenceOnboarding({ userId, onComplete, completing = false, serverError = "", persist = true, agentCreation = false, plan = DEFAULT_PLAN, variant, forced, fetchDeck = fetchPredictionDeck }: ArmProps & { fetchDeck?: DeckFetcher }) {
   const router = useRouter();
   const { profile, setProfile, loaded, storageError } = useProfileStore(userId, persist);
   const log = useRunLog(variant, forced);
   const [index, setIndex] = useState<number>(SEEDS.clarity);
   const [cards, setCards] = useState<Card[]>([]);
-  const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -51,8 +43,8 @@ export function InferenceOnboarding({ userId, name, onComplete, completing = fal
   const a = profile.investorAnswers.onboarding ?? newOnboarding();
   const knowledge = profile.investorAnswers.knowledge;
   const busy = completing || saving;
-  const card = index >= 0 ? cards[index] : index === SEEDS.seed && knowledge !== null ? seedCard(knowledge) : undefined;
-  const atRules = done && index >= cards.length;
+  const card = index >= 0 ? cards[index] : undefined;
+  const atRules = index >= 0 && cards.length > 0 && index >= cards.length;
 
   function update(patch: Partial<OnboardingAnswers>, extra: Partial<InvestingProfile> = {}) {
     setError("");
@@ -60,39 +52,29 @@ export function InferenceOnboarding({ userId, name, onComplete, completing = fal
   }
   const answer = (c: Card, value: CardAnswer) => update(applyAnswer(a, c, value));
 
-  /** Asks for the next card once per position. A failure drops the arm onto the
-   * tree's remaining questions rather than stranding anyone mid-onboarding. */
-  const request = useCallback(async (position: number) => {
-    if (requested.current > position) return;
-    requested.current = position + 1;
-    setLoading(true); setNotice("");
+  /** Asks for the seven-domain pack once. A failure drops the arm onto the
+   * knowledge-level bank rather than stranding anyone mid-onboarding. */
+  const request = useCallback(async () => {
+    if (requested.current) return;
+    requested.current = 1;
+    setLoading(true);
     const controller = new AbortController();
     try {
-      const result = await nextCard({
-        confidence: a.confidence, knowledge,
-        priors: a.responses.map(r => ({ text: r.text, direction: r.direction, category: r.category, ...(r.confidence ? { confidence: r.confidence } : {}), ...(r.years ? { years: r.years } : {}) })),
-        ownBelief: a.ownBelief, asked: cards.map(c => c.title), kinds: cards.map(c => c.kind),
-      }, controller.signal);
-      if (result.done) setDone(true); else setCards(list => [...list, result.card]);
+      const pack = await fetchDeck({ confidence: a.confidence, knowledge }, controller.signal);
+      setCards(pack);
     } catch {
-      // The tree's own questions, so the run still finishes and still produces a thesis.
-      const remaining = predictions(knowledge ?? 0).slice(cards.length + 1, cards.length + 2)[0];
       log.setSource("fallback");
-      setNotice("Your agent couldn’t write this one, so here’s a standard question.");
-      if (remaining) setCards(list => [...list, { id: `fallback-${remaining.id}`, kind: "binary", title: remaining.text, lead: "", category: remaining.category }]);
-      else setDone(true);
+      setCards(predictions(knowledge ?? 0).map(p => ({ id: `fallback-${p.id}`, kind: "binary" as const, title: p.text, lead: "Take a side.", category: p.category })));
     } finally { setLoading(false); }
-  }, [a.confidence, a.responses, a.ownBelief, cards, knowledge, log, nextCard]);
+  }, [a.confidence, knowledge, log, fetchDeck]);
 
   useEffect(() => {
-    if (!loaded || index < 0 || done) return;
-    if (index >= cards.length && cards.length < MAX_GENERATED) void request(cards.length);
-    else if (index >= cards.length) setDone(true);
-  }, [index, cards.length, done, loaded, request]);
+    if (!loaded || index < 0) return;
+    if (!cards.length) void request();
+  }, [index, cards.length, loaded, request]);
 
-  // Identify the position by a stable string. The seed card is rebuilt on every
-  // render, and while a generated card is in flight there is no card at all —
-  // logging either of those by object identity invented cards that never showed.
+  // Identify the position by a stable string. While a generated card is in
+  // flight there is no card at all — logging that gap invented cards that never showed.
   const position = atRules ? { id: "rules", kind: "rules" }
     : index === SEEDS.clarity ? { id: "clarity", kind: "scale" }
     : index === SEEDS.knowledge ? { id: "knowledge", kind: "chips" }
@@ -112,6 +94,7 @@ export function InferenceOnboarding({ userId, name, onComplete, completing = fal
   function completeKnowledge(result: FamiliarityResult) {
     const nextKnowledge = familiarityFields(result);
     const knowledgeChanged = profile.investorAnswers.knowledge !== nextKnowledge.knowledge;
+    if (knowledgeChanged) { requested.current = 0; setCards([]); }
     update(knowledgeChanged ? { responses: [], strongest: [] } : {}, { investorAnswers: { ...profile.investorAnswers, ...nextKnowledge } });
     setIndex(i => i + 1);
   }
@@ -135,11 +118,10 @@ export function InferenceOnboarding({ userId, name, onComplete, completing = fal
     finally { setSaving(false); }
   }
 
-  if (!loaded) return <LoadingState label="Loading your profile…" />;
-  const positive = a.responses.filter(r => r.direction === "yes" && a.strongest.includes(r.id)).map(r => r.text).join(" ");
-  const preview: InvestingProfile = { ...profile, thesis: a.strongest.length || a.ownBelief.trim() ? onboardingThesis(a) : "", themes: suggestedThemes(`${positive} ${a.ownBelief}`), step: atRules ? 5 : index >= 1 ? 4 : index >= 0 ? 3 : 2 };
-  const step = Math.min(TOTAL, index + 4);
-  const title = index === SEEDS.clarity ? "How much of the future already feels clear to you?" : index === SEEDS.knowledge ? FAMILIARITY_TITLE : atRules ? "Your outlook. Your rules." : card?.title ?? "Your agent is thinking…";
+  if (!loaded) return <LoadingState label="Loading…" />;
+  const waiting = index >= 0 && !card && !atRules;
+  const step = Math.min(TOTAL, index + 3);
+  const title = index === SEEDS.clarity ? "How much of the future already feels clear to you?" : index === SEEDS.knowledge ? FAMILIARITY_TITLE : atRules ? "Your outlook. Your rules." : DECK_TITLE;
   // A generated card may need a second line; the fixed scenes never do, and a
   // card you answer by swiping or dragging explains itself without one.
   const lead = index >= 0 && card && !["binary", "pad"].includes(card.kind) ? card.lead : "";
@@ -148,20 +130,17 @@ export function InferenceOnboarding({ userId, name, onComplete, completing = fal
     <div className="socialtrading-question">
       <div className="onb-stage" key={`${index}-${card?.id ?? ""}`}>
         <OnboardingCard
-          title={title} lead={lead || undefined} quietTitle={card?.kind === "binary" && !atRules} step={step} total={TOTAL} error={error || serverError}
+          title={title} lead={lead || undefined} step={step} total={TOTAL} error={error || serverError}
           onBack={index === SEEDS.clarity ? undefined : back}
-          onNext={atRules ? finish : loading ? undefined : card?.kind === "binary" ? undefined : next}
+          onNext={atRules ? finish : waiting ? undefined : card?.kind === "binary" ? undefined : next}
           nextLabel={atRules ? busy ? "Saving your profile…" : agentCreation ? "Create agent" : "Meet my agent" : "Continue"}
           busy={busy || loading}
-          hint={<>
-            {notice && <p className="onb-hint">{notice}</p>}
-            {storageError && <p className="onb-error" role="status">{storageError}</p>}
-          </>}
+          hint={storageError ? <p className="onb-error" role="status">{storageError}</p> : undefined}
         >
           <h1 ref={heading} tabIndex={-1} className="sr-only outline-none">{title}</h1>
           {index === SEEDS.clarity && <FoundationScale kind="clarity" value={a.confidence} onChange={confidence => update({ confidence })} />}
           {index === SEEDS.knowledge && <FamiliarityCheck showTitle={false} hideContinue busy={busy} initialSelectedIds={profile.investorAnswers.selectedConceptIds} onChange={ids => update({}, { investorAnswers: { ...profile.investorAnswers, selectedConceptIds: ids } })} onComplete={completeKnowledge} />}
-          {loading && !card && <div className="onb-thinking" role="status"><Sparkles size={18} strokeWidth={1.6} /><span>Reading what you’ve told it so far…</span></div>}
+          {waiting && <DealingDeck backs={Math.max(0, PREDICTION_COUNT - 1)} answered={0} total={PREDICTION_COUNT} />}
           {card && !atRules && <CardInput card={card} answers={a} onAnswer={value => { answer(card, value); if (value.kind === "binary") setIndex(i => i + 1); }} />}
           {atRules && <>
             <div className="onb-summary"><Sparkles size={18} strokeWidth={1.6} /><div><p>{onboardingThesis(a)}</p></div></div>
@@ -171,7 +150,6 @@ export function InferenceOnboarding({ userId, name, onComplete, completing = fal
         </OnboardingCard>
       </div>
     </div>
-    <OnboardingAgentPeek profile={preview} name={name} agentName={agentCreation ? generatedAgentName(preview, name, userId) : undefined} />
   </div>;
 }
 

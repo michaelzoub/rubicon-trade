@@ -71,7 +71,7 @@ it("keeps profile fields hidden until an authenticated session is ready", async 
 });
 
 /** The two shared foundations, then the opening AI chart and the map. Everyone
- * lands on the same base questions before the deck starts branching. */
+ * lands on the same base questions before the deck covers the other domains. */
 async function pickFamiliarity(experienced = true) {
   if (experienced) for (const concept of FAMILIARITY_CONCEPTS) await click(concept.label);
   await click("Continue");
@@ -87,7 +87,7 @@ async function place(category: string, sure: string, years: string) {
   await setRange(`How sure you are: ${category}`, sure);
   await setRange(`How far ahead you are looking: ${category}`, years);
 }
-/** Throws every branching card the run offers, all the same way. */
+/** Throws every remaining domain card the run offers, all the same way. */
 async function sweep(label = "Not sure") {
   for (let i = 0; i < DECK_SIZE; i++) await click(label);
 }
@@ -128,7 +128,7 @@ it("saves disagreement, confidence, horizon, own beliefs and reversible dislikes
   const complete = vi.fn();
   await act(async () => root.render(<ProfileFlow userId="alice" persist={false} onComplete={complete} />));
   await foundation();
-  // The first branching card is chosen from the AI answer, not read off a list.
+  // The first remaining domain after the AI chart, not a branch off the answer.
   const first = branch(opening());
   await click("I don’t see it");
   for (let i = 1; i < DECK_SIZE; i++) await click("Not sure");

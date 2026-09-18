@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyAnswer, readCard, type Card } from "./onboarding-cards";
+import { applyAnswer, readCard, readPredictionDeck, type Card } from "./onboarding-cards";
 import { CATEGORIES, newOnboarding, onboardingThesis } from "./onboarding";
 
 const valid = { id: "c1", kind: "binary", title: "Robots do most warehouse work.", lead: "Go with your instinct.", category: CATEGORIES[0] };
@@ -26,6 +26,15 @@ describe("generated onboarding cards", () => {
 
   it("drops options the model sent for a kind that has none", () => {
     expect(readCard({ ...valid, options: ["stray"] })).not.toHaveProperty("options");
+  });
+
+  it("accepts a seven-domain pack and rejects anything missing a domain", () => {
+    const predictions = CATEGORIES.map((category, i) => ({ category, statement: `Statement ${i} about ${category}.` }));
+    const pack = readPredictionDeck({ predictions });
+    expect(pack).toHaveLength(7);
+    expect(pack!.map(c => c.category)).toEqual(CATEGORIES);
+    expect(readPredictionDeck({ predictions: predictions.slice(1) })).toBeNull();
+    expect(readPredictionDeck({ predictions: [...predictions, { category: "Technology", statement: "A second tech take." }] })).toHaveLength(7);
   });
 });
 

@@ -45,6 +45,30 @@ export function readCard(raw: unknown): Card | null {
 /** What the endpoint returns: the next card, or the end of the run. */
 export type NextCard = { done: true } | { done: false; card: Card };
 
+const DECK_LEAD = "Take a side.";
+
+/** A generated seven-domain pack. Every category must be present exactly once
+ * or the pack is dropped and the caller uses the knowledge-level bank. */
+export function readPredictionDeck(raw: unknown): Card[] | null {
+  const list = Array.isArray(raw) ? raw
+    : raw && typeof raw === "object" && Array.isArray((raw as { predictions?: unknown }).predictions)
+      ? (raw as { predictions: unknown[] }).predictions
+      : null;
+  if (!list) return null;
+  const byCategory = new Map<string, Card>();
+  for (const item of list) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    const title = string(row.statement ?? row.title, 140);
+    const category = CATEGORIES.find(name => name === row.category);
+    if (!title || !category || byCategory.has(category)) continue;
+    const card = readCard({ id: `deck-${category}`, kind: "binary", title, lead: string(row.lead, 240) ?? DECK_LEAD, category });
+    if (card) byCategory.set(category, card);
+  }
+  if (byCategory.size !== CATEGORIES.length) return null;
+  return CATEGORIES.map(category => byCategory.get(category)!);
+}
+
 const appended = (belief: string, line: string) => [belief.trim(), line].filter(Boolean).join(" ").slice(0, 300);
 
 /** Folds one answered card into the same answer shape the tree produces, so
