@@ -149,3 +149,45 @@
 .hub-recover-confirm p { font-size: 12px; line-height: 1.6; }
 .hub-recover-sent { display: flex; gap: 8px; align-items: baseline; font-size: 12px; }
 .rubicon-purchase .hub-recover-row, .hub-recover-row { transition: border-color .15s, background .15s; }
+
+/* An asset with no Base market keeps its place on the screen — following it is
+   still worth something — but says what is missing instead of failing on tap. */
+.hub-buy-primary.is-unavailable {
+  background: transparent;
+  color: var(--quiet, #7b8ea6);
+  box-shadow: inset 0 0 0 1px var(--line, #e3eaf3);
+  cursor: not-allowed;
+  opacity: 1;
+}
+.hub-buy-primary.is-unavailable:hover { background: transparent; box-shadow: inset 0 0 0 1px var(--line, #e3eaf3); transform: none; }
+.rubicon-purchase .hub-buy-primary.is-unavailable { color: #8fa0b3; box-shadow: inset 0 0 0 1px #ffffff20; }
+
+.hub-market-quote { display: grid; gap: 4px; width: 170px; min-width: 0; margin-left: auto; text-align: right; }
+.hub-market-quote-values { display: grid; gap: 3px; font-variant-numeric: tabular-nums; }
+.hub-market-quote-values strong { font-size: 14px; font-weight: 500; }
+.hub-market-quote .hub-change, .hub-market-quote > small { font-size: 10px; }
+.hub-market-quote > small { color: var(--quiet, #7b8ea6); }
+.hub-market-quote-chart { display: block; min-width: 0; }
+.hub-market-quote.is-large { width: 100%; margin: 0; text-align: left; gap: 10px; }
+.hub-market-quote.is-large .hub-market-quote-values { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; }
+.hub-market-quote.is-large strong { font-size: 22px; }
+.hub-market-quote.is-large .hub-change { font-size: 12px; }
+.hub-sparkline.is-empty { display: inline-flex; align-items: center; font-size: 10px; color: var(--quiet, #7b8ea6); }
+@media (max-width: 540px) {
+  .hub-buy-result { flex-wrap: wrap; }
+  .hub-buy-result .hub-market-quote { width: 140px; }
+}
+
+/* Granting the agent a signer: the most consequential control in the product,
+   so it reads as a deliberate sequence rather than one casual switch. */
+.hub-delegate { display: grid; gap: 12px; }
+.hub-delegate-wallets { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.hub-delegate-wallets li { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line, #e3eaf3); font-size: 12px; }
+.hub-delegate-ok { display: inline-flex; gap: 5px; align-items: center; color: #1f8a5b; }
+.hub-delegate-toggle { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line, #e3eaf3); cursor: pointer; }
+.hub-delegate-toggle:has(input:disabled) { opacity: .55; cursor: not-allowed; }
+.hub-delegate-toggle input { margin-top: 2px; }
+.hub-delegate-toggle span { display: grid; gap: 3px; }
+.hub-delegate-toggle small { color: var(--quiet, #7b8ea6); font-size: 11px; line-height: 1.5; }
+.hub-delegate-live { display: flex; gap: 6px; align-items: center; font-size: 11px; color: #1f8a5b; }
+.rubicon-purchase .hub-delegate-toggle, .rubicon-purchase .hub-delegate-wallets li { box-shadow: inset 0 0 0 1px #ffffff20; }

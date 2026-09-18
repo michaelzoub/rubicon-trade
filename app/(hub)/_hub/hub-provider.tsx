@@ -1,4 +1,5 @@
 "use client";
+import { rememberLoadingAgent } from "../../_components/loading-agent-identity";
 import { openPurchase, purchaseIntent } from "./purchase";
 import type { InvestingProfile } from "@/lib/socialtrading/profile";
 import { agentSelectionKey, type AgentConfig } from "@/lib/socialtrading/agents/config";
@@ -114,6 +115,7 @@ export function HubProvider({ userId, name, initial, initialAccount = null, api:
   const abort = useRef<AbortController | null>(null);
   const revision = useRef(initial.revision);
   useEffect(() => { revision.current = state.revision; }, [state.revision]);
+  useEffect(() => { rememberLoadingAgent(userId, state, agents); }, [userId, state, agents]);
   useEffect(() => () => abort.current?.abort(), []);
 
   /** Responses may carry the account beside the state; take it whenever it appears. */

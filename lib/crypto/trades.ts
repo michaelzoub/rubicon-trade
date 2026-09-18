@@ -2,8 +2,10 @@ import "server-only";
 import { cryptoServices } from "./services";
 import { ownedWallet } from "./wallet";
 import { address, chain, NATIVE, parseUnits, swapRequest } from "./chains";
-import { preflight, tokenDecimals, approvalTransaction, checkTransactionGas } from "./preflight";
-import { buildSwapBatch, gaslessChain } from "./batch";
+import { BUY_CHAIN } from "./tradable";
+import { preflight, tokenDecimals, tokenSymbol, approvalTransaction, checkTransactionGas } from "./preflight";
+import { catalogEntry } from "./catalog";
+import { buildSwapBatch, simulateSwapBatch, gaslessChain } from "./batch";
 import { validatePermit, permitPayload } from "./permit";
 import { verifyTypedData } from "viem";
 import { tradePolicy } from "@/lib/socialtrading/policy";
@@ -15,10 +17,35 @@ import type { SwapBatch, SwapRequest, TokenDisplay, Transaction } from "./types"
 export const PROPOSAL_TTL = 24 * 3600_000;
 const usd = (n: number) => `$${n.toFixed(2)}`;
 
+/** What a token is: the ticker to print, and where its decimal point sits.
+ *
+ * Identity is not a price, and asking a price feed for it fails in the one
+ * case that matters most. DefiLlama refuses any quote older than five minutes,
+ * which for a tokenized stock is most of the day once its market closes. The
+ * whole answer — symbol and decimals together — used to be discarded when that
+ * happened, leaving `{ symbol: "token", decimals: null }`, and `formatUnits`
+ * with null decimals prints base units: a $0.50 buy of NVDAc read "227373
+ * TOKEN" on the confirmation instead of 0.00227373.
+ *
+ * So identity comes from the sources that actually hold it. The catalog pin
+ * first — every entry is held to the contract's own `symbol()` and
+ * `decimals()` by scripts/verify-catalog.ts, and it is the only source that
+ * keeps `NVDAc` from being flattened to `NVDAC`. Then the contract itself. A
+ * price is consulted for nothing but a last-resort name. */
 async function describe(services: typeof cryptoServices, chainId: number, token: string): Promise<TokenDisplay> {
   if (token === NATIVE) return { symbol: chain(chainId).nativeSymbol, decimals: 18 };
-  try { const p = await services.defi?.price({ chainId, address: token }); if (p) return { symbol: p.symbol || "token", decimals: await tokenDecimals(chainId, token) }; } catch { /* display only */ }
-  return { symbol: "token", decimals: null };
+  const pinned = catalogEntry(chainId, token);
+  if (pinned) return { symbol: pinned.symbol, decimals: pinned.decimals };
+  const [symbol, decimals] = await Promise.all([
+    tokenSymbol(chainId, token),
+    // Unknown stays unknown. Assuming 18 misplaces the point exactly as badly
+    // as printing base units, only without looking wrong.
+    tokenDecimals(chainId, token).catch(() => null),
+  ]);
+  if (symbol) return { symbol, decimals };
+  // The chain could not be reached. A stale quote still carries a usable name.
+  try { const p = await services.defi?.price({ chainId, address: token }); if (p?.symbol) return { symbol: p.symbol, decimals }; } catch { /* display only */ }
+  return { symbol: "token", decimals };
 }
 
 /** Creates a swap intent and runs the deterministic policy. The wallet must
@@ -27,6 +54,10 @@ async function describe(services: typeof cryptoServices, chainId: number, token:
  * wallet signature because no delegated signer exists. */
 export async function proposeSwap(state: HubState, userId: string, input: SwapRequest, reasoning: string, services = cryptoServices, initiator: TradeInitiator = "agent") {
   const request = swapRequest(input); await ownedWallet(userId, request.wallet);
+  // Everything the agent buys settles on Base. This is enforced here rather than
+  // in the prompt, because a scheduled run has no one to correct it: the cron
+  // dispatcher reaches this same function, so the rule holds for every caller.
+  if (initiator !== "user" && request.chainId !== BUY_CHAIN) throw new Error(`Rubicon buys on ${chain(BUY_CHAIN).name}. Propose this swap on ${chain(BUY_CHAIN).name}, or ask the user to buy it themselves.`);
   const [quote, value, tokenIn, tokenOut] = await Promise.all([
     services.execution.quote(request),
     services.valuation.value({ chainId: request.chainId, address: request.tokenIn }, request.amount),
@@ -95,8 +126,8 @@ export async function prepareSwap(state: HubState, userId: string, trade: TradeI
   if (BigInt(quote.minimumOutput) < BigInt(c.minimumOutput)) throw new Error("The quote moved below your minimum output. Ask for a new proposal.");
   c.quote = quote; c.quoteId = crypto.randomUUID(); c.expiresAt = quote.expiresAt;
   c.phase = "authorizing"; c.step = "swap";
-  c.detail = quote.permitData ? "Sign the Permit2 authorization for this fresh quote." : "Fresh quote ready for swap creation.";
-  return { permitData: quote.permitData, quoteId: c.quoteId, expiresAt: c.expiresAt, step: c.step };
+  c.detail = !sponsored && quote.permitData ? "Sign the Permit2 authorization for this fresh quote." : "Fresh quote ready for swap creation.";
+  return { permitData: sponsored ? undefined : quote.permitData, quoteId: c.quoteId, expiresAt: c.expiresAt, step: c.step };
 }
 
 /** Hands the client exactly one thing to sign, and records exactly what was
@@ -129,15 +160,18 @@ export async function authorizeSwap(state: HubState, userId: string, trade: Trad
   await preflight(c.request, sponsored);
   const policy = tradePolicy(state.profile, trade.value, state.trades.filter(t => t.id !== trade.id), true, Date.now(), trade.initiator ?? "agent");
   if (!policy.allowed || (trade.initiator !== "user" && state.agent && !state.agent.capabilities.includes("trading"))) throw new Error("Trading authorization changed. Request a new proposal.");
-  if (c.quote.permitData) {
+  if (!sponsored && c.quote.permitData) {
     validatePermit(c.quote.permitData, c.request);
     if (typeof signature !== "string" || !/^0x[0-9a-f]{130}$/i.test(signature) || !await verifyTypedData({ ...permitPayload(c.quote.permitData), types: c.quote.permitData.types, address: c.request.wallet as `0x${string}`, signature: signature as `0x${string}` })) throw new Error("Invalid Permit2 signature for the selected wallet and quote.");
   }
-  const transaction = await cryptoServices.execution.swap(c.quote, typeof signature === "string" ? signature : undefined);
+  // The batch grants both approval layers itself. A separate Permit2 signature
+  // is unnecessary, and a standalone swap simulation cannot see those approvals.
+  const transaction = await cryptoServices.execution.swap(c.quote, typeof signature === "string" ? signature : undefined, { batchedApprovals: sponsored });
   // The batch is built from the router call the quote produced, so the calldata
   // the chain is later held to is the calldata authorized here and nothing else.
   const batch = sponsored ? await buildSwapBatch(c.request, transaction) : null;
-  if (!batch) await checkTransactionGas(transaction);
+  if (batch) await simulateSwapBatch(batch);
+  else await checkTransactionGas(transaction);
   if (c.quote.expiresAt <= Date.now()) throw new Error("Quote expired. Request a fresh quote.");
   await issue(trade, batch ? { batch } : { transaction }, "swap");
   c.quote = undefined;

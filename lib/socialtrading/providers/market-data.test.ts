@@ -34,3 +34,16 @@ it("retains company results when quote enrichment fails", async () => {
   vi.stubGlobal("fetch", async (url: string) => url.includes("tickers?market") ? Response.json({ results: [{ ticker: "NVDA", name: "NVIDIA" }] }) : new Response(null, { status: 503 }));
   expect(await marketData.search("NVIDIA")).toEqual([expect.objectContaining({ symbol: "NVDA", price: null })]);
 });
+it("keeps the bar-derived change when the snapshot has no percentage", async () => {
+  mockMarket();
+  vi.stubGlobal("fetch", async (input: string) => {
+    if (input.includes("/v3/reference/tickers/")) return Response.json({ results: { ticker: "NVDA", name: "NVIDIA" } });
+    if (input.includes("/snapshot/")) return Response.json({ ticker: { lastTrade: { p: 126 } } });
+    if (input.includes("/aggs/")) return Response.json({ results: [{ t: 1700000000000, c: 100 }, { t: 1700086400000, c: 120 }] });
+    return Response.json({ results: [] });
+  });
+  const asset = await marketData.detail("NVDA");
+  expect(asset.price).toBe(126);
+  expect(asset.change).toBeCloseTo(20);
+  expect(asset.chart).toHaveLength(2);
+});

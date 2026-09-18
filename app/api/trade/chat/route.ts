@@ -1,6 +1,7 @@
 import { assertCredits, loadAccount, supabaseLedger } from "@/lib/socialtrading/account";
 import { requestedAgent, requestedChat, authenticate, bodyOf, failure, HubError, loadState, saveState } from "@/lib/socialtrading/server";
 import { runAgent } from "@/lib/socialtrading/agent/run";
+import { reviewProfile } from "@/lib/socialtrading/profile-review";
 import { appendMessages, latestChat } from "@/lib/socialtrading/chats";
 import { brokerage } from "@/lib/socialtrading/providers/brokerage";
 import type { AccountSummary } from "@/lib/socialtrading/plans";
@@ -61,6 +62,7 @@ export async function POST(request: Request) {
       }
       appendMessages(chat, [user, assistant]);
       try {
+        await reviewProfile(state, userId, account);
         const saved = await saveState(userId, state, account.limits);
         emit({ type: "state", state: saved });
       } catch (error) {

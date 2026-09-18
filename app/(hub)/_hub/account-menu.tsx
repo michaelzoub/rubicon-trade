@@ -5,7 +5,7 @@ import { ArrowUpRight, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, LogO
 import Link from "next/link";
 import { gsap, useGSAP, prefersReducedMotion } from "../../_components/motion";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
-import { CHAINS, formatUnits, type ChainId } from "@/lib/crypto/chains";
+import { CHAINS, DEFAULT_CHAIN, formatUnits, type ChainId } from "@/lib/crypto/chains";
 import { qrMatrix } from "@/lib/crypto/qr";
 import { formatCredits, type AccountSummary } from "@/lib/socialtrading/plans";
 import type { ThemeId } from "@/lib/socialtrading/themes";
@@ -30,7 +30,7 @@ type Props = {
 const DISCOVERED = "rubicon:account-discovered:v1";
 
 /** One wallet as the card shows it. `balance` is undefined until the menu has asked the network. */
-export type WalletEntry = { address: string; kind: string; connected: boolean; balance?: WalletBalance };
+export type WalletEntry = { address: string; kind: string; connected: boolean; balance?: WalletBalance; switchToBase?: () => Promise<void>; connect?: () => void };
 
 /** One profile card in the header. Hover, tap, or focus opens a small identity card:
  * who you are, your credits, your wallet, then sign out. */
@@ -45,7 +45,7 @@ export function AccountMenu(props: Props) {
 const PREVIEW_WALLETS: WalletEntry[] = [{ address: "0x1111111111111111111111111111111111111111", kind: "Embedded wallet", connected: true, balance: { state: "ok", network: "Base", usdc: "25", native: "1", symbol: "ETH" } }];
 
 function LiveMenu(props: Props) {
-  const { logout } = usePrivy();
+  const { logout, connectWallet } = usePrivy();
   const linked = useLinkedWallets();
   const { wallets } = useWallets();
   const [open, setOpen] = useState(false);
@@ -72,7 +72,16 @@ function LiveMenu(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, connectionKey]);
   const balances = cache?.connectionKey === connectionKey ? cache.balances : {};
-  const entries: WalletEntry[] = linked.map(w => ({ address: w.address, kind: w.client, connected: wallets.some(c => c.address.toLowerCase() === w.address), balance: balances[w.address] }));
+  const entries: WalletEntry[] = linked.map(w => {
+    const connected = wallets.find(c => c.address.toLowerCase() === w.address);
+    return { address: w.address, kind: w.client, connected: !!connected, balance: balances[w.address], connect: () => connectWallet(),
+      switchToBase: connected ? async () => {
+        await connected.switchChain(DEFAULT_CHAIN);
+        const provider = await connected.getEthereumProvider();
+        if (Number(await provider.request({ method: "eth_chainId" })) !== DEFAULT_CHAIN) throw new Error("Select Base in your wallet, then try again.");
+      } : undefined,
+    };
+  });
   return <Menu {...props} onOpen={setOpen} wallets={entries}
     signOut={<button type="button" className="hub-account-signout" onClick={() => void logout()}><LogOut size={14} aria-hidden="true" /><span>Sign out</span></button>} />;
 }
@@ -164,6 +173,7 @@ function Menu({ userId, name, planName, account, themes, inferred, identity, pro
 
               <ChevronRight size={14} aria-hidden="true" className="hub-account-chevron" />
             </button>)}
+            {!preview && wallets.map(w => <BaseSwitch key={w.address} wallet={w} multiple={wallets.length > 1} />)}
           </div>
         </div>}
       {signOut && <div className="hub-account-foot" data-discover="signout">{signOut}</div>}
@@ -184,9 +194,30 @@ function AccountOrb({ seed, themes, inferred, identity, compact = false }: {
 }
 
 function walletSummary(wallet: WalletEntry): string {
-  if (wallet.balance?.state === "ok") return `${wallet.balance.usdc} USDC`;
+  if (wallet.balance?.state === "ok") return `${wallet.balance.usdc} USDC · ${wallet.balance.network}`;
   if (wallet.balance?.state === "unavailable") return "Unavailable";
   return wallet.connected ? "Checking…" : "Not connected";
+}
+
+export function BaseSwitch({ wallet, multiple = false }: { wallet: WalletEntry; multiple?: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const lock = useRef(false);
+  async function switchNetwork() {
+    if (!wallet.switchToBase || lock.current) return;
+    lock.current = true; setBusy(true); setMessage("");
+    try { await wallet.switchToBase(); setMessage("Wallet is now on Base. Existing funds are not bridged."); }
+    catch (error) { setMessage(error instanceof Error ? error.message : "Could not switch. Choose Base in your wallet."); }
+    finally { lock.current = false; setBusy(false); }
+  }
+  if (!wallet.switchToBase) return wallet.connect ? <button type="button" className="hub-account-row is-link" onClick={wallet.connect}><span className="hub-account-label">Connect wallet to switch to Base</span><ChevronRight size={14} aria-hidden="true" /></button> : null;
+  return <div>
+    <button type="button" className="hub-account-row is-link" disabled={busy} onClick={() => void switchNetwork()}>
+      <span className="hub-account-label">{busy ? "Switching…" : "Switch wallet to Base"}{multiple && <small> · {wallet.address.slice(0, 6)}…{wallet.address.slice(-4)}</small>}</span>
+      <ChevronRight size={14} aria-hidden="true" />
+    </button>
+    {message && <p className="socialtrading-caption" style={{ padding: "4px 12px 8px" }} role="status">{message}</p>}
+  </div>;
 }
 
 function WalletDetail({ wallet, onBack }: { wallet: WalletEntry; onBack: () => void }) {
@@ -216,6 +247,7 @@ function WalletDetail({ wallet, onBack }: { wallet: WalletEntry; onBack: () => v
         <div><dt>{balance.symbol}</dt><dd>{balance.native}</dd></div>
       </>}
     </dl>
+    <BaseSwitch wallet={wallet} />
   </div>;
 }
 

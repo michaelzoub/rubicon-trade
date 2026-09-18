@@ -13,6 +13,8 @@ import { useHub } from "./hub-provider";
 import { HubLink as Link } from "./navigation";
 import { LimitHint, UsagePill } from "./limits-ui";
 import { PartView } from "./parts";
+import { gsap, useGSAP } from "../../_components/motion";
+import "./conversation.css";
 
 const STARTERS = [
   { title: "Turn an idea into a plan", text: "I believe AI will change how we work. Help me explore investments connected to that idea and explain the risks in plain English." },
@@ -27,17 +29,37 @@ function Row({ message, name, agentName, seed, themes, learned, profile }: { pro
   const user = message.role === "user";
   const streaming = message.status === "streaming";
   const empty = message.parts.length === 0;
+  const root = useRef<HTMLLIElement>(null);
+  useGSAP(() => {
+    const media = gsap.matchMedia();
+    media.add("(prefers-reduced-motion: no-preference)", () => {
+      gsap.fromTo(".hub-row-body", { opacity: 0, y: 14, x: user ? 12 : -8, scale: .985 }, {
+        opacity: 1, y: 0, x: 0, scale: 1, duration: .55, ease: "back.out(1.15)", clearProps: "all",
+      });
+      gsap.fromTo(".hub-row-avatar", { scale: .7, rotation: -12 }, { scale: 1, rotation: 0, duration: .7, ease: "elastic.out(1, .65)", clearProps: "all" });
+    });
+    return () => media.revert();
+  }, { scope: root });
+  useGSAP(() => {
+    if (!streaming) return;
+    const media = gsap.matchMedia();
+    media.add("(prefers-reduced-motion: no-preference)", () => {
+      gsap.to(".hub-row-badge", { y: -3, rotation: 4, duration: .9, repeat: -1, yoyo: true, ease: "sine.inOut" });
+      gsap.to(".hub-thinking-dot", { y: -5, scale: 1.2, opacity: 1, duration: .4, stagger: .13, repeat: -1, yoyo: true, ease: "sine.inOut" });
+    });
+    return () => media.revert();
+  }, { scope: root, dependencies: [streaming, empty], revertOnUpdate: true });
   // Reaching for what the agent said reveals the belief underneath it.
   const said = message.parts.map(part => "text" in part ? part.text : "").join(" ");
   const why = user || streaming ? null : messageGloss(said, state);
   return (
-    <li className={`hub-row is-${message.role}${streaming ? " is-streaming" : ""}`} data-message={message.id}>
+    <li ref={root} className={`hub-row is-${message.role}${streaming ? " is-streaming" : ""}`} data-message={message.id}>
       {!user && <span className="hub-row-avatar" aria-hidden="true"><ProfileAvatar profile={profile} seed={seed} themes={themes} inferred={learned} className="hub-row-badge" /></span>}
       <div className="hub-row-body">
         <p className="hub-row-meta"><span>{user ? "You" : agentName ?? (name ? `${name}’s agent` : "Your agent")}</span><time dateTime={message.at}>{clock(message.at)}</time>{message.via === "background" && <em className="hub-row-via">Reached out</em>}</p>
         <div className="hub-row-content">
           {message.parts.map((part, i) => <PartView key={i} part={part} />)}
-          {streaming && empty && <p className="hub-thinking" role="status" aria-live="polite"><span /><span /><span /></p>}
+          {streaming && empty && <p className="hub-thinking" role="status" aria-live="polite"><span className="hub-thinking-dots" aria-hidden="true"><i className="hub-thinking-dot" /><i className="hub-thinking-dot" /><i className="hub-thinking-dot" /></span><small>Connecting the dots</small></p>}
           {streaming && !empty && <span className="hub-caret" aria-hidden="true" />}
         </div>
         {why && <button type="button" className="hub-why-trigger" {...gloss(why)}>Why you’re seeing this</button>}
@@ -101,6 +123,16 @@ export function Conversation() {
   const [decision, setDecision] = useState<string | null>(null);
   const learned = learnedThemes(state.inferred, state.profile.themes);
   const outOfCredits = !!account && account.credits.balanceMicros < account.credits.holdMicros;
+  const readyToSend = !!draft.trim() && !busy && !outOfCredits;
+
+  useGSAP(() => {
+    if (!readyToSend) return;
+    const media = gsap.matchMedia();
+    media.add("(prefers-reduced-motion: no-preference)", () => {
+      gsap.fromTo(".hub-send", { scale: .85, rotation: -8 }, { scale: 1, rotation: 0, duration: .5, ease: "back.out(2)", clearProps: "transform" });
+    });
+    return () => media.revert();
+  }, { scope: section, dependencies: [readyToSend], revertOnUpdate: true });
 
   useLayoutEffect(() => {
     const fit = () => {

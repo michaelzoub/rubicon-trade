@@ -9,20 +9,29 @@ vi.mock("./rpc", () => ({ rpc: mocks.rpc }));
 import { proposeSwap, prepareSwap, authorizeSwap, userSwap } from "./trades";
 import { encodeAccountCalls } from "./aa";
 import { gaslessChain } from "./chains";
-const req = { chainId: 1, wallet: "0x1111111111111111111111111111111111111111", tokenIn: "0x2222222222222222222222222222222222222222", tokenOut: "0x3333333333333333333333333333333333333333", amount: "1000000", slippageBps: 50 };
+// Agent purchases settle on Base, so the fixtures are Base.
+const req = { chainId: 8453, wallet: "0x1111111111111111111111111111111111111111", tokenIn: "0x2222222222222222222222222222222222222222", tokenOut: "0x3333333333333333333333333333333333333333", amount: "1000000", slippageBps: 50 };
+const hex = (text: string) => [...text].map(c => c.charCodeAt(0).toString(16).padStart(2, "0")).join("");
+/** `symbol()` as the ABI returns it: offset, length, then the padded bytes. */
+const abiString = (text: string) => `0x${(32n).toString(16).padStart(64, "0")}${BigInt(text.length).toString(16).padStart(64, "0")}${hex(text).padEnd(64, "0")}`;
 function state(permission: "automatic" | "approve" | "notify" = "approve"): HubState { return { revision: 0, profile: { ...newProfile("alice"), permission, permissionConfigured: true, limits: { perTrade: "100", daily: "100", weekly: "100" } }, trades: [], messages: [], events: [], dislikes: [], preferences: [], inferred: [], signals: [] }; }
 beforeEach(() => {
   vi.resetAllMocks(); mocks.ownedWallet.mockResolvedValue(req.wallet); mocks.value.mockResolvedValue(50); mocks.rpc.mockImplementation(async (_chain, method, params) => {
-    if (method === "eth_chainId") return "0x1";
+    if (method === "eth_getCode") return params[0] === req.wallet ? "0x" : "0x6000";
+    if (method === "eth_call" && params.length === 3) return "0x";
+    if (method === "eth_chainId") return "0x2105";
     if (method === "eth_getTransactionCount") return "0x0";
     if (method === "eth_getBalance") return "0xde0b6b3a7640000";
     if (method === "eth_estimateGas") return "0x186a0";
     if (method === "eth_gasPrice") return "0x1";
     if (params?.[0]?.data === "0x313ce567") return `0x${(params[0].to === req.tokenIn ? 6 : 18).toString(16).padStart(64, "0")}`;
+    // symbol(), ABI-encoded: offset, length, then the bytes. A token's own
+    // ticker is what the card prints, so the fixture has to speak it.
+    if (params?.[0]?.data === "0x95d89b41") return abiString(params[0].to === req.tokenIn ? "USDC" : "wxyz");
     return `0x${(10n ** 25n).toString(16).padStart(64, "0")}`;
   });
   mocks.quote.mockResolvedValue({ outputAmount: "200", minimumOutput: "199", expiresAt: Date.now() + 60_000, request: req, raw: {} });
-  mocks.approval.mockResolvedValue(null); mocks.swap.mockResolvedValue({ chainId: 1, from: req.wallet, to: req.tokenOut, data: "0x1234", value: "0" });
+  mocks.approval.mockResolvedValue(null); mocks.swap.mockResolvedValue({ chainId: 8453, from: req.wallet, to: req.tokenOut, data: "0x1234", value: "0" });
   mocks.price.mockImplementation(async (t: { address: string }) => t.address === req.tokenIn ? { symbol: "USDC", decimals: 6, price: 1, timestamp: Date.now() / 1000 } : { symbol: "wxyz", decimals: 18, price: 2, timestamp: Date.now() / 1000 });
 });
 describe("agent swap proposals", () => {
@@ -73,7 +82,7 @@ describe("agent swap proposals", () => {
   });
 });
 describe("user-initiated swaps", () => {
-  const input = { chainId: 1, wallet: req.wallet, tokenIn: req.tokenIn, tokenOut: req.tokenOut, amount: "1.5" };
+  const input = { chainId: 8453, wallet: req.wallet, tokenIn: req.tokenIn, tokenOut: req.tokenOut, amount: "1.5" };
   it("converts human units exactly with provider decimals and is allowed in every agent mode", async () => {
     for (const mode of ["notify", "approve", "automatic"] as const) {
       const s = state(mode), t = await userSwap(s, "alice", input);
@@ -135,8 +144,10 @@ describe("gas sponsorship", () => {
   it("never asks a sponsored wallet for native gas", async () => {
     const s = state(), t = await proposeSwap(s, "alice", req, "test");
     // An empty ETH balance is exactly the case sponsorship exists for.
-    mocks.rpc.mockImplementation(async (_chain: number, method: string, params?: [{ to: string; data: string }]) => {
-      if (method === "eth_chainId") return "0x1";
+    mocks.rpc.mockImplementation(async (_chain: number, method: string, params?: any[]) => {
+      if (method === "eth_getCode") return params?.[0] === req.wallet ? "0x" : "0x6000";
+      if (method === "eth_call" && params?.length === 3) return "0x";
+      if (method === "eth_chainId") return "0x2105";
       if (method === "eth_getBalance") return "0x0";
       if (params?.[0]?.data === "0x313ce567") return `0x${(params[0].to === req.tokenIn ? 6 : 18).toString(16).padStart(64, "0")}`;
       return `0x${(10n ** 25n).toString(16).padStart(64, "0")}`;
@@ -145,4 +156,85 @@ describe("gas sponsorship", () => {
     await expect(authorizeSwap(s, "alice", t, prepared.quoteId)).resolves.toMatchObject({ step: "swap" });
     expect(t.crypto?.batch?.paymaster).toBe("circle-usdc");
   });
+});
+
+it("refuses an agent proposal on any network but Base", async () => {
+  // A scheduled run has nobody to correct it, so the rule lives in the code
+  // rather than the prompt.
+  const s = state("automatic");
+  await expect(proposeSwap(s, "alice", { ...req, chainId: 42161 }, "why")).rejects.toThrow("Rubicon buys on Base");
+  expect(s.trades).toHaveLength(0);
+  await expect(proposeSwap(s, "alice", req, "why")).resolves.toBeDefined();
+  expect(s.trades).toHaveLength(1);
+});
+
+/** A buy confirmation prints a quantity. Getting the decimal point wrong there
+ * is not a cosmetic bug: 227373 and 0.00227373 are the same trade described
+ * eight orders of magnitude apart, and the person signs based on what it says. */
+describe("what a token is, for the card that asks you to sign", () => {
+  // NVDAc, pinned in the catalog at 8 decimals.
+  const nvda = "0xb20000000000000000000078ee7ce2fe4908108c";
+  const pinned = { ...req, chainId: 8453, tokenOut: nvda };
+
+  it("keeps a pinned token's symbol and decimals when no fresh price exists", async () => {
+    // DefiLlama rejects a tokenized stock whose oracle last posted more than
+    // five minutes ago — which is most of the day, once its market closes.
+    mocks.price.mockImplementation(async (t: { address: string }) => {
+      if (t.address === nvda) throw new Error("A fresh, reliable USD valuation is unavailable for this token.");
+      return { symbol: "USDC", decimals: 6, price: 1, timestamp: Date.now() / 1000 };
+    });
+    const trade = await proposeSwap(state("automatic"), "alice", pinned, "test");
+    expect(trade.crypto?.display.tokenOut).toEqual({ symbol: "NVDAc", decimals: 8 });
+  });
+
+  it("reads an unpinned token off the chain rather than calling it “token”", async () => {
+    mocks.price.mockRejectedValue(new Error("A fresh, reliable USD valuation is unavailable for this token."));
+    mocks.rpc.mockImplementation(async (_chain: number, method: string, params: { to: string; data: string }[]) => {
+      if (method === "eth_chainId") return "0x2105";
+      if (params?.[0]?.data === "0x313ce567") return `0x${(params[0].to === req.tokenIn ? 6 : 9).toString(16).padStart(64, "0")}`;
+      // symbol() returns an ABI-encoded string: offset, length, then the bytes.
+      if (params?.[0]?.data === "0x95d89b41") return abiString("MOON");
+      return `0x${(10n ** 25n).toString(16).padStart(64, "0")}`;
+    });
+    const trade = await proposeSwap(state("automatic"), "alice", req, "test");
+    expect(trade.crypto?.display.tokenOut).toEqual({ symbol: "MOON", decimals: 9 });
+  });
+
+  it("never reports decimals it could not establish", async () => {
+    mocks.price.mockRejectedValue(new Error("unavailable"));
+    mocks.rpc.mockImplementation(async (_chain: number, method: string) => {
+      if (method === "eth_chainId") return "0x2105";
+      throw new Error("Chain RPC rate limit reached; retry later (429).");
+    });
+    const trade = await proposeSwap(state("automatic"), "alice", req, "test");
+    // Unknown is allowed to be unknown. Inventing 18 would misplace the point
+    // just as badly as printing base units, only less visibly.
+    expect(trade.crypto?.display.tokenOut.decimals).toBeNull();
+  });
+});
+
+it("prepares a USDC-fee purchase without a separate Permit2 signature and simulates before issuing", async () => {
+  const s = state();
+  mocks.quote.mockResolvedValue({ outputAmount: "200", minimumOutput: "199", expiresAt: Date.now() + 60_000, request: req, raw: {}, permitData: { domain: { name: "Permit2" } } });
+  const t = await userSwap(s, "alice", { ...req, amount: "0.6" });
+  const prepared = await prepareSwap(s, "alice", t);
+  expect(prepared.permitData).toBeUndefined();
+  const result = await authorizeSwap(s, "alice", t, prepared.quoteId);
+  expect(result.batch).toBeDefined();
+  expect(mocks.swap).toHaveBeenCalledWith(expect.anything(), undefined, { batchedApprovals: true });
+  expect(mocks.rpc).toHaveBeenCalledWith(8453, "eth_call", [expect.objectContaining({ to: req.wallet, data: result.batch!.callData }), "latest", expect.anything()]);
+  expect(t.crypto?.phase).toBe("issued");
+});
+
+it("keeps a purchase unissued when its complete batch reverts", async () => {
+  const s = state(), t = await userSwap(s, "alice", { ...req, amount: "0.6" });
+  const prepared = await prepareSwap(s, "alice", t);
+  const original = mocks.rpc.getMockImplementation()!;
+  mocks.rpc.mockImplementation(async (...args) => {
+    if (args[1] === "eth_call" && args[2].length === 3) throw new Error("execution reverted");
+    return original(...args);
+  });
+  await expect(authorizeSwap(s, "alice", t, prepared.quoteId)).rejects.toThrow("Purchase simulation failed");
+  expect(t.crypto?.phase).toBe("authorizing");
+  expect(t.crypto?.batch).toBeUndefined();
 });

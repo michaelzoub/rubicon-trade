@@ -46,7 +46,8 @@ export const marketData = {
       const quote = snapshot.value.ticker;
       const price = quote.lastTrade?.p ?? quote.day?.c;
       if (price && Number.isFinite(price)) {
-        asset.price = price; asset.change = quote.todaysChangePerc ?? null;
+        asset.price = price;
+        asset.change = quote.todaysChangePerc ?? (quote.prevDay?.c ? (price / quote.prevDay.c - 1) * 100 : asset.change);
         asset.asOf = quote.updated ? new Date(quote.updated / 1e6).toISOString() : asset.asOf; asset.volume = quote.day?.v;
       }
     }

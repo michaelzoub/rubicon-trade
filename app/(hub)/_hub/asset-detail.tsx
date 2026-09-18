@@ -9,9 +9,13 @@ import { gsap, useGSAP, prefersReducedMotion, rubiconMotion } from "../../_compo
 import { compact, timeAgo, usd } from "./format";
 import { useHub } from "./hub-provider";
 import { Lens } from "./lens";
-import { ChangePill, Fact, Facts, NewsList, RelevanceLabel, useFollowRoom } from "./parts";
+import { ChangePill, Fact, Facts, RelevanceLabel, useFollowRoom } from "./parts";
+import { ProfileAvatar } from "../profile-avatar";
+import { AssetNews } from "./asset-news";
+import "./asset-detail.css";
 import { PriceTrace, type TraceHit } from "./price-trace";
 import { openPurchase } from "./purchase";
+import { tradability } from "@/lib/crypto/tradable";
 
 const RANGES = [
   { id: "7", label: "7D", hue: "#2f80ed" },
@@ -56,6 +60,8 @@ export function AssetDetail({ kind, id }: { kind: Asset["kind"]; id: string }) {
   }, { scope: stage, dependencies: [asset?.id] });
 
   const watched = !!asset && state.profile.interests.some(i => i.id === asset.id || i.symbol?.toUpperCase() === asset.symbol.toUpperCase());
+  const buyable = asset ? tradability(asset) : null;
+  const reason = asset?.reason?.replace(/You’ve been spending time on (.+?)\. You’ve been spending time on (.+?)(?:\.|$)/, "You’ve been exploring $1 and $2.") || "Explore the latest context with your agent.";
   const data = asset?.chart ?? [];
   const read = hit ? data[hit.index] : null;
   const when = (time: number) => new Intl.DateTimeFormat("en-US", days <= 7 ? { weekday: "short", hour: "numeric" } : { month: "short", day: "numeric" }).format(new Date(time));
@@ -95,7 +101,7 @@ export function AssetDetail({ kind, id }: { kind: Asset["kind"]; id: string }) {
       <Link href="/explore" className="hub-back"><ArrowLeft size={14} aria-hidden="true" />Explore</Link>
       {error && <p className="hub-error" role="alert">{error}</p>}
       {!asset && !error && <div className="hub-skeleton-grid" role="status" aria-label="Loading asset"><span className="rubicon-skeleton hub-skeleton" /><span className="rubicon-skeleton hub-skeleton" /></div>}
-      {asset && <>
+      {asset && buyable && <>
         <header className="hub-detail-head" data-detail-part>
           <div>
             <p className="hub-detail-symbol mono">{asset.symbol}</p>
@@ -103,10 +109,10 @@ export function AssetDetail({ kind, id }: { kind: Asset["kind"]; id: string }) {
             <RelevanceLabel asset={asset} />
           </div>
           <div className={`hub-detail-price${read ? " is-reading" : ""}`}>
-            <strong ref={priceNode}>{usd(read ? read.price : asset.price)}</strong>
+            <strong ref={priceNode}>{(read ? read.price : asset.price) == null ? "Price unavailable" : usd(read ? read.price : asset.price)}</strong>
             <ChangePill value={asset.change} />
             <small>{read ? when(read.time) : asset.asOf ? `as of ${timeAgo(asset.asOf)}` : ""}</small>
-            <button type="button" className="hub-buy-primary" onClick={() => openPurchase({ asset })}>Buy {asset.symbol} <span aria-hidden="true">↗</span></button>
+            {buyable.status === "tradable" ? <button type="button" className="hub-buy-primary" onClick={() => openPurchase({ asset })}>Buy {asset.symbol} <span aria-hidden="true">↗</span></button> : <button type="button" className="hub-buy-primary is-unavailable" disabled aria-disabled="true" title={buyable.detail}>{buyable.reason}</button>}
           </div>
         </header>
         <section className="hub-detail-chart" data-detail-part aria-label="Price history">
@@ -122,14 +128,20 @@ export function AssetDetail({ kind, id }: { kind: Asset["kind"]; id: string }) {
           </div> : <p className="hub-notice">No price history is available for this range.</p>}
         </section>
         <section className="hub-detail-why" data-detail-part>
+          <div className="hub-detail-why-copy">
           <p className="hub-part-title">Why this matters to you</p>
-          <p>{asset.reason}</p>
+          <Link href="/agents" className="hub-detail-agent">
+            <ProfileAvatar profile={state.profile} seed={state.agent?.id ?? state.profile.userId} themes={state.profile.themes} className="hub-detail-agent-avatar" />
+            <span><small>Your agent</small><strong>{state.agent?.name ?? "Your market companion"}</strong></span>
+            <span className="hub-detail-agent-arrow" aria-hidden="true">↗</span>
+          </Link>
+          <p className="hub-detail-reason">{reason}</p>
           <div className="hub-asset-actions">
-            <button type="button" className="hub-chip-button" onClick={() => signal(watched ? "removed" : "watched", asset)} aria-pressed={watched} data-tooltip={watched ? undefined : follow.title} aria-disabled={!watched && !follow.room}>{watched ? <><EyeOff size={12} aria-hidden="true" />Watching</> : <><Eye size={12} aria-hidden="true" />Add to what I’m watching</>}</button>
-            <button type="button" className="hub-chip-button" onClick={() => ask(`What happened with ${asset.symbol} recently?`)}><MessageCircle size={12} aria-hidden="true" />What happened here?</button>
-            {state.profile.permission !== "notify" && <button type="button" className="hub-chip-button" onClick={() => openPurchase({ asset, amount: "50" })}>Buy $50…</button>}
+            <button type="button" className="hub-chip-button" onClick={() => { if (watched || follow.room) signal(watched ? "removed" : "watched", asset); }} aria-pressed={watched} data-tooltip={watched ? undefined : follow.title} aria-disabled={!watched && !follow.room}>{watched ? <><EyeOff size={12} aria-hidden="true" />Watching</> : <><Eye size={12} aria-hidden="true" />Watch {asset.symbol}</>}</button>
+            <button type="button" className="hub-chip-button" onClick={() => ask(`What happened with ${asset.symbol} recently?`)}><MessageCircle size={12} aria-hidden="true" />Ask your agent</button>
           </div>
           {!watched && !follow.room && <p className="hub-limit-hint is-full" role="status">{follow.title} <Link className="hub-inline-link" href="/profile">Open profile</Link></p>}
+          </div>
         </section>
         {/* The numbers most people never read, and the prompt for the ones who
           * do. Folded away so the page answers "what is this and why me?" first. */}
@@ -146,7 +158,7 @@ export function AssetDetail({ kind, id }: { kind: Asset["kind"]; id: string }) {
             <button type="button" className="hub-chip-button" onClick={() => ask(`Why did you surface ${asset.symbol}?`)}>Why did you surface this?</button>
           </div>
         </details>
-        {asset.news.length > 0 && <section data-detail-part><NewsList title="Recent" items={asset.news} /></section>}
+        {asset.news.length > 0 && <section data-detail-part><AssetNews items={asset.news} /></section>}
       </>}
     </div>
   );

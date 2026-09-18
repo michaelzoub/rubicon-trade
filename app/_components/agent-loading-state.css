@@ -1,0 +1,11 @@
+.agent-loading { display: flex; min-height: 350px; flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px 36px; overflow: hidden; }
+.agent-loading-stage { position: relative; width: min(100%, 360px); height: 230px; isolation: isolate; background: radial-gradient(ellipse at center, var(--loading-wash), transparent 68%); }
+.agent-loading-orbit { position: absolute; top: 50%; left: 50%; width: 290px; height: 100px; border: 1px solid var(--loading-accent); opacity: .12; border-radius: 50%; transform: translate(-50%, -20%) rotate(-16deg); }
+.agent-loading-orbit-inner { width: 210px; height: 70px; transform: translate(-50%, -20%) rotate(18deg); opacity: .08; }
+.agent-loading-body { position: absolute; width: 92px; height: 106px; left: calc(50% - 46px); top: 52px; will-change: transform; }
+.agent-loading-creature { display: block; width: 100%; height: 100%; filter: drop-shadow(0 8px 12px color-mix(in srgb, var(--loading-accent) 18%, transparent)); }
+.agent-loading-shadow { position: absolute; left: calc(50% - 38px); top: 182px; width: 76px; height: 12px; background: var(--loading-accent); border-radius: 50%; filter: blur(7px); opacity: .2; }
+.agent-loading-label { margin: 0; color: var(--muted, #737373); font-size: 14px; letter-spacing: -.01em; text-align: center; }
+.agent-loading-signals { display: flex; gap: 5px; margin-top: 14px; }
+.agent-loading-signal { width: 4px; height: 4px; border-radius: 50%; background: var(--loading-accent); opacity: .6; }
+@media (prefers-reduced-motion: reduce) { .agent-loading-body { will-change: auto; } }

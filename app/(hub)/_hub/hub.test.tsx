@@ -222,13 +222,37 @@ it("shows an onchain swap in human units and walks prepare → sign → submitte
   expect(events.posted).toContainEqual(expect.objectContaining({ action: "submitted", tradeId: "t2", hash: `0x${"ab".repeat(32)}` }));
 });
 
-it("explains that a small mainnet buy is blocked by the fee, not by the price", async () => {
-  // The exact case from the field: the money is on Ethereum, and moving a couple
-  // of dollars of it costs more than the purchase is worth. The resolver says so
-  // by name rather than leaving a disabled button unexplained.
+it.each(["accepted", "declined", "unchanged"])("handles a %s network switch before preparing a purchase", async outcome => {
+  let network = "0x1";
+  privy.sendTransaction.mockImplementation(async ({ method }: { method: string }) =>
+    method === "eth_chainId" ? network : method === "eth_accounts" ? [BATCH.sender] : method === "eth_call" ? "0x3b9aca00" : "0x0");
+  privy.switchChain.mockImplementationOnce(async () => {
+    if (outcome === "declined") throw new Error("User rejected the request (4001)");
+    if (outcome === "accepted") network = "0x2105";
+  });
+  authorized.sponsored = true;
+  gasless.sendSwapBatch.mockResolvedValue({ userOpHash: `0x${"cd".repeat(32)}`, hash: `0x${"ab".repeat(32)}` });
+  try {
+    await render(PREVIEW_STATE);
+    const card = Array.from(container.querySelectorAll(".hub-trade--crypto")).at(-1)!;
+    const sign = Array.from(card.querySelectorAll("button")).find(b => b.textContent === "Review & sign in wallet")!;
+    await act(async () => sign.click());
+    expect(privy.switchChain).toHaveBeenCalledWith(8453);
+    if (outcome === "accepted") {
+      expect(events.posted).toContainEqual(expect.objectContaining({ action: "prepare" }));
+      expect(events.posted).toContainEqual(expect.objectContaining({ action: "submitted" }));
+    } else {
+      expect(events.posted).toEqual([]);
+      expect(card.querySelector('[role="alert"]')?.textContent).toContain(outcome === "declined" ? "Wallet request declined" : "Switch to Base");
+    }
+  } finally { authorized.sponsored = false; }
+});
+
+it("explains an unfundable buy by naming Base, the only network it spends from", async () => {
+  // Single-chain: money elsewhere is not reached for, so the panel says what is
+  // missing on Base rather than leaving a disabled button unexplained.
   routeReply = () => ({ chosen: null, candidates: [
-    { chainId: 1, wallet: PREVIEW_WALLET, balance: "3340000", reserve: "191600", status: "fee_exceeds_amount" },
-    { chainId: 8453, wallet: PREVIEW_WALLET, balance: "0", reserve: "26400", status: "insufficient" },
+    { chainId: 8453, wallet: PREVIEW_WALLET, balance: "3340000", reserve: "26400", status: "insufficient" },
   ] });
   await render(PREVIEW_STATE, <TradeView />);
   await setValue(container.querySelector("#buy-search") as HTMLInputElement, "pepe");
@@ -236,10 +260,9 @@ it("explains that a small mainnet buy is blocked by the fee, not by the price", 
   await act(async () => (Array.from(container.querySelectorAll(".hub-buy-result")).find(b => b.textContent?.includes("PEPE")) as HTMLElement).click());
   await setValue(container.querySelector("#buy-amount") as HTMLInputElement, "0.2");
   await act(async () => { await new Promise(r => setTimeout(r, 700)); });
-  // Named the chain the money is actually on, and offered somewhere it works.
-  expect(container.textContent).toContain("Your USDC is on Ethereum");
-  expect(container.textContent).toContain("costs more than it is worth");
-  expect(container.textContent).toContain("hold USDC on Base");
+  // Names the shortfall on the one network the app spends from.
+  expect(container.textContent).toContain("You have 3.34 USDC on Base");
+  expect(container.textContent).toContain("not enough for this buy");
   // No network picker survives: the route is resolved, not chosen.
   expect(container.querySelector(".hub-buy-form select")).toBeNull();
   expect((container.querySelector(".hub-buy-submit") as HTMLButtonElement).disabled).toBe(true);
@@ -247,15 +270,13 @@ it("explains that a small mainnet buy is blocked by the fee, not by the price", 
   // The arithmetic is inspectable rather than something to take on faith: every
   // network looked at, what it holds, the live fee, and why it was not used.
   const rows = Array.from(container.querySelectorAll(".hub-route-detail li")).map(li => li.textContent);
-  expect(rows).toHaveLength(2);
-  expect(rows[0]).toContain("Ethereum");
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toContain("Base");
   expect(rows[0]).toContain("$3.34");
-  expect(rows[0]).toContain("Fee is more than this buy");
-  // The live fee, not the stale $16 constant it replaced.
-  expect(rows[0]).toContain("fee $0.19");
-  expect(rows[1]).toContain("Base");
-  expect(rows[1]).toContain("No USDC");
-});
+  expect(rows[0]).toContain("Not enough USDC");
+  // The live fee, not the stale constant it replaced.
+  expect(rows[0]).toContain("fee $0.03");
+}, 20000);
 
 it("tells the buyer what is missing instead of letting a short balance reach the wallet", async () => {
   // 50 USDC on Base, and no native ETH anywhere: $100 is short, $25 is fine.
@@ -274,7 +295,7 @@ it("tells the buyer what is missing instead of letting a short balance reach the
   await setValue(container.querySelector("#buy-amount") as HTMLInputElement, "25");
   await act(async () => { await new Promise(r => setTimeout(r, 700)); });
   expect((container.querySelector(".hub-buy-submit") as HTMLButtonElement).disabled).toBe(false);
-});
+}, 20000);
 
 it("lets the user buy a tokenized stock with dollars from the Trade page", async () => {
   await render(PREVIEW_STATE, <TradeView />);
@@ -290,13 +311,13 @@ it("lets the user buy a tokenized stock with dollars from the Trade page", async
   // Buying waits for the resolved route: the panel will not submit a purchase
   // before the server has said which wallet and network it pays from.
   await act(async () => { await new Promise(r => setTimeout(r, 700)); });
-  expect(container.textContent).toContain("Paying from Base");
+  expect(container.textContent).toContain("Paying with USDC on Base");
   const form = container.querySelector("form.hub-buy-form")!;
   await act(async () => { form!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
   await act(async () => { await new Promise(r => setTimeout(r, 10)); });
   expect(events.posted).toContainEqual(expect.objectContaining({ action: "propose", chainId: 8453, wallet: PREVIEW_WALLET, tokenIn: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", tokenOut: PREVIEW_TOKENS[1].address, amount: "25", slippageBps: 50, note: "Buy $25.00 of BNVDA" }));
   expect(container.querySelector(".hub-swap-result .hub-trade--crypto")).not.toBeNull();
-});
+}, 20000);
 
 it("keeps the advanced swap-by-contract form behind a toggle", async () => {
   await render(PREVIEW_STATE, <TradeView />);

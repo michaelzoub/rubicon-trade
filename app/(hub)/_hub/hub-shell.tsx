@@ -98,8 +98,8 @@ function Boot({ userId, name, children }: { userId: string; name?: string; child
     finally { setSaving(false); }
   }
 
-  if (state === undefined) return <Frame><LoadingState label="Loading your profile…" /></Frame>;
-  if (!state) return <Frame onboarding><ProfileFlow userId={userId} name={name} onComplete={complete} completing={saving} serverError={error} /></Frame>;
+  if (state === undefined) return <Frame><LoadingState label="Loading your profile…" userId={userId} /></Frame>;
+  if (!state) return <Frame><ProfileFlow userId={userId} name={name} onComplete={complete} completing={saving} serverError={error} /></Frame>;
   return <HubProvider userId={userId} name={name} initial={state} initialAccount={account}><Hub>{children}</Hub></HubProvider>;
 }
 

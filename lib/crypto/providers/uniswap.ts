@@ -23,8 +23,18 @@ export function createUniswap(request: Transport = http): ExecutionProvider {
       const minimumOutput = (BigInt(q.output.amount) * BigInt(10_000 - r.slippageBps) / BigInt(10_000)).toString();
       return { provider: "uniswap", request: r, outputAmount: q.output.amount, minimumOutput, raw: q, permitData: data.permitData ?? undefined, expiresAt: Date.now() + 60_000 };
     },
-    async swap(quote, signature) {
-      if (quote.permitData && (!signature || !/^0x[0-9a-f]+$/i.test(signature))) throw new Error("Permit2 signature required for this quote."); if (quote.expiresAt <= Date.now()) throw new Error("Quote expired. Request a new quote."); const data = await post<{ swap: Transaction }>("swap", { quote: quote.raw, ...(quote.permitData ? { permitData: quote.permitData, signature } : {}), simulateTransaction: true, refreshGasPrice: true, deadline: Math.floor(quote.expiresAt / 1000) }); const tx = validateTransaction(data.swap, quote.request);
+    async swap(quote, signature, options) {
+      const batched = options?.batchedApprovals === true;
+      if (!batched && quote.permitData && (!signature || !/^0x[0-9a-f]+$/i.test(signature))) throw new Error("Permit2 signature required for this quote.");
+      if (quote.expiresAt <= Date.now()) throw new Error("Quote expired. Request a new quote.");
+      // Batch approvals are simulated together by the caller; the gateway can
+      // only simulate the standalone router call against existing allowances.
+      const data = await post<{ swap: Transaction }>("swap", {
+        quote: quote.raw,
+        ...(!batched && quote.permitData ? { permitData: quote.permitData, signature } : {}),
+        simulateTransaction: !batched, refreshGasPrice: true, deadline: Math.floor(quote.expiresAt / 1000),
+      });
+      const tx = validateTransaction(data.swap, quote.request);
       const allowedValue = quote.request.tokenIn === NATIVE ? BigInt(quote.request.amount) : BigInt(0);
       if (BigInt(tx.value) !== allowedValue) throw new Error("Unexpected native token value in swap transaction.");
       return tx; },

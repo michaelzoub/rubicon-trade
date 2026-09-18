@@ -26,7 +26,7 @@ async function request<T>(token: Token, url: string, init?: RequestInit): Promis
 export type StateAction =
   | { action: "conviction"; id: string; text: string; strength: number; remove?: boolean }
   /** The small set of choices people explicitly control for an agent. */
-  | { action: "agent"; thesis?: string; interests?: HubState["profile"]["interests"]; permission?: HubState["profile"]["permission"]; limits?: HubState["profile"]["limits"] }
+  | { action: "agent"; thesis?: string; interests?: HubState["profile"]["interests"]; permission?: HubState["profile"]["permission"]; limits?: HubState["profile"]["limits"]; autoExecute?: boolean }
   | { action: "initialize"; profile: unknown; userName?: string }
   | { action: "profile"; profile: HubState["profile"]; dislikes: string[]; preferences: string[] }
   | { action: "signal"; signal: SignalAction; target: string; kind?: Asset["kind"]; symbol?: string; name?: string; themes?: string[] }

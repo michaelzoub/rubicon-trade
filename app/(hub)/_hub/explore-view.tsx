@@ -8,6 +8,7 @@ import { THEMES } from "@/lib/socialtrading/themes";
 import { ThemeMark } from "../theme-cards";
 import { useGloss } from "./gloss";
 import { useHub } from "./hub-provider";
+import { isTradable } from "@/lib/crypto/tradable";
 import { Lens, type LensItem } from "./lens";
 import { AssetGrid } from "./parts";
 
@@ -43,6 +44,12 @@ export function ExploreView() {
    * objects can be seen travelling to their new places. */
 
 
+  const buyableFirst = useCallback((list: Asset[]) => {
+    const rank = (a: Asset) => (isTradable({ symbol: a.symbol, name: a.name, kind: a.kind, contracts: a.contracts }) ? 0 : 1);
+    // A stable partition: relevance order survives inside each group.
+    return [...list].sort((a, b) => rank(a) - rank(b));
+  }, []);
+
   const forYou = useCallback(async (q: string) => {
     const [stocks, coins] = await Promise.allSettled([market({ kind: "stock", q }), market({ kind: "crypto", q })]);
     if (stocks.status === "rejected" && coins.status === "rejected") throw stocks.reason;
@@ -57,7 +64,10 @@ export function ExploreView() {
     const handle = setTimeout(() => {
       load().then(list => {
         if (cancelled) return;
-        setAssets(list); setLoading(false);
+        // What you can actually buy comes first. Everything else keeps its place
+        // — following a stock with no tokenized market is still worth something —
+        // and its card says plainly that Rubicon cannot buy it yet.
+        setAssets(buyableFirst(list)); setLoading(false);
       }).catch(e => { if (!cancelled) { setAssets([]); setLoading(false); setError(e instanceof Error ? e.message : "Market data is unavailable."); } });
     }, search ? 350 : 0);
     return () => { cancelled = true; clearTimeout(handle); };

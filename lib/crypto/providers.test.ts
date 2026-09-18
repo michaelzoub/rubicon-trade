@@ -87,6 +87,18 @@ describe("Uniswap execution adapter", () => {
     await expect(api.swap({ ...q, expiresAt: 0 })).rejects.toThrow(/expired/);
     await expect(api.swap(q)).rejects.toThrow(/native/);
   });
+  it("builds a swap without a separate permit when approvals will execute in the batch", async () => {
+    vi.stubEnv("UNISWAP_API_KEY", "test-key");
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ swap: { chainId: 1, from: wallet, to: ROUTERS[1], data: "0xaabb", value: "0" } }));
+    const quote = { provider: "uniswap" as const, request: req, raw: raw().quote, outputAmount: "2000000", minimumOutput: "1990000", expiresAt: Date.now() + 60000, permitData: {} as import("./types").PermitData };
+    const api = createUniswap(createTransport(fetcher));
+    await expect(api.swap(quote)).rejects.toThrow("Permit2 signature required");
+    await api.swap(quote, undefined, { batchedApprovals: true });
+    const body = JSON.parse(fetcher.mock.calls[0][1].body);
+    expect(body.simulateTransaction).toBe(false);
+    expect(body.permitData).toBeUndefined();
+    expect(body.signature).toBeUndefined();
+  });
   it("simulates the swap after approvals have settled", async () => {
     vi.stubEnv("UNISWAP_API_KEY", "test-key");
     const fetcher = vi.fn().mockResolvedValueOnce(Response.json(raw())).mockResolvedValueOnce(Response.json({ swap: { chainId: 1, from: wallet, to: ROUTERS[1], data: "0xaabb", value: "0" } }));

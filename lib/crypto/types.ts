@@ -12,7 +12,7 @@ export type Call = { to: string; value: string; data: string };
  * account calldata they encode to. The chain is later held to this calldata. */
 export type SwapBatch = { chainId: number; sender: string; calls: Call[]; callData: string; paymaster: "circle-usdc" | null };
 export interface DiscoveryProvider { search(query: string): Promise<Pair[]>; pairs(token: TokenRef): Promise<Pair[]> }
-export interface ExecutionProvider { quote(request: SwapRequest): Promise<SwapQuote>; swap(quote: SwapQuote, signature?: string): Promise<Transaction> }
+export interface ExecutionProvider { quote(request: SwapRequest): Promise<SwapQuote>; swap(quote: SwapQuote, signature?: string, options?: { batchedApprovals?: boolean }): Promise<Transaction> }
 export interface ValuationProvider { value(token: TokenRef, amount: string): Promise<number> }
 /** Display-only token facts captured at proposal time. Never used for execution. */
 export type TokenDisplay = { symbol: string; decimals: number | null };
