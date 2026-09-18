@@ -76,7 +76,7 @@ async function pickFamiliarity(experienced = true) {
   if (experienced) for (const concept of FAMILIARITY_CONCEPTS) await click(concept.label);
   await click("Continue");
 }
-async function foundation(level = "Experienced", confidence = "I know what I believe") {
+async function foundation(level = "Experienced", confidence = "I have strong convictions") {
   await click(confidence); await click("Continue");
   await pickFamiliarity(level === "Experienced");
   await place("Society and work", "84", "6"); await click("Continue");
@@ -103,7 +103,7 @@ async function uncertain() {
 }
 it("requires explicit foundation answers and carries only the views that were actually taken", async () => {
   await render();
-  await foundation("Unknown grounds", "I’m here to explore");
+  await foundation("Unknown grounds", "I’m still exploring");
   await uncertain();
   expect(container.textContent).toContain("Your outlook. Your rules.");
   await click("Meet my agent");
@@ -153,7 +153,7 @@ it("saves disagreement, confidence, horizon, own beliefs and reversible dislikes
 it("puts the world map in front of everyone and keeps the countries", async () => {
   const complete = vi.fn();
   await act(async () => root.render(<ProfileFlow userId="alice" persist={false} onComplete={complete} />));
-  await click("I know what I believe"); await click("Continue");
+  await click("I have strong convictions"); await click("Continue");
   await pickFamiliarity(true);
   await place("Society and work", "70", "4"); await click("Continue");
   expect(container.textContent).toContain("Where could conflict reshape markets?");

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { Bot, BriefcaseBusiness, ChevronLeft, ChevronRight, Coins, Globe2, HeartPulse, RotateCcw, Sprout, Zap } from "lucide-react";
+import { Bot, BriefcaseBusiness, Coins, Globe2, HeartPulse, RotateCcw, Sprout, Zap } from "lucide-react";
 import { CATEGORIES, predictions } from "@/lib/socialtrading/onboarding";
 import { commitOf, forceOf, leanOf, poseOf, type Direction } from "@/lib/socialtrading/onboarding-throw";
 import { Draggable, gsap, prefersReducedMotion, rubiconMotion, useGSAP } from "../_components/motion";
@@ -16,12 +16,6 @@ export const sectorKey = (category: string) => SECTOR_KEYS[Math.max(0, CATEGORIE
 export type { Direction };
 export type DeckCard = { id: string; category: string; text: string; lead?: string };
 
-const CHIP: { dir: Direction; label: string }[] = [
-  { dir: "no", label: "I don’t see it" },
-  { dir: "unsure", label: "Not sure" },
-  { dir: "yes", label: "I see it" },
-];
-
 function paint(deck: HTMLElement | null, x: number, y: number) {
   if (!deck) return;
   const lean = leanOf(x, y);
@@ -31,8 +25,8 @@ function paint(deck: HTMLElement | null, x: number, y: number) {
 }
 
 /** A deck you throw rather than a form you fill. The top card tracks the
- * pointer, tilts into the well it is heading for, and the labels below light
- * with it — so a tap and a flick are visibly the same move. */
+ * pointer and tilts into the label it is heading for — left, right, or down —
+ * so a tap on that label and a flick are the same move. */
 export function PredictionDeck({ card, backs = 0, answered, total, onVote, onUndo }: {
   card: DeckCard; backs?: number;
   answered?: number; total?: number;
@@ -76,13 +70,13 @@ export function PredictionDeck({ card, backs = 0, answered, total, onVote, onUnd
     locked.current = false;
     paint(stage, 0, 0);
     if (quiet) return;
-    gsap.set(el, { x: 0, y: 0, rotation: hinting ? -2.6 : 0, rotationX: 0, opacity: 1, scale: 1 });
-    gsap.fromTo(el, { y: 36, rotation: -6, scale: 0.94, opacity: 0 }, {
-      y: 0, rotation: hinting ? -2.6 : 0, scale: 1, opacity: 1, duration: 0.48, ease: "creature",
+    gsap.set(el, { x: 0, y: 0, rotation: 0, rotationX: 0, opacity: 1, scale: 1, transformOrigin: "50% 50%" });
+    gsap.fromTo(el, { y: 28, rotation: -4, scale: 0.96, opacity: 0 }, {
+      y: 0, rotation: 0, scale: 1, opacity: 1, duration: 0.48, ease: "creature",
     });
     if (hinting) {
       invite.current = gsap.to(el, {
-        x: 16, rotation: 4.5, duration: 0.85, ease: "sine.inOut",
+        rotation: 3.2, duration: 0.9, ease: "sine.inOut",
         yoyo: true, repeat: 5, delay: 0.55, repeatDelay: 0.28,
       });
     }
@@ -118,7 +112,8 @@ export function PredictionDeck({ card, backs = 0, answered, total, onVote, onUnd
     return () => { invite.current?.kill(); drag.kill(); };
   }, { dependencies: [card.id], revertOnUpdate: true });
 
-  return <div ref={deck} className={`onb-deck${hinting ? " is-hinting" : ""}`} data-sector={sector} style={{ "--force": 0 } as CSSProperties}>
+  return <div ref={deck} className={`onb-deck${hinting ? " is-hinting" : ""}`} data-sector={sector} style={{ "--force": 0 } as CSSProperties} aria-busy={exiting}>
+    <button type="button" className="onb-vote" data-dir="no" disabled={exiting} onClick={() => void fly("no")}>I don’t see it</button>
     <div className="onb-deck-stage">
       <i className="onb-well is-no" aria-hidden="true" />
       <i className="onb-well is-yes" aria-hidden="true" />
@@ -132,8 +127,6 @@ export function PredictionDeck({ card, backs = 0, answered, total, onVote, onUnd
         aria-label={`${card.text} Swipe left to disagree, right to agree, down for unsure.`}
         onKeyDown={e => { const d = ({ ArrowLeft: "no", ArrowRight: "yes", ArrowDown: "unsure" } as const)[e.key as "ArrowLeft"]; if (d) { e.preventDefault(); void fly(d); } }}>
         <span className="onb-swipe-handle" aria-hidden="true" />
-        <span className="onb-swipe-edge is-no" aria-hidden="true"><ChevronLeft size={22} strokeWidth={2.2} /></span>
-        <span className="onb-swipe-edge is-yes" aria-hidden="true"><ChevronRight size={22} strokeWidth={2.2} /></span>
         <Icon className="onb-swipe-mark" strokeWidth={1} aria-hidden="true" />
         <span className="onb-swipe-topic"><Icon size={18} strokeWidth={1.6} aria-hidden="true" />{card.category}</span>
         <h2>{card.text}</h2>
@@ -143,15 +136,8 @@ export function PredictionDeck({ card, backs = 0, answered, total, onVote, onUnd
         <span className="onb-stamp is-unsure" aria-hidden="true">Not sure</span>
       </div>
     </div>
-
-    <p className="onb-swipe-cue">{hinting ? "Swipe or tap to take a side" : ""}</p>
-
-    <div className="onb-votes" aria-busy={exiting}>
-      {CHIP.map(chip => <button key={chip.dir} type="button" data-dir={chip.dir} className={chip.dir === "yes" ? "is-yes" : undefined} disabled={exiting} onClick={() => void fly(chip.dir)}>
-        {chip.label}
-      </button>)}
-    </div>
-
+    <button type="button" className="onb-vote" data-dir="yes" disabled={exiting} onClick={() => void fly("yes")}>I see it</button>
+    <button type="button" className="onb-vote is-unsure" data-dir="unsure" disabled={exiting} onClick={() => void fly("unsure")}>Not sure</button>
     {(total !== undefined || onUndo) && <div className="onb-deck-foot">
       {total !== undefined && <div className="onb-dots" aria-hidden="true">{Array.from({ length: total }, (_, i) => <i key={i} className={i < (answered ?? 0) ? "active" : i === (answered ?? 0) ? "is-now" : ""} />)}</div>}
       {onUndo && <button type="button" className="onb-text-button" onClick={onUndo}><RotateCcw size={13} aria-hidden="true" /> Undo last swipe</button>}

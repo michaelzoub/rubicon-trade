@@ -1,4 +1,5 @@
-export const CONFIDENCE = ["I’m here to explore", "I have a few hunches", "Some things feel clear", "I know what I believe"];
+export const CONVICTION_TITLE = "How strong are your convictions about the future?";
+export const CONFIDENCE = ["I’m still exploring", "I have a few hunches", "I have some convictions", "I have strong convictions"];
 export const EXPERIENCE = ["New to investing", "Getting started", "Comfortable investing", "Experienced investor"];
 export const EXPERIENCE_NOTES = ["I’m new or have barely started.", "I understand stocks, ETFs or crypto.", "I can research and compare investments myself.", "I manage my own portfolio and know what I’m looking at."];
 export const DISLIKES = ["Non-ESG companies", "ESG companies", "Fossil fuels", "Defence and weapons", "Tobacco", "Gambling", "Memecoins", "Highly speculative investments", "Real estate", "Commodities", "Short-term trading"];

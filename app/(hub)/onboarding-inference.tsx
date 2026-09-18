@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, Check, MessageSquare, SlidersHorizontal, Sparkles } from "lucide-react";
 import { profileKey, PERMISSIONS, limitsError, type InvestingProfile, type Permission } from "@/lib/socialtrading/profile";
-import { newOnboarding, onboardingThesis, predictions, PREDICTION_COUNT, DECK_TITLE, type OnboardingAnswers } from "@/lib/socialtrading/onboarding";
+import { newOnboarding, onboardingThesis, predictions, PREDICTION_COUNT, CONVICTION_TITLE, DECK_TITLE, type OnboardingAnswers } from "@/lib/socialtrading/onboarding";
 import { applyAnswer, type Card, type CardAnswer } from "@/lib/socialtrading/onboarding-cards";
 import { DEFAULT_PLAN } from "@/lib/socialtrading/plans";
 import { suggestedThemes } from "@/lib/socialtrading/themes";
@@ -86,7 +86,7 @@ export function InferenceOnboarding({ userId, onComplete, completing = false, se
   useEffect(() => { heading.current?.focus({ preventScroll: true }); }, [index]);
 
   function next() {
-    if (index === SEEDS.clarity && a.confidence === null) return setError("Choose how clear the future feels to you.");
+    if (index === SEEDS.clarity && a.confidence === null) return setError("Choose how strong your convictions are.");
     if (index === SEEDS.knowledge) { completeKnowledge(scoreFamiliarity(profile.investorAnswers.selectedConceptIds ?? [])); return; }
     if (card && card.kind === "pad" && !a.responses.some(r => r.confidence !== undefined)) return setError("Place the dot to continue.");
     setIndex(i => i + 1);
@@ -121,7 +121,7 @@ export function InferenceOnboarding({ userId, onComplete, completing = false, se
   if (!loaded) return <LoadingState label="Loading…" />;
   const waiting = index >= 0 && !card && !atRules;
   const step = Math.min(TOTAL, index + 3);
-  const title = index === SEEDS.clarity ? "How much of the future already feels clear to you?" : index === SEEDS.knowledge ? FAMILIARITY_TITLE : atRules ? "Your outlook. Your rules." : DECK_TITLE;
+  const title = index === SEEDS.clarity ? CONVICTION_TITLE : index === SEEDS.knowledge ? FAMILIARITY_TITLE : atRules ? "Your outlook. Your rules." : DECK_TITLE;
   // A generated card may need a second line; the fixed scenes never do, and a
   // card you answer by swiping or dragging explains itself without one.
   const lead = index >= 0 && card && !["binary", "pad"].includes(card.kind) ? card.lead : "";

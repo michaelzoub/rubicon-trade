@@ -39,7 +39,7 @@ async function render(fetchDeck: DeckFetcher) {
   await act(async () => root.render(<InferenceOnboarding userId="alice" persist={false} variant="inference" forced={false} fetchDeck={fetchDeck} />));
 }
 async function foundations() {
-  await click("I know what I believe"); await click("Continue");
+  await click("I have strong convictions"); await click("Continue");
   for (const concept of FAMILIARITY_CONCEPTS) await click(concept.label);
   await click("Continue");
 }

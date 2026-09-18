@@ -105,10 +105,10 @@ interface ConfidenceJourneyProps {
 
 const DISTANCE_STOPS = [0, 333, 667, 1000];
 const CONFIDENCE_DESCRIPTIONS = [
-  "You’re open to possibilities and haven’t formed firm convictions yet.",
-  "A few instincts are emerging, but they’re still taking shape.",
-  "Several convictions feel defined, though some uncertainty remains.",
-  "Your convictions feel strong, settled, and easy to stand behind.",
+  "You don’t have firm views yet — you’re open to seeing where things go.",
+  "A few instincts are forming, but they haven’t hardened into convictions.",
+  "You already hold some convictions, even if not everything is settled.",
+  "You have strong convictions about where the world is heading.",
 ];
 const STARS = Array.from({ length: 56 }, (_, i) => {
   const angle = i * 2.399963229728653;
@@ -397,7 +397,7 @@ function ConfidenceJourney({ value, onChange }: ConfidenceJourneyProps) {
   const selected = value ?? 0;
   return <div ref={root} className="onb-distance">
     <div className="onb-distance-frame">
-      <div ref={scroller} className="onb-distance-scroll" role="slider" tabIndex={0} aria-label="Clarity of your beliefs"
+      <div ref={scroller} className="onb-distance-scroll" role="slider" tabIndex={0} aria-label="Strength of your convictions"
         aria-valuemin={24} aria-valuemax={135} aria-valuenow={FOCAL_LENGTHS[selected]}
         aria-valuetext={`${CONFIDENCE[selected]}, ${FOCAL_LENGTHS[selected]} millimeters`} onKeyDown={handleKeyDown}>
         <div className="onb-distance-runway">
