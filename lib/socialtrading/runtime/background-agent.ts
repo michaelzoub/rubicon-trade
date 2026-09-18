@@ -9,8 +9,18 @@ import { DEFAULT_PLAN, type PlanLimits } from "../plans";
 import type { Asset, HubState, Message, MessagePart } from "../types";
 import { emptyMemory, type AgentMemory, type ModelClient, type ModelMessage, type Relevance, type RunDecision, type RunJob, type RunOutcome, type RuntimeStore } from "./types";
 
-/** Tools a scheduled run may never call: they move money or rewrite the profile without the user present. */
-export const WRITE_TOOLS = new Set(["update_profile", "propose_trade", "propose_crypto_swap", "quote_crypto_swap", "get_crypto_wallets"]);
+/** Tools a scheduled run may never call: they rewrite the profile or move money
+ * through a path that needs a person. Rewriting a profile unattended is never
+ * allowed — nobody asked for it and nobody would see it happen. */
+export const WRITE_TOOLS = new Set(["update_profile", "propose_trade", "quote_crypto_swap", "get_crypto_wallets"]);
+
+/** Buying unattended, which is withheld unless the person has granted it.
+ *
+ * Separate from `WRITE_TOOLS` because this one is earned rather than forbidden:
+ * `buyUnattended` says whether this user turned it on, set limits, and delegated
+ * a signer. When they have not, the tool is not offered and a call is refused
+ * with the reason — so the model learns why instead of retrying. */
+export const DELEGATED_TOOLS = new Set(["propose_crypto_swap", "execute_crypto_swap"]);
 const RELEVANCE_RANK: Record<Relevance, number> = { low: 0, medium: 1, high: 2 };
 const NOTIFY_TOOL = "notify_user", REMEMBER_TOOL = "remember";
 
@@ -43,6 +53,9 @@ export type BackgroundAgentDeps<S> = {
   maxRounds?: number;
   /** Test seam for the user-facing display name. */
   userName?: string;
+  /** Whether this user has granted unattended buying, checked per run. Absent
+   * means no: a deployment that does not wire this can never spend unattended. */
+  buyUnattended?: (state: HubState) => Promise<{ allowed: boolean; reason: string }>;
 };
 
 const ago = (iso: string | undefined, now: Date) => {
@@ -104,7 +117,13 @@ export async function runBackgroundAgent<S>(job: RunJob, deps: BackgroundAgentDe
     const usedToday = await deps.store.notificationsSince(job.userId, job.agentId, startOfUtcDay(startedAt));
     const remainingToday = Math.max(0, agent.notifications.maxPerDay - usedToday);
 
-    const tools = [...deps.registry.schemas(state).filter(t => !WRITE_TOOLS.has(t.function.name)), ...RUNTIME_TOOLS];
+    // Checked before the tools are listed, and again inside the tool, because a
+    // person can revoke the signer while a run is in flight.
+    const delegated = await deps.buyUnattended?.(state).catch(() => ({ allowed: false, reason: "Could not confirm your delegated wallet." })) ?? { allowed: false, reason: "Unattended buying is not enabled." };
+    const tools = [
+      ...deps.registry.schemas(state).filter(t => !WRITE_TOOLS.has(t.function.name) && (delegated.allowed || !DELEGATED_TOOLS.has(t.function.name))),
+      ...RUNTIME_TOOLS,
+    ];
     const messages: ModelMessage[] = [
       { role: "system", content: backgroundSystemPrompt({ agent, state, memory, now: startedAt, remainingToday, userName: deps.userName }) },
       { role: "user", content: `Scheduled wake-up (${job.trigger}). Begin.` },
@@ -138,6 +157,8 @@ export async function runBackgroundAgent<S>(job: RunJob, deps: BackgroundAgentDe
           result = { saved: notes.length };
         } else if (WRITE_TOOLS.has(name)) {
           result = { error: "Not available during scheduled runs. Ask the user to open the conversation instead." };
+        } else if (DELEGATED_TOOLS.has(name) && !delegated.allowed) {
+          result = { error: `${delegated.reason} Notify the user instead of retrying.` };
         } else {
           toolCalls++; inspected.push(lookupLabel(name, args));
           try {

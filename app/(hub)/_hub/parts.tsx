@@ -1,6 +1,7 @@
 "use client";
 import { BridgeTradeCard } from "./bridge-trade-card";
 import { openPurchase } from "./purchase";
+import { tradability } from "@/lib/crypto/tradable";
 
 import { ArrowUpRight, Check, Eye, EyeOff, HelpCircle, X } from "lucide-react";
 import { HubLink as Link } from "./navigation";
@@ -15,12 +16,13 @@ import { assetGloss, useGloss } from "./gloss";
 import { useHub } from "./hub-provider";
 import { CryptoTradeCard } from "./crypto-trade-card";
 import { PriceTrace, traceDate, type TraceHit } from "./price-trace";
+import { useMarketAsset } from "./market-quote";
 
 export const assetHref = (asset: Pick<Asset, "kind" | "id">) => `/explore/${asset.kind}/${encodeURIComponent(asset.id)}`;
 
 /** Tiny inline price history. Pure SVG so it can sit inside a chat row. */
 export function Sparkline({ points, width = 96, height = 28, className = "" }: { points: { price: number }[]; width?: number; height?: number; className?: string }) {
-  if (points.length < 2) return <span className={`hub-sparkline is-empty ${className}`} style={{ width, height }} aria-hidden="true" />;
+  if (points.length < 2) return <span className={`hub-sparkline is-empty ${className}`} style={{ width, height }}>Chart unavailable</span>;
   const prices = points.map(p => p.price), min = Math.min(...prices), max = Math.max(...prices), span = max - min || 1;
   const d = prices.map((p, i) => `${i ? "L" : "M"}${(i / (prices.length - 1)) * width} ${height - 2 - ((p - min) / span) * (height - 4)}`).join(" ");
   const up = prices[prices.length - 1] >= prices[0];
@@ -29,13 +31,13 @@ export function Sparkline({ points, width = 96, height = 28, className = "" }: {
 
 export function ChangeText({ value, className = "" }: { value: number | null; className?: string }) {
   const tone = value === null ? "" : value > 0 ? " is-up" : value < 0 ? " is-down" : "";
-  return <span className={`hub-change${tone} ${className}`}>{pct(value)}</span>;
+  return <span className={`hub-change${tone} ${className}`}>{value == null ? "Change unavailable" : pct(value)}</span>;
 }
 
 /** The move as a pill: tinted by direction, with an arrow that says it twice. */
 export function ChangePill({ value, className = "" }: { value: number | null; className?: string }) {
   const tone = value === null ? "" : value > 0 ? " is-up" : value < 0 ? " is-down" : "";
-  return <span className={`hub-change hub-pill${tone} ${className}`}>{pct(value)}{value !== null && value !== 0 && <ArrowUpRight size={11} aria-hidden="true" style={value < 0 ? { transform: "rotate(90deg)" } : undefined} />}</span>;
+  return <span className={`hub-change hub-pill${tone} ${className}`}>{value == null ? "Change unavailable" : pct(value)}{value != null && value !== 0 && <ArrowUpRight size={11} aria-hidden="true" style={value < 0 ? { transform: "rotate(90deg)" } : undefined} />}</span>;
 }
 
 export function RelevanceLabel({ asset }: { asset: Pick<Asset, "label" | "labelTone"> }) {
@@ -64,7 +66,8 @@ export function useFollowRoom() {
   return { room: !status.atLimit, title: status.atLimit ? `You follow ${status.limit} assets, the most the ${account.planName} plan keeps. Unfollow one in your profile to follow this.` : status.nearLimit ? `${status.remaining} more ${status.remaining === 1 ? "asset" : "assets"} to follow on the ${account.planName} plan.` : undefined };
 }
 
-export function AssetCard({ asset, dense = false }: { asset: Asset; dense?: boolean }) {
+export function AssetCard({ asset: initial, dense = false }: { asset: Asset; dense?: boolean }) {
+  const asset = useMarketAsset(initial);
   const { state, signal, send, busy } = useHub();
   const gloss = useGloss();
   const router = useRouter();
@@ -77,13 +80,13 @@ export function AssetCard({ asset, dense = false }: { asset: Asset; dense?: bool
       <button type="button" className="hub-asset-main" onClick={open} aria-label={`Open ${asset.name}`}>
         <span className="hub-asset-id"><strong>{asset.symbol}</strong><span>{asset.name}</span></span>
         <Sparkline points={asset.chart.slice(-40)} />
-        <span className="hub-asset-price"><span>{usd(asset.price)}</span><ChangeText value={asset.change} /></span>
+        <span className="hub-asset-price"><span>{asset.price == null ? "Price unavailable" : usd(asset.price)}</span><ChangeText value={asset.change} /></span>
       </button>
       <div className="hub-asset-foot">
         <button type="button" className="hub-why-trigger" {...gloss(assetGloss(asset, state))}>Why you’re seeing this</button>
         <RelevanceLabel asset={asset} />
         {!dense && asset.reason && <p className="hub-asset-reason">{asset.reason}</p>}
-        <div className="hub-asset-actions"><button type="button" className="hub-buy-primary" onClick={() => openPurchase({ asset })}>Buy</button>
+        <div className="hub-asset-actions"><BuyAction asset={asset} />
           <button type="button" className="hub-chip-button" onClick={() => signal(watched ? "removed" : "watched", asset)} aria-pressed={watched} data-tooltip={watched ? undefined : follow.title} aria-disabled={!watched && !follow.room}>
             {watched ? <><EyeOff size={12} aria-hidden="true" />Watching</> : <><Eye size={12} aria-hidden="true" />Watch</>}
           </button>
@@ -119,7 +122,8 @@ function useTilt<T extends HTMLElement>(max = 4) {
   return { root, onPointerMove: move, onPointerLeave: leave };
 }
 
-function DiscoveryCard({ asset }: { asset: Asset }) {
+function DiscoveryCard({ asset: initial }: { asset: Asset }) {
+  const asset = useMarketAsset(initial);
   const { state, signal, send, busy } = useHub();
   const router = useRouter();
   const follow = useFollowRoom();
@@ -136,9 +140,10 @@ function DiscoveryCard({ asset }: { asset: Asset }) {
       <AssetLogo asset={asset} />
       <span className="hub-discovery-price"><strong>{asset.price == null ? "Price unavailable" : usd(asset.price)}</strong><small>{asset.kind === "crypto" ? "Crypto" : "Stock"}</small></span>
       <span className="hub-discovery-name"><strong>{asset.name}</strong><small>{asset.symbol} <ChangeText value={asset.change} /></small></span>
+      <Sparkline points={asset.chart.slice(-40)} width={160} height={40} />
       {asset.description && <p className="hub-discovery-description">{asset.description}</p>}
     </Link>
-    <div className="hub-discovery-actions"><button type="button" className="hub-buy-primary" onClick={() => openPurchase({ asset })}>Buy</button>
+    <div className="hub-discovery-actions"><BuyAction asset={asset} />
       <button type="button" className="hub-chip-button" disabled={pending || busy || (!watched && !follow.room)} data-tooltip={follow.title} aria-pressed={watched} onClick={() => void act(watched ? "removed" : "watched")}>{watched ? <Check size={14} /> : <Eye size={14} />}{watched ? "Watching" : "Watch"}</button>
       <button type="button" className="hub-chip-button" disabled={busy || pending} onClick={() => { router.push("/"); void send(`Tell me about ${asset.name} (${asset.symbol}) and why it might interest me.`); }}>Ask agent</button>
       <button type="button" className="hub-discovery-dismiss" disabled={pending || busy} data-tooltip="Not for me" aria-label={`Not interested in ${asset.symbol}`} onClick={() => void act("dismissed")}><X size={15} /></button>
@@ -151,7 +156,8 @@ function DiscoveryCard({ asset }: { asset: Asset }) {
  * The card is a small instrument: what it is, what it costs, how it moved, and
  * the trace of how it got here running off the bottom edge. Reaching across
  * the trace reads a point off it; the rest of the card stays exactly as it was. */
-function QuietAssetCard({ asset }: { asset: Asset }) {
+function QuietAssetCard({ asset: initial }: { asset: Asset }) {
+  const asset = useMarketAsset(initial);
   const { signal } = useHub();
   const tilt = useTilt<HTMLElement>(2);
   const [hit, setHit] = useState<TraceHit | null>(null);
@@ -164,16 +170,28 @@ function QuietAssetCard({ asset }: { asset: Asset }) {
         <span className="quiet-card-open" aria-hidden="true"><ArrowUpRight size={14}/></span>
       </span>
       <span className="quiet-card-quote">
-        <strong className="quiet-card-price">{usd(asset.price)}</strong>
+        <strong className="quiet-card-price">{asset.price == null ? "Price unavailable" : usd(asset.price)}</strong>
         <span className="quiet-card-delta"><small>today</small><ChangePill value={asset.change}/></span>
       </span>
       <span className="quiet-card-chart">
-        <PriceTrace points={points} height={92} pad={{ top: 30, bottom: 0 }} onScrub={setHit} />
+        {points.length > 1 ? <PriceTrace points={points} height={92} pad={{ top: 30, bottom: 0 }} onScrub={setHit} /> : <small>Price history unavailable</small>}
         {read && hit && <span className={`trace-chip${hit.y < 52 ? " is-below" : ""}`} style={{ left: Math.min(Math.max(hit.x, 64), hit.width - 64), top: hit.y < 52 ? hit.y + 14 : hit.y - 12 }}><small>{traceDate(read.time)}</small><b>{usd(read.price)}</b></span>}
         <span className="quiet-card-signal">{asset.label || "A new connection"}</span>
       </span>
     </Link>
   </article>;
+}
+
+/** Buy, or the honest reason you can't.
+ *
+ * Every Buy affordance in the app resolves through `tradability`, so a card can
+ * never offer a purchase the execution path would refuse. An asset with no Base
+ * market keeps its place on the screen — following it is still worth something —
+ * and says what is missing instead of failing after the tap. */
+export function BuyAction({ asset, amount, className = "hub-buy-primary" }: { asset: Asset; amount?: string; className?: string }) {
+  const verdict = tradability({ symbol: asset.symbol, name: asset.name, kind: asset.kind, contracts: asset.contracts });
+  if (verdict.status === "tradable") return <button type="button" className={className} onClick={() => openPurchase({ asset, ...(amount ? { amount } : {}) })}>Buy</button>;
+  return <button type="button" className={`${className} is-unavailable`} disabled aria-disabled="true" title={verdict.detail} data-tooltip={verdict.detail}>{verdict.reason}</button>;
 }
 
 export function AssetGrid({ assets, title, dense, discovery = false, quiet = false }: { assets: Asset[]; title?: string; dense?: boolean; discovery?: boolean; quiet?: boolean }) {

@@ -117,3 +117,19 @@ describe.runIf(live)("live fee reserve", () => {
     expect(2_000_000n - await liveFeeReserve(1)).toBeGreaterThan(1_000_000n);
   }, 60000);
 });
+
+describe.runIf(live)("live small Base buy", () => {
+  it("quotes and simulates the full $0.60 USDC → NVDAc batch with zero ETH", async () => {
+    const { createUniswap } = await import("./providers/uniswap");
+    const { buildSwapBatch, simulateSwapBatch } = await import("./batch");
+    const request = { chainId: 8453, wallet: "0xf21219da75e62254aab31ba7c919dd3bd9621790", tokenIn: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", tokenOut: "0xb20000000000000000000078ee7ce2fe4908108c", amount: "600000", slippageBps: 50 };
+    expect(BigInt(await rpc<string>(8453, "eth_getBalance", [request.wallet, "latest"]))).toBe(0n);
+    const api = createUniswap(), quote = await api.quote(request);
+    const transaction = await api.swap(quote, undefined, { batchedApprovals: true });
+    const batch = await buildSwapBatch(request, transaction);
+    expect(batch.calls[0].to).toBe(request.tokenIn);
+    expect(batch.calls.at(-1)?.to).toBe(transaction.to.toLowerCase());
+    await simulateSwapBatch(batch);
+    expect(BigInt(quote.outputAmount)).toBeGreaterThan(0n);
+  }, 60000);
+});

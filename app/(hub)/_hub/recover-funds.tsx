@@ -9,6 +9,12 @@ import type { Holding } from "@/lib/crypto/recovery";
 import { useHub } from "./hub-provider";
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
+const exactAmount = (holding: Holding) => {
+  const digits = holding.balance.padStart(holding.decimals + 1, "0");
+  if (!holding.decimals) return digits;
+  const fraction = digits.slice(-holding.decimals).replace(/0+$/, "");
+  return `${digits.slice(0, -holding.decimals)}${fraction ? `.${fraction}` : ""}`;
+};
 
 /** Sending something out of the app.
  *
@@ -50,11 +56,11 @@ export function RecoverFunds() {
   }, [wallets.length]);
 
   function choose(holding: Holding) {
-    setPicked(holding); setTo(""); setAmount(holding.display.replace(/,/g, "")); setConfirming(false); setError(""); setSent(null);
+    setPicked(holding); setTo(""); setAmount(exactAmount(holding)); setConfirming(false); setError(""); setSent(null);
   }
 
-  const wallet = picked ? wallets.find(w => w.address.toLowerCase() === picked.wallet) : undefined;
-  const validAddress = ADDRESS.test(to.trim());
+  const wallet = picked ? wallets.find(w => w.address.toLowerCase() === picked.wallet.toLowerCase()) : undefined;
+  const validAddress = ADDRESS.test(to.trim()) && !/^0x0{40}$/i.test(to.trim());
   const base = (() => {
     if (!picked || !amount.trim()) return null;
     try { const v = parseUnits(amount, picked.decimals); return BigInt(v) > BigInt(picked.balance) ? null : v; } catch { return null; }
@@ -71,7 +77,7 @@ export function RecoverFunds() {
       await wallet!.switchChain(picked.chainId);
       const provider = await wallet!.getEthereumProvider();
       const accounts = await provider.request({ method: "eth_accounts" });
-      if (!Array.isArray(accounts) || !accounts.some(a => String(a).toLowerCase() === picked.wallet)) throw new Error("Reconnect the selected wallet before continuing.");
+      if (!Array.isArray(accounts) || !accounts.some(a => String(a).toLowerCase() === picked.wallet.toLowerCase())) throw new Error("Reconnect the selected wallet before continuing.");
       if (Number(await provider.request({ method: "eth_chainId" })) !== picked.chainId) throw new Error(`Switch to ${picked.chainName} in your wallet, then try again.`);
       const hash = await provider.request({ method: "eth_sendTransaction", params: [{ from: tx.from, to: tx.to, data: tx.data, value: "0x0", nonce: tx.nonce }] });
       if (typeof hash !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(hash)) throw new Error("Your wallet did not return a transaction. Check it before trying again.");
@@ -112,7 +118,7 @@ export function RecoverFunds() {
       <label className="hub-recover-field">
         <span>How much</span>
         <input className="socialtrading-input" inputMode="decimal" value={amount} onChange={e => { setAmount(e.target.value.replace(/[^\d.]/g, "")); setConfirming(false); }} />
-        <button type="button" className="hub-chip-button" onClick={() => { setAmount(picked.display.replace(/,/g, "")); setConfirming(false); }}>All of it</button>
+        <button type="button" className="hub-chip-button" onClick={() => { setAmount(exactAmount(picked)); setConfirming(false); }}>All of it</button>
       </label>
       <label className="hub-recover-field">
         <span>Where to</span>
@@ -121,6 +127,7 @@ export function RecoverFunds() {
       {to && !validAddress && <p className="hub-notice">That doesn’t look like a wallet address. It should start with 0x and be 42 characters.</p>}
       {amount.trim() && !base && <p className="hub-notice">Enter an amount you actually hold — up to {picked.display} {picked.symbol}.</p>}
       {!wallet && <p className="hub-notice">Connect {shortAddress(picked.wallet)} to send this.</p>}
+      <p className="socialtrading-caption">Withdrawals stay on {picked.chainName}. Keep some {CHAINS[picked.chainId as ChainId].nativeSymbol} in this wallet on {picked.chainName} for the network fee; unlike buys, withdrawals do not pay gas with USDC.</p>
       {error && <p className="hub-error" role="alert">{error}</p>}
 
       {/* The last honest moment before it is gone. Named in full, because a

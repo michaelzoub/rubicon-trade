@@ -6,24 +6,27 @@ import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { ChevronRight, Search, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type CSSProperties } from "react";
 import { CHAINS, formatUnits, type ChainId } from "@/lib/crypto/chains";
-import { CATALOG, primaryChain, type CatalogEntry } from "@/lib/crypto/catalog";
+import { BUY_CHAIN } from "@/lib/crypto/tradable";
+import { CATALOG, catalogEntry, primaryChain, type CatalogEntry } from "@/lib/crypto/catalog";
 import { purchaseError } from "@/lib/crypto/readiness";
 import type { ResolvedRoute } from "@/lib/crypto/route-resolver";
-import type { TokenMatch } from "@/lib/crypto/search";
+import { withCatalogMatches, type TokenMatch } from "@/lib/crypto/search";
 import { useCelebration } from "../../_components/celebration";
 import { gsap, useGSAP, rubiconMotion } from "../../_components/motion";
-import { pct, usd } from "./format";
+import { usd } from "./format";
 import { useHub } from "./hub-provider";
 import { AssetLogo, TradeCard } from "./parts";
+import { DepositFunds } from "./deposit-funds";
+import { MarketQuote } from "./market-quote";
 
 const PRESETS = ["25", "50", "100", "250"];
 const USD = /^\d{1,7}(\.\d{1,2})?$/;
 
-type Target = { symbol: string; name: string; chainId: ChainId; address: string; kind?: "stock" | "crypto"; thin?: boolean; priceUsd?: number | null };
+type Target = { symbol: string; name: string; chainId: ChainId; address: string; kind?: "stock" | "crypto"; thin?: boolean; priceUsd?: number | null; decimals?: number; icon?: string };
 
 const fromEntry = (entry: CatalogEntry): Target => {
   const chainId = primaryChain(entry);
-  return { symbol: entry.symbol, name: entry.name, chainId, address: entry.contracts[chainId]!, kind: entry.kind };
+  return { symbol: entry.symbol, name: entry.name, chainId, address: entry.contracts[chainId]!, kind: entry.kind, decimals: entry.decimals, icon: entry.icon };
 };
 
 /** A literal buy: choose a thing, say how many dollars, sign once.
@@ -48,6 +51,7 @@ export function BuyPanel({ preselected, title = "Buy", initialQuery = "", initia
   const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<TokenMatch[] | null>(null);
   const [searching, setSearching] = useState(false);
+  const searchResults = useMemo(() => withCatalogMatches(query, results ?? []), [query, results]);
   const [picked, setPicked] = useState<Target | null>(null);
   const [amount, setAmount] = useState(initialAmount);
   const [route, setRoute] = useState<ResolvedRoute | null>(null);
@@ -63,8 +67,9 @@ export function BuyPanel({ preselected, title = "Buy", initialQuery = "", initia
   const preset = useMemo<Target | null>(() => {
     if (!preselected) return null;
     // Cheapest supported chain wins when an asset lists on several.
-    const chainId = (Object.keys(preselected.contracts).map(Number).filter(id => id in CHAINS) as ChainId[])
-      .sort((a, b) => (a === 8453 ? -1 : b === 8453 ? 1 : a - b))[0];
+    // Base only: an asset that does not list there is not offered for purchase,
+    // and the card that opened this dialog already says so.
+    const chainId = (Object.keys(preselected.contracts).map(Number).filter(id => id === BUY_CHAIN) as ChainId[])[0];
     return chainId ? { symbol: preselected.symbol, name: preselected.name, chainId, address: preselected.contracts[String(chainId)] } : null;
   }, [preselected]);
   const target = preset ?? picked;
@@ -77,6 +82,7 @@ export function BuyPanel({ preselected, title = "Buy", initialQuery = "", initia
     setError("");
     if (q.length < 2) { setResults(null); setSearching(false); return; }
     setSearching(true);
+    setResults(null);
     const handle = setTimeout(async () => {
       try { const list = await searchTokens(q); if (live) setResults(list); }
       catch (e) { if (live) { setResults([]); setError(e instanceof Error ? e.message : "Search failed."); } }
@@ -116,17 +122,12 @@ export function BuyPanel({ preselected, title = "Buy", initialQuery = "", initia
     if (!wallets.length || resolving) return resolving ? "Finding your funds…" : "";
     if (!route) return "";
     if (!chosen) {
-      const priced = route.candidates.find(c => c.status === "fee_exceeds_amount");
-      if (priced) return `Your USDC is on ${CHAINS[priced.chainId as ChainId].name}, where moving ${usd(Number(amount), 2)} costs more than it is worth. Try a larger amount, or hold USDC on Base.`;
-      const funded = route.candidates.filter(c => BigInt(c.balance) > 0n).sort((a, b) => Number(BigInt(b.balance) - BigInt(a.balance)))[0];
-      if (funded) return `You have ${(Number(funded.balance) / 1e6).toFixed(2)} USDC on ${CHAINS[funded.chainId as ChainId].name} — not enough for this buy.`;
-      return "No USDC found in your wallets. Add USDC on Base to buy in a couple of taps.";
+      const here = route.candidates.find(c => c.chainId === BUY_CHAIN && BigInt(c.balance) > 0n);
+      if (here) return `You have ${(Number(here.balance) / 1e6).toFixed(2)} USDC on ${CHAINS[BUY_CHAIN].name} — not enough for this buy.`;
+      return `No USDC on ${CHAINS[BUY_CHAIN].name} yet. Send USDC to your wallet on ${CHAINS[BUY_CHAIN].name} and this is one tap.`;
     }
-    const where = CHAINS[chosen.chainId as ChainId].name;
-    if (chosen.status === "same_chain") return `Paying from ${where} · fee comes out of your USDC`;
-    const mins = chosen.status === "available" && chosen.timeEstimateMs ? Math.max(1, Math.ceil(chosen.timeEstimateMs / 60000)) : null;
-    const fee = chosen.status === "available" && chosen.gasFeeUSD ? `$${Math.max(0.01, Number(chosen.gasFeeUSD)).toFixed(2)}` : null;
-    return `Paying from ${where} → ${CHAINS[target!.chainId].name}${mins ? ` · about ${mins} min` : ""}${fee ? ` · fee ${fee}` : ""} · taken from your USDC`;
+    // One chain, so one sentence: no crossing, no duration, no native token.
+    return `Paying with USDC on ${CHAINS[chosen.chainId as ChainId].name} · the fee comes out of your USDC, so you never need ETH`;
   })();
 
   /** The arithmetic behind the one-line answer, for anyone who wants to check it.
@@ -148,8 +149,12 @@ export function BuyPanel({ preselected, title = "Buy", initialQuery = "", initia
         : c.reason.slice(0, 60),
     })) : [];
 
-  const receives = chosen?.status === "available"
-    ? Number(formatUnits(chosen.outputAmount, 18, 6).replace(/,/g, ""))
+  // A quote's output is in the token's own units. The tokenized stocks are 8
+  // decimals, so assuming 18 would tell someone they were getting a ten-
+  // billionth of what they are actually buying.
+  const outDecimals = target?.decimals ?? (target ? catalogEntry(target.chainId, target.address)?.decimals : undefined) ?? null;
+  const receives = chosen?.status === "available" && outDecimals !== null
+    ? Number(formatUnits(chosen.outputAmount, outDecimals, 6).replace(/,/g, ""))
     : null;
   const valid = ready && !!target && !!chosen && USD.test(amount) && Number(amount) > 0 && !resolving;
 
@@ -208,15 +213,15 @@ export function BuyPanel({ preselected, title = "Buy", initialQuery = "", initia
       {error && <p className="hub-error" role="alert">{error}</p>}
 
       {query.trim().length >= 2 ? <>
-        {searching && results === null && <p className="hub-empty-inline" role="status">Searching…</p>}
-        {results !== null && <ul className="hub-buy-results" aria-label="Search results">
-          {!searching && !results.length && <li className="hub-empty-inline">Nothing found. Try another name or symbol.</li>}
-          {results.map(t => <li key={`${t.chainId}:${t.address}`} data-buy-item>
+        {searching && results === null && !searchResults.length && <p className="hub-empty-inline" role="status">Searching…</p>}
+        {(results !== null || searchResults.length > 0) && <ul className="hub-buy-results" aria-label="Search results">
+          {!searching && !searchResults.length && <li className="hub-empty-inline">Nothing found. Try another name or symbol.</li>}
+          {searchResults.map(t => <li key={`${t.chainId}:${t.address}`} data-buy-item>
             <button type="button" className="hub-buy-result" aria-label={`Buy ${t.symbol.toUpperCase()} on ${t.chain}`} onClick={() => setPicked({ symbol: t.symbol, name: t.name, chainId: t.chainId, address: t.address, kind: t.kind, thin: t.thin, priceUsd: t.priceUsd })}>
-              <AssetLogo asset={{ symbol: t.symbol.toUpperCase() }} />
+              <AssetLogo asset={{ symbol: t.symbol.toUpperCase(), logo: catalogEntry(t.chainId, t.address)?.icon }} />
               <span className="hub-buy-result-id"><strong>{t.symbol.toUpperCase()}</strong><span>{t.name}</span></span>
               <span className="hub-buy-result-tags">{t.kind === "stock" && <span className="hub-label hub-label--emerging">Tokenized stock</span>}<span className="hub-label hub-label--related">{t.chain}</span>{t.thin && <span className="hub-label hub-label--muted">thin liquidity</span>}</span>
-              <span className="hub-buy-result-price"><span>{usd(t.priceUsd)}</span><span className={`hub-change${(t.change24h ?? 0) > 0 ? " is-up" : (t.change24h ?? 0) < 0 ? " is-down" : ""}`}>{pct(t.change24h)}</span></span>
+              <MarketQuote chainId={t.chainId} contract={t.address} price={t.priceUsd} change={t.change24h} />
               <span className="hub-buy-result-go" aria-hidden="true"><ChevronRight size={18} /></span>
             </button>
           </li>)}
@@ -226,10 +231,11 @@ export function BuyPanel({ preselected, title = "Buy", initialQuery = "", initia
         {section.note && <p className="purchase-requirements">{section.note}</p>}
         <ul className="hub-buy-results" aria-label={section.title}>
           {section.entries.map(entry => <li key={entry.symbol} data-buy-item>
-            <button type="button" className="hub-buy-result" aria-label={`Buy ${entry.symbol.toUpperCase()}`} onClick={() => setPicked(fromEntry(entry))}>
-              <AssetLogo asset={{ symbol: entry.symbol.toUpperCase() }} />
-              <span className="hub-buy-result-id"><strong>{entry.symbol.toUpperCase()}</strong><span>{entry.name}</span></span>
+            <button type="button" className="hub-buy-result" aria-label={`Buy ${entry.symbol}`} onClick={() => setPicked(fromEntry(entry))}>
+              <AssetLogo asset={{ symbol: entry.symbol.toUpperCase(), logo: entry.icon }} />
+              <span className="hub-buy-result-id"><strong>{entry.symbol}</strong><span>{entry.name}</span></span>
               <span className="hub-buy-result-tags"><span className="hub-label hub-label--related">{CHAINS[primaryChain(entry)].name}</span></span>
+              <MarketQuote chainId={primaryChain(entry)} contract={entry.contracts[primaryChain(entry)]!} />
               <span className="hub-buy-result-go" aria-hidden="true"><ChevronRight size={18} /></span>
             </button>
           </li>)}
@@ -239,12 +245,13 @@ export function BuyPanel({ preselected, title = "Buy", initialQuery = "", initia
 
     {target && !tradeId && <form className="hub-buy-form" data-buy-stage onSubmit={buy}>
       <div className="hub-buy-target">
-        <AssetLogo asset={{ symbol: target.symbol.toUpperCase() }} />
+        <AssetLogo asset={{ symbol: target.symbol.toUpperCase(), logo: target.icon ?? catalogEntry(target.chainId, target.address)?.icon }} />
         <div className="hub-buy-target-copy">
           <p className="hub-buy-target-symbol">{target.symbol.toUpperCase()} <span>{target.name}</span></p>
         </div>
         {!preset && <button type="button" className="hub-chip-button" onClick={reset}>Change</button>}
       </div>
+      <MarketQuote key={`${target.chainId}:${target.address}`} chainId={target.chainId} contract={target.address} price={target.priceUsd} large />
 
       <div className="hub-buy-amount">
         <label htmlFor="buy-amount">You pay</label>
@@ -261,6 +268,7 @@ export function BuyPanel({ preselected, title = "Buy", initialQuery = "", initia
         ? <p className="hub-notice"><button type="button" className="hub-chip-button" onClick={() => connectWallet()}>Connect wallet</button> Connect a wallet to buy.</p>
         : routeLine && <div className="hub-route">
           <p className={chosen || resolving ? "purchase-requirements" : "hub-notice"} role="status">{routeLine}</p>
+          {!chosen && !resolving && <details><summary>Deposit USDC on Base</summary><DepositFunds /></details>}
           {breakdown.length > 0 && <details className="hub-route-detail">
             <summary>Where your money is</summary>
             <ul>{breakdown.map(row => <li key={row.chainId} data-chosen={row.chosen || undefined}>

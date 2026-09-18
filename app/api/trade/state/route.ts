@@ -1,4 +1,5 @@
 import { changeConviction } from "@/lib/socialtrading/worldview";
+import { reviewProfile } from "@/lib/socialtrading/profile-review";
 import { loadAccount } from "@/lib/socialtrading/account";
 import { newChat } from "@/lib/socialtrading/chats";
 import { assertWithin, requestedAgent, requestedChat, authenticate, bodyOf, failure, HubError, initialize, loadState, saveState } from "@/lib/socialtrading/server";
@@ -60,10 +61,30 @@ export async function POST(request: Request) {
         if (JSON.stringify(tradeLimits) !== JSON.stringify(state.profile.limits)) changed.push("limits");
         state.profile.permission = permission; state.profile.limits = { perTrade: tradeLimits.perTrade, daily: tradeLimits.daily, weekly: tradeLimits.weekly }; state.profile.permissionConfigured = true;
       }
+      if (body.autoExecute !== undefined) {
+        // Spending unattended is the most consequential setting here, so it is
+        // only accepted as a literal boolean, only alongside Act mode and real
+        // limits, and turning it off is always allowed.
+        if (typeof body.autoExecute !== "boolean") throw new HubError(400, "Unattended buying must be on or off.");
+        if (body.autoExecute) {
+          if (state.profile.permission !== "automatic") throw new HubError(400, "Unattended buying needs your agent set to act within your limits.");
+          const invalid = limitsError(state.profile.limits);
+          if (invalid) throw new HubError(400, invalid);
+        }
+        if (body.autoExecute !== (state.profile.autoExecute === true)) changed.push(body.autoExecute ? "unattended buying on" : "unattended buying off");
+        state.profile.autoExecute = body.autoExecute;
+      }
       recordEvent(state, "agent", `Updated ${state.agent?.name ?? "your agent"}`, changed.length ? `Changed ${changed.join(", ")}.` : undefined);
     } else if (body.action === "profile") {
       const profile = readProfile(JSON.stringify({ ...body.profile, userId }), userId);
       if (!profile.completedAt || (profile.permission === "automatic" && limitsError(profile.limits))) throw new HubError(400, "Check your thesis, mode, and spending limits.");
+      // Unattended spending cannot be switched on by a profile save that does not
+      // also satisfy what it requires. Turning it off is always allowed.
+      if (profile.autoExecute && !state.profile.autoExecute) {
+        if (profile.permission !== "automatic") throw new HubError(400, "Choose “Buy for me” with a comfort zone before your agent can buy unattended.");
+        const invalid = limitsError(profile.limits);
+        if (invalid) throw new HubError(400, invalid);
+      }
       if (!shortStrings(body.dislikes) || !shortStrings(body.preferences)) throw new HubError(400, "Keep preferences to 50 short entries.");
       const before = state.profile;
       assertWithin(profileViolation(state, { profile, dislikes: body.dislikes, preferences: body.preferences }, limits));
@@ -98,6 +119,8 @@ export async function POST(request: Request) {
     } else if (body.action === "forget") {
       if (typeof body.target !== "string") throw new HubError(400, "Invalid request.");
       state.inferred = state.inferred.filter(i => i.id !== body.target);
+      state.profileReview = { attemptedAt: state.profileReview?.attemptedAt ?? new Date(0).toISOString(), ...state.profileReview,
+        forgotten: { ...state.profileReview?.forgotten, [body.target]: new Date().toISOString() } };
       recordEvent(state, "profile", `You cleared what I’d inferred about ${body.target.slice(0, 100)}`);
     } else if (body.action === "trade") {
       if (typeof body.tradeId !== "string" || !["approved", "rejected"].includes(body.decision)) throw new HubError(400, "Invalid request.");
@@ -118,7 +141,9 @@ export async function POST(request: Request) {
         recordEvent(state, "agent", "You deleted a chat", "Its messages are gone; what the agent learned and changed in your profile stays.");
       } else throw new HubError(400, "Unknown chat action.");
     } else throw new HubError(400, "Unknown action.");
+    const previousReview = state.profileReview?.attemptedAt;
+    if (body.action === "signal") await reviewProfile(state, userId, account);
     state = await saveState(userId, state, limits);
-    return Response.json({ state, account: body.action === "chat" ? await loadAccount(userId) : account, ...(chatId ? { chatId } : {}) });
+    return Response.json({ state, account: body.action === "chat" || previousReview !== state.profileReview?.attemptedAt ? await loadAccount(userId) : account, ...(chatId ? { chatId } : {}) });
   } catch (e) { return failure(e); }
 }

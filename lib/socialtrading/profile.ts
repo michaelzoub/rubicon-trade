@@ -49,6 +49,14 @@ export type InvestingProfile = {
   permission: Permission;
   permissionConfigured: boolean;
   limits: Limits;
+  /** Whether the agent may buy while nobody is present.
+   *
+   * Off unless the person turns it on, and never inferred from Act mode: Act
+   * mode means "reserve without asking me", which is not the same as "spend
+   * without me". Turning this on also requires a delegated signer the person
+   * grants and can revoke; `lib/crypto/autonomous.ts` re-checks both at the
+   * moment of spending, not just when the tool is offered. */
+  autoExecute?: boolean;
   learning: {
     signals: PreferenceSignal[];
     inferredInterests: { interestId: string; affinity: number; updatedAt: string }[];
@@ -61,7 +69,7 @@ export type InvestingProfile = {
 export function newProfile(userId: string): InvestingProfile {
   return {
     version: 3, userId, thesis: "", investorAnswers: { knowledge: null, guidedTest: false, opportunityDrivers: [], esgPriority: null, aiPriority: null, technologies: [], conflictCountries: [], geopoliticalThesis: "", futureVision: "" }, themes: [], interests: [], permission: "notify", permissionConfigured: false,
-    limits: { perTrade: "", daily: "", weekly: "" },
+    limits: { perTrade: "", daily: "", weekly: "" }, autoExecute: false,
     learning: { signals: [], inferredInterests: [] },
     step: 1, completedAt: null, updatedAt: new Date().toISOString(),
   };
@@ -122,7 +130,11 @@ export function readProfile(raw: string | null, userId: string): InvestingProfil
     return { ...fresh, thesis: p.thesis, investorAnswers, themes, interests: p.interests, permission: p.permission,
       avatarSeed: typeof p.avatarSeed === "string" && /^[a-zA-Z0-9-]{1,80}$/.test(p.avatarSeed) ? p.avatarSeed : undefined,
       permissionConfigured,
-      limits: p.limits, step, completedAt: step === 6 && typeof p.completedAt === "string" ? p.completedAt : null };
+      limits: p.limits,
+      // Only a literal `true` from the stored profile enables unattended
+      // spending: anything ambiguous reads as off.
+      autoExecute: p.autoExecute === true,
+      step, completedAt: step === 6 && typeof p.completedAt === "string" ? p.completedAt : null };
   } catch {
     return fresh;
   }

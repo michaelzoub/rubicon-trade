@@ -20,11 +20,21 @@ import { timeAgo } from "./format";
 import { useHub } from "./hub-provider";
 import { useLinkedWallets, WalletsSection } from "./wallets";
 import { RecoverFunds } from "./recover-funds";
+import { DelegateSigning } from "./delegate-signing";
+import { DepositFunds } from "./deposit-funds";
 import { HubLink as Link } from "./navigation";
 
 const TELL = ["I’m becoming more interested in nuclear", "Stop showing me memecoins", "Add VRT to things I’m watching", "Change my daily limit to $200"];
-const ICONS = { notify: Bell, approve: MessageSquare, automatic: SlidersHorizontal };
-const MODE_LINE: Record<Permission, string> = { notify: "It tells you what it sees. Every buy is yours to make.", approve: "It brings you ideas and proposes trades. Nothing moves until you say so.", automatic: "It proposes inside a comfort zone you set. You still sign every one." };
+const ICONS = { notify: Bell, approve: MessageSquare, automatic: SlidersHorizontal, buy: Wallet };
+/** The four ways an agent can work with you, as one decision.
+ *
+ * `buy` is not a fourth permission in the data model — it is `automatic` plus a
+ * delegated signer — but it is a fourth *choice* here, because "it can spend
+ * without me" is what a person is actually deciding, and burying that in a
+ * checkbox somewhere else made it unfindable. */
+type Mode = Permission | "buy";
+const MODE_LABEL: Record<Mode, string> = { ...PERMISSIONS, buy: "Buy for me" };
+const MODE_LINE: Record<Mode, string> = { notify: "It tells you what it sees. Every buy is yours to make.", approve: "It brings you ideas and proposes trades. Nothing moves until you say so.", automatic: "It proposes inside a comfort zone you set. You still sign every one.", buy: "It buys inside your comfort zone while you are away, on Base, using your USDC. Needs a signer you grant and can revoke." };
 const money = (v: string) => v && Number.isFinite(Number(v)) ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Number(v)) : null;
 const list = (items: string[], max = 3) => items.length <= max ? items.join(", ") : `${items.slice(0, max).join(", ")} +${items.length - max}`;
 
@@ -110,6 +120,8 @@ export function ProfileView() {
   const router = useRouter();
   const wallets = useLinkedWallets();
   const [profile, setProfile] = useState<InvestingProfile>(state.profile);
+  /** The radio reflects both stored facts, so a saved choice survives a reload. */
+  const mode: Mode = profile.autoExecute && profile.permission === "automatic" ? "buy" : profile.permission;
   const [dislikes, setDislikes] = useState(state.dislikes);
   const [preferences, setPreferences] = useState(state.preferences);
   const [saving, setSaving] = useState(false);
@@ -221,16 +233,23 @@ export function ProfileView() {
           </div>
         </Facet>
 
-        <Facet icon={ShieldCheck} title="How your agent works with you" summary={<p><strong>{PERMISSIONS[profile.permission]}</strong> · {MODE_LINE[profile.permission]}{profile.permission !== "notify" && zone ? <> Comfort zone: {zone}.</> : ""}</p>}>
+        <Facet icon={ShieldCheck} title="How your agent works with you" summary={<p><strong>{MODE_LABEL[mode]}</strong> · {MODE_LINE[mode]}{profile.permission !== "notify" && zone ? <> Comfort zone: {zone}.</> : ""}</p>}>
           <fieldset className="hub-modes">
-            <legend className="sr-only">Agent permissions</legend>
-            {(Object.entries(PERMISSIONS) as [Permission, string][]).map(([value, label]) => { const Icon = ICONS[value]; const selected = profile.permission === value; return <label key={value} className={`hub-mode${selected ? " is-selected" : ""}`}>
-              <input type="radio" name="permission" value={value} checked={selected} onChange={() => setProfile(p => ({ ...p, permission: value, permissionConfigured: true }))} />
+            <legend className="sr-only">How your agent works with you</legend>
+            {(Object.keys(MODE_LABEL) as Mode[]).map(value => { const Icon = ICONS[value]; const selected = mode === value; return <label key={value} className={`hub-mode${selected ? " is-selected" : ""}`}>
+              <input type="radio" name="permission" value={value} checked={selected} onChange={() => setProfile(p => ({
+                ...p, permissionConfigured: true,
+                permission: value === "buy" ? "automatic" : value,
+                // Choosing anything else is also how you stop it spending.
+                autoExecute: value === "buy",
+              }))} />
               <span className="hub-mode-icon" aria-hidden="true"><Icon size={18} strokeWidth={1.6} /></span>
-              <span className="hub-mode-copy"><strong>{label}</strong><small>{MODE_LINE[value]}</small></span>
+              <span className="hub-mode-copy"><strong>{MODE_LABEL[value]}</strong><small>{MODE_LINE[value]}</small></span>
               <span className="hub-mode-check" aria-hidden="true">{selected && <Check size={12} />}</span>
             </label>; })}
           </fieldset>
+          {/* The signer lives with the choice that needs it, not three fields away. */}
+          {mode === "buy" && <div className="hub-field"><DelegateSigning /></div>}
           {profile.permission !== "notify" && <div className="hub-field hub-zone">
             <div className="hub-field-head"><p>{profile.permission === "automatic" ? "Comfort zone · USD" : "Comfort zone · USD (optional)"}</p></div>
             <div className="hub-zone-fields">
@@ -266,11 +285,15 @@ export function ProfileView() {
           <div className="hub-field">
             <p>Wallets for onchain swaps</p>
             <WalletsSection compact />
-            <p className="socialtrading-caption">Swaps settle from your own wallet on Uniswap. Your agent can propose them under the mode above; you always sign.</p>
+            <p className="socialtrading-caption">Swaps settle from your own wallet on Uniswap. Your agent proposes them under the mode above, and you sign — unless you grant it a signer below.</p>
           </div>
           <div className="hub-field">
-            <p>Send something out</p>
-            <p className="socialtrading-caption">Anything sitting in your wallets, on any network Rubicon supports. Useful when something arrived on the wrong one.</p>
+            <p>Deposit USDC</p>
+            <DepositFunds />
+          </div>
+          <div className="hub-field">
+            <p>Withdraw funds</p>
+            <p className="socialtrading-caption">Withdraw deposited USDC or other supported tokens to your own wallet, on the same network. You review and sign every withdrawal.</p>
             <RecoverFunds />
           </div>
         </Facet>

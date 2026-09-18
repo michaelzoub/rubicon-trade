@@ -10,6 +10,17 @@ import { assertWallet, signPurchasePermit, sendPurchaseTransaction } from "@/lib
 import { timeAgo, usd } from "./format";
 import { useHub } from "./hub-provider";
 
+/** An amount, or an admission that we cannot state one.
+ *
+ * `formatUnits` with null decimals hands back the raw base-unit integer, which
+ * on a confirmation reads as a quantity: 227373 where the buyer is getting
+ * 0.00227373. Nothing about that looks like an error, so it has to be caught
+ * here rather than trusted to look wrong. The decimals are resolved for real
+ * before any calldata is signed. */
+function quantity(base: string, token: { symbol: string; decimals: number | null }) {
+  return token.decimals === null ? `${token.symbol} · amount confirmed when you continue` : `${formatUnits(base, token.decimals)} ${token.symbol}`;
+}
+
 export function cryptoStatus(trade: TradeIntent): string {
   const c = trade.crypto!;
   switch (trade.status) {
@@ -45,7 +56,13 @@ export function CryptoTradeCard({ trade, expanded = false }: { trade: TradeInten
     try {
       if (action === "prepare" || action === "resume") {
         if (!wallet) throw new Error(`Connect the wallet ${shortAddress(r.wallet)} to sign this swap.`);
-        const provider = await wallet.getEthereumProvider() as WalletProvider;
+        let provider = await wallet.getEthereumProvider() as WalletProvider;
+        if (Number(await provider.request({ method: "eth_chainId" })) !== r.chainId) {
+          setStage(`Switching wallet to ${net.name}…`);
+          await wallet.switchChain(r.chainId);
+          // Reacquire the provider after Privy updates the selected network.
+          provider = await wallet.getEthereumProvider() as WalletProvider;
+        }
         setStage("Checking wallet and funds…");
         await assertWallet(provider, r);
         const balance = await readPurchaseBalance(provider, r.wallet, r.chainId);
@@ -119,15 +136,15 @@ export function CryptoTradeCard({ trade, expanded = false }: { trade: TradeInten
       * but secondary, so they wait behind Details rather than competing with
       * the only question the card actually asks: do you want this? */}
     <p className="hub-trade-line">
-      <span className="hub-trade-line-out">{formatUnits(r.amount, tokenIn.decimals)} {tokenIn.symbol.toUpperCase()}</span>
+      <span className="hub-trade-line-out">{quantity(r.amount, tokenIn)}</span>
       <span className="hub-trade-line-arrow" aria-hidden="true">→</span>
-      <span className="hub-trade-line-in">{formatUnits(c.outputAmount, tokenOut.decimals)} {tokenOut.symbol.toUpperCase()}</span>
+      <span className="hub-trade-line-in">{quantity(c.outputAmount, tokenOut)}</span>
       <small>≈ {usd(trade.value, 2)} · network fee paid in {gaslessChain(r.chainId) ? "USDC" : net.nativeSymbol}</small>
     </p>
     {/* One guarantee before signing: the worst case you have agreed to. Wallet,
       * network and slippage repeat inside Details, so printing them here as
       * well only buries the number that actually protects the buyer. */}
-    <p className="purchase-readiness"><strong>At least {formatUnits(c.minimumOutput, tokenOut.decimals)} {tokenOut.symbol.toUpperCase()}</strong>{funds ? <span>{funds}</span> : null}</p>
+    <p className="purchase-readiness"><strong>At least {quantity(c.minimumOutput, tokenOut)}</strong>{funds ? <span>{funds}</span> : null}</p>
     {operation && <p className="purchase-requirements">Submitted operation: <span className="mono">{operation}</span>. Keep this reference if confirmation takes longer. <button type="button" className="hub-chip-button" disabled={busy} onClick={() => void act("operation")}>Check submitted purchase</button></p>}
     {/* A trade the person placed already says what it is in the line above, and
       * the agent's limits are not a fact about it. Both are worth reading when

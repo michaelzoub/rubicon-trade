@@ -9,6 +9,15 @@ const quoteFor = vi.fn();
 vi.mock('./wallet', () => ({ ownedWallet: vi.fn(async () => wallet) }));
 vi.mock('./rpc', () => ({ rpc: vi.fn(async (chainId: number) => `0x${(balances[chainId] ?? 0n).toString(16)}`) }));
 vi.mock('./providers/uniswap-bridge', () => ({ createUniswapBridge: () => ({ quote: quoteFor }) }));
+/** Cross-chain funding is off by default (see `CROSS_CHAIN_FUNDING`). The route
+ * logic still ships and is one flag from live, so it stays covered here with the
+ * flag forced on; `route-resolver.single-chain.test.ts` covers the shipped
+ * default of one network. */
+vi.mock('./tradable', async importOriginal => ({
+  ...(await importOriginal<typeof import('./tradable')>()),
+  CROSS_CHAIN_FUNDING: true,
+  FUNDING_CHAINS: Object.keys(CHAINS).map(Number),
+}));
 
 const { resolvePurchaseRoute, bridgeInput } = await import('./route-resolver');
 

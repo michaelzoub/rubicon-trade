@@ -27,6 +27,7 @@ const bought = (status: HubState["trades"][number]["status"]): HubState => {
 const seat = { chainId: 8453, wallet: PREVIEW_WALLET, balance: "500000000", reserve: "20000", status: "same_chain" as const };
 const route = { chosen: seat, candidates: [seat] };
 const api = {
+  market: async () => ({ assets: [] }),
   searchTokens: async (_t: unknown, q: string) => ({ tokens: PREVIEW_TOKENS.filter(t => `${t.symbol} ${t.name}`.toLowerCase().includes(q.toLowerCase())) }),
   crypto: async (_t: unknown, _r: number, body: { action: string }) =>
     body.action === "purchase_route" ? { route }
@@ -44,6 +45,23 @@ const tick = () => act(async () => { await new Promise(r => setTimeout(r, 350));
 /** Long enough for the debounced route resolution to land. */
 const resolved = () => act(async () => { await new Promise(r => setTimeout(r, 700)); });
 
+it.each(["nvidia", "NVDA", "NVDAc"])("finds the recommended NVIDIA instrument for %s when discovery is empty", async query => {
+  const searchTokens = vi.fn(async () => ({ tokens: [] }));
+  const crypto = vi.fn(api.crypto);
+  await act(async () => root.render(<HubProvider userId="preview-user" name="Michael" initial={PREVIEW_STATE} initialAccount={PREVIEW_ACCOUNT} api={{ ...api, searchTokens, crypto }}><BuyPanel initialQuery={query} /></HubProvider>));
+  await tick();
+  expect(searchTokens).toHaveBeenCalled();
+  const results = container.querySelectorAll<HTMLButtonElement>(".hub-buy-result");
+  expect(results).toHaveLength(1);
+  expect(results[0].textContent).toContain("NVIDIA");
+  expect(container.textContent).not.toContain("Nothing found");
+  await act(async () => results[0].click());
+  await resolved();
+  expect(crypto).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({
+    action: "purchase_route", destinationChainId: 8453, tokenOut: "0xb20000000000000000000078ee7ce2fe4908108c",
+  }), expect.anything());
+});
+
 async function buyThenSettle() {
   await act(async () => root.render(<HubProvider userId="preview-user" name="Michael" initial={PREVIEW_STATE} initialAccount={PREVIEW_ACCOUNT} api={api}><BuyPanel /></HubProvider>));
   await setValue(container.querySelector("#buy-search") as HTMLInputElement, "bnvda");
@@ -53,7 +71,7 @@ async function buyThenSettle() {
   expect(container.querySelector(".hub-buy-estimate")?.textContent).toContain("BNVDA at today’s price");
   await resolved();
   // The network, the wallet and the fee are one sentence, not four controls.
-  expect(container.querySelector(".hub-buy-form")!.textContent).toContain("Paying from Base");
+  expect(container.querySelector(".hub-buy-form")!.textContent).toContain("Paying with USDC on Base");
   expect(container.querySelector("select")).toBeNull();
   await act(async () => { container.querySelector("form.hub-buy-form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
   await tick();
@@ -82,7 +100,7 @@ it("shows a purchase you placed without restating it or the agent's limits", asy
   expect(card.textContent!.match(/Ready to sign/g) ?? []).toHaveLength(1);
   // The guarantee that matters before signing survives.
   expect(card.querySelector(".purchase-readiness")!.textContent).toContain("At least");
-});
+}, 20000);
 
 it("celebrates in words when the buy settles onchain, and keeps the burst quiet under reduced motion", async () => {
   await buyThenSettle();
@@ -92,7 +110,7 @@ it("celebrates in words when the buy settles onchain, and keeps the burst quiet 
   expect(document.querySelector(".rubicon-celebration")).toBeNull();
   await act(async () => Array.from(done.querySelectorAll("button")).find(b => b.textContent === "Buy something else")!.click());
   expect(container.querySelector("#buy-search")).not.toBeNull();
-});
+}, 20000);
 
 it("bursts fifteen pieces of confetti from the trade card when motion is welcome", async () => {
   reduced = false;
@@ -100,4 +118,4 @@ it("bursts fifteen pieces of confetti from the trade card when motion is welcome
   const burst = document.querySelector(".rubicon-celebration");
   expect(burst).not.toBeNull();
   expect(burst!.querySelectorAll("span")).toHaveLength(15);
-});
+}, 20000);

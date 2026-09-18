@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { decodeAccountCalls, encodeAccountCalls, erc20ApproveData, PERMIT2, permit2ApproveData } from "./aa";
-import { buildSwapBatch } from "./batch";
+import { buildSwapBatch, simulateSwapBatch } from "./batch";
 import type { SwapRequest, Transaction } from "./types";
 
 const wallet = "0x1111111111111111111111111111111111111111";
@@ -75,4 +75,19 @@ describe("swap batch", () => {
     const expiration = Number(`0x${batch.calls[1].data.slice(-64)}`);
     expect(batch.calls[1].data).toBe(permit2ApproveData(usdc, other, 50_000_000n, expiration));
   });
+});
+
+it("simulates every batch call together using only a temporary code override", async () => {
+  const batch = await buildSwapBatch(req, swap, reads(0n, { amount: 0n, expiration: 0 }));
+  const read = vi.fn(async (_chain: number, method: string, params: unknown[]) => method === "eth_getCode" ? params[0] === wallet ? "0x" : "0x6000" : "0x");
+  await simulateSwapBatch(batch, read as never);
+  expect(read).toHaveBeenCalledWith(8453, "eth_call", [{ from: wallet, to: wallet, data: batch.callData, value: "0x0" }, "latest", { [wallet]: { code: "0x6000" } }]);
+  expect(read.mock.calls.every(([, method]) => !method.includes("send"))).toBe(true);
+});
+
+it("rejects a conflicting delegation before simulating the batch", async () => {
+  const batch = await buildSwapBatch(req, swap, reads(0n, { amount: 0n, expiration: 0 }));
+  const read = vi.fn(async () => "0x6000");
+  await expect(simulateSwapBatch(batch, read as never)).rejects.toThrow("different smart account");
+  expect(read.mock.calls).toHaveLength(2);
 });

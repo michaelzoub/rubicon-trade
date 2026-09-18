@@ -6,7 +6,7 @@ import { gsap, useGSAP, rubiconMotion } from "../../_components/motion";
 import { usd } from "./format";
 import { useHub } from "./hub-provider";
 import { HubLink as Link } from "./navigation";
-import { AssetLogo, assetHref, ChangeText } from "./parts";
+import { AssetLogo, assetHref, ChangeText, Sparkline } from "./parts";
 
 /** How many opportunities the field holds. Enough to read as a landscape
  * rather than a handful of picks, few enough to stay legible. */
@@ -151,7 +151,7 @@ export function Constellation({ assets }: { assets: Asset[] }) {
                 <Link href={assetHref(asset)} className={`hub-orbit-card${match ? " is-match hub-priority-card" : ""}`} onClick={() => { void signal("opened", asset); }}
                   aria-label={`Open ${asset.name}${match ? ", a strong match for your thesis" : ""}`}>
                   <AssetLogo asset={asset} />
-                  <span className="hub-orbit-id"><strong>{asset.symbol}</strong><small>{usd(asset.price)}</small></span>
+                  <span className="hub-orbit-id"><strong>{asset.symbol}</strong><small>{asset.price == null ? "Price unavailable" : usd(asset.price)}</small><Sparkline points={asset.chart.slice(-30)} width={60} height={16} /></span>
                   <ChangeText value={asset.change} />
                 </Link>
               </div>

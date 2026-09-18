@@ -1,5 +1,6 @@
 import { advanceBridge, proposeBridge } from "@/lib/crypto/bridges";
 import { resolvePurchaseRoute } from "@/lib/crypto/route-resolver";
+import { BUY_CHAIN, CROSS_CHAIN_FUNDING } from "@/lib/crypto/tradable";
 import { findHoldings, transferCall } from "@/lib/crypto/recovery";
 import { authenticate, bodyOf, failure, HubError, loadState, requestedAgent, saveState } from "@/lib/socialtrading/server";
 import { authorizeSwap, prepareSwap, resumeSwap, userSwap } from "@/lib/crypto/trades";
@@ -59,7 +60,12 @@ export async function POST(request: Request) {
     }
     if (body.action === "propose") {
       // The user's own swap: their decision, their signature. Agent mode does not gate it.
-      const trade = body.destinationChainId !== undefined && Number(body.destinationChainId) !== Number(body.chainId) ? await proposeBridge(state, userId, body) : await userSwap(state, userId, body);
+      const crossing = body.destinationChainId !== undefined && Number(body.destinationChainId) !== Number(body.chainId);
+      // Single-chain by decision. A crossing is refused here rather than part-way
+      // through a route, so a purchase can never strand between two networks.
+      if (crossing && !CROSS_CHAIN_FUNDING) throw new HubError(400, `Rubicon buys on ${chain(BUY_CHAIN).name}. Hold USDC on ${chain(BUY_CHAIN).name} to buy, or use Send something out in your profile to move it there.`);
+      if (Number(body.chainId) !== BUY_CHAIN && !CROSS_CHAIN_FUNDING) throw new HubError(400, `Rubicon buys on ${chain(BUY_CHAIN).name}, not ${chain(Number(body.chainId)).name}.`);
+      const trade = crossing ? await proposeBridge(state, userId, body) : await userSwap(state, userId, body);
       return Response.json({ state: await saveState(userId, state), tradeId: trade.id });
     }
     if (typeof body.tradeId !== "string") throw new HubError(400, "Choose a swap proposal.");

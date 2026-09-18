@@ -2,7 +2,7 @@ import "server-only";
 import { chain, tokenRef } from "../chains";
 import { http, type Transport } from "../http";
 import type { TokenRef } from "../types";
-export type CoinMetadata = { id: string; symbol: string; name: string; platforms: Record<string, string>; detail_platforms?: Record<string, { decimal_place: number | null; contract_address: string }>; categories: string[]; description: { en?: string }; market_data?: { current_price?: { usd?: number }; market_cap?: { usd?: number }; total_volume?: { usd?: number } } };
+export type CoinMetadata = { id: string; symbol: string; name: string; platforms: Record<string, string>; detail_platforms?: Record<string, { decimal_place: number | null; contract_address: string }>; categories: string[]; description: { en?: string }; market_data?: { current_price?: { usd?: number }; price_change_percentage_24h?: number | null; market_cap?: { usd?: number }; total_volume?: { usd?: number } } };
 export function createCoinGecko(request: Transport = http) {
   function get<T>(path: string, ttl = 60_000) {
     const pro = process.env.COINGECKO_API_PLAN === "pro", key = process.env.COINGECKO_API_KEY;

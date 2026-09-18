@@ -1,5 +1,6 @@
 import 'server-only';
-import { address, chain, CHAIN_IDS, parseUnits } from './chains';
+import { address, chain, parseUnits } from './chains';
+import { CROSS_CHAIN_FUNDING, FUNDING_CHAINS } from './tradable';
 import { liveFeeReserve, type ReserveReader } from './fee-reserve';
 import { rpc } from './rpc';
 import { ownedWallet } from './wallet';
@@ -49,12 +50,12 @@ export async function resolvePurchaseRoute(userId: string, input: { wallets: str
   if (!wallets.length) throw new Error('Connect a wallet to continue.');
   await Promise.all(wallets.map(wallet => ownedWallet(userId, wallet)));
 
-  const pairs = wallets.flatMap(wallet => CHAIN_IDS.map(chainId => ({ wallet, chainId })));
+  const pairs = wallets.flatMap(wallet => FUNDING_CHAINS.map(chainId => ({ wallet, chainId })));
 
   // What each chain's fee actually costs today, rather than what it cost when
   // the constant was written. This is what decides whether a small buy is
   // possible at all, so it is measured, not assumed.
-  const reserves = new Map(await Promise.all(CHAIN_IDS.map(async id => [id, await liveFeeReserve(id, read)] as const)));
+  const reserves = new Map(await Promise.all(FUNDING_CHAINS.map(async id => [id, await liveFeeReserve(id, read)] as const)));
 
   // Balances next, for every wallet and chain at once. Nothing is quoted yet:
   // a funded destination makes every bridge quote wasted work.
@@ -81,6 +82,7 @@ export async function resolvePurchaseRoute(userId: string, input: { wallets: str
     // The destination tops the fee up on the side, as `purchaseTotal` already
     // computes for the same-chain path; a source pays it out of the amount.
     if (chainId === input.destinationChainId || balance < BigInt(amount)) return { ...at, status: 'insufficient' };
+    if (!CROSS_CHAIN_FUNDING) return { ...at, status: 'insufficient' };
     const send = bridgeInput(BigInt(amount), reserve);
     // A route that delivers less than a dollar is not a route.
     if (send <= 1_000_000n) return { ...at, status: 'fee_exceeds_amount' };
