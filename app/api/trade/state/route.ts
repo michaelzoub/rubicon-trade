@@ -16,7 +16,10 @@ const shortStrings = (list: unknown, max = 50, length = 200) => Array.isArray(li
 export async function GET(request: Request) {
   try {
     const userId = await authenticate(request);
-    const [state, account] = await Promise.all([loadState(userId, requestedAgent(new URL(request.url).searchParams.get("agentId"))), loadAccount(userId)]);
+    const [state, account] = await Promise.all([
+      loadState(userId, requestedAgent(new URL(request.url).searchParams.get("agentId"))),
+      loadAccount(userId).catch(() => null),
+    ]);
     return Response.json({ state, account }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) { return failure(e); }
 }

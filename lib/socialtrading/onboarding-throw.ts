@@ -27,6 +27,7 @@ export function commitOf(x: number, y: number, vx = 0, vy = 0): Direction | null
   return null;
 }
 
+/** Resting pose is straight. Left/right tilt with x; a downward drag shrinks. */
 export function poseOf(x: number, y: number) {
-  return { rotation: x / 18, rotationX: Math.max(-14, Math.min(10, -y / 36)) };
+  return { rotation: x / 18, scale: 1 - Math.min(0.1, Math.max(0, y) / 900) };
 }

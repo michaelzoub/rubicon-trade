@@ -1,9 +1,9 @@
 "use client";
-import { Bell, Check, MessageSquare, Orbit, SlidersHorizontal, Sparkles } from "lucide-react";
+import { Orbit } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { profileKey, PERMISSIONS, limitsError, type InvestingProfile, type Permission } from "@/lib/socialtrading/profile";
-import { CATEGORIES, CONVICTION_TITLE, DECK_SIZE, DECK_TITLE, DISLIKES, KEYWORDS, SCENE, basePrediction, deckProgress, isBaseId, newOnboarding, nextPrediction, onboardingThesis, resolveScene, sceneOrder, type OnboardingAnswers, type PredictionResponse } from "@/lib/socialtrading/onboarding";
+import { profileKey, limitsError, type InvestingProfile } from "@/lib/socialtrading/profile";
+import { CATEGORIES, CONVICTION_LEAD, CONVICTION_TITLE, DECK_LEAD, DECK_SIZE, DECK_TITLE, DISLIKES, KEYWORDS, SCENE, basePrediction, deckProgress, isBaseId, newOnboarding, nextPrediction, onboardingPortrait, onboardingThesis, resolveScene, sceneOrder, type OnboardingAnswers, type PredictionResponse } from "@/lib/socialtrading/onboarding";
 import { DEFAULT_PLAN } from "@/lib/socialtrading/plans";
 import { suggestedThemes } from "@/lib/socialtrading/themes";
 import { LoadingState } from "../_components/ui";
@@ -14,14 +14,15 @@ import { InferredSwipeDeck, iconFor, type DeckCard, type Direction } from "./onb
 import { DislikeVoid } from "./onboarding-void";
 import { PredictionPad } from "./onboarding-chart";
 import { GeographyMap } from "./onboarding-geo";
+import { OnboardingAgentPeek } from "./onboarding-agent";
 import { OnboardingCard } from "./onboarding-card";
+import { OnboardingRules } from "./onboarding-rules";
 import { fetchPredictionDeck, type DeckFetcher } from "./onboarding-client";
 import { useProfileStore, useRunLog, type ArmProps } from "./onboarding-session";
 import "./onboarding.css";
 
-const PERMISSION_ICONS = { notify: Bell, approve: MessageSquare, automatic: SlidersHorizontal };
-/** One line per scene. Everything else a scene has to say, it says by being
- * touched — there are no leads, eyebrows or helper paragraphs under these.
+/** One line per scene. The opening question needs a second line so the dial
+ * is not mistaken for a metaphor; the rest explain themselves by being touched.
  * Positional with SCENE; the opening chart borrows the AI question itself. */
 const TITLES = [CONVICTION_TITLE, FAMILIARITY_TITLE, "", "Where could conflict reshape markets?", DECK_TITLE, "Which views do you feel strongest about?", "Draw your prediction.", "What doesn’t belong in your future?", "Your outlook. Your rules."];
 const KINDS = ["scale", "chips", "pad", "map", "binary", "chips", "pad", "chips", "rules"];
@@ -30,7 +31,7 @@ const KINDS = ["scale", "chips", "pad", "map", "binary", "chips", "pad", "chips"
  * far AI goes, on the chart, and where in the world it lands, on the map — and
  * then swipes the other six domains at their knowledge level. Those answers
  * shape the profile and the scenes after the deck, not the next swipe. */
-export function TreeOnboarding({ userId, onComplete, completing = false, serverError = "", persist = true, agentCreation = false, plan = DEFAULT_PLAN, variant, forced, fetchDeck = fetchPredictionDeck }: ArmProps & { fetchDeck?: DeckFetcher }) {
+export function TreeOnboarding({ userId, name, onComplete, completing = false, serverError = "", persist = true, agentCreation = false, plan = DEFAULT_PLAN, variant, forced, fetchDeck = fetchPredictionDeck }: ArmProps & { fetchDeck?: DeckFetcher }) {
   const router = useRouter();
   const { profile, setProfile, loaded, storageError } = useProfileStore(userId, persist);
   const log = useRunLog(variant, forced);
@@ -121,13 +122,15 @@ export function TreeOnboarding({ userId, onComplete, completing = false, serverE
   }
   if (!loaded) return <LoadingState label="Loading…" />;
   const index = order.indexOf(scene);
-  const step = index + (scene === SCENE.deck ? deckProgress(a) / DECK_SIZE : 1);
+  const swiping = scene === SCENE.deck;
+  const step = swiping ? deckProgress(a) + 1 : index + 1;
+  const total = swiping ? DECK_SIZE : order.length;
   const title = scene === SCENE.horizon ? base.text : TITLES[scene];
   return <div className="socialtrading-layout onb" aria-label="Build your Rubicon profile">
     <div className="socialtrading-question">
       <div className="onb-stage" key={scene}>
         <OnboardingCard
-          title={title} step={step} total={order.length}
+          title={title} lead={scene === SCENE.clarity ? CONVICTION_LEAD : swiping ? DECK_LEAD : undefined} step={step} total={total} countLabel={swiping ? "Prediction" : undefined}
           error={error || serverError}
           onBack={scene === SCENE.clarity ? undefined : back}
           onNext={scene === SCENE.deck ? undefined : scene === SCENE.rules ? finish : next}
@@ -164,13 +167,17 @@ export function TreeOnboarding({ userId, onComplete, completing = false, serverE
           {scene === SCENE.chart && <div className="onb-charts">{a.responses.filter(r => a.strongest.includes(r.id) && !isBaseId(r.id)).map(r => <PredictionPad key={r.id} response={r} onChange={patch => place(r.id, patch)} />)}</div>}
           {scene === SCENE.dislikes && <DislikeVoid values={DISLIKES} released={a.dislikes} openToEverything={a.openToEverything}
             onRelease={dislike} onRestore={dislike} onToggleOpen={() => update({ openToEverything: !a.openToEverything, dislikes: [] })} />}
-          {scene === SCENE.rules && <>
-            <div className="onb-summary"><Sparkles size={18} strokeWidth={1.6} /><div><p>{onboardingThesis(a)}</p><small>{a.dislikes.length ? `Strong dislikes: ${a.dislikes.join(" · ")}` : "Open to all themes"}{profile.investorAnswers.conflictCountries.length ? ` · Watching ${profile.investorAnswers.conflictCountries.join(", ")}` : ""}</small></div></div>
-            <fieldset className="onb-permissions"><legend>How should your agent act?</legend>{(Object.entries(PERMISSIONS) as [Permission, string][]).map(([value, label]) => { const PermissionIcon = PERMISSION_ICONS[value]; const selected = profile.permissionConfigured && profile.permission === value; return <label key={value} className="onb-option"><input type="radio" name="permission" value={value} checked={selected} onChange={() => update({}, { permission: value, permissionConfigured: true })} /><PermissionIcon size={17} strokeWidth={1.5} aria-hidden="true" /><span>{label}</span><span className="onb-check" aria-hidden="true">{selected && <Check size={12} />}</span></label>; })}</fieldset>
-            {profile.permissionConfigured && profile.permission === "automatic" && <div className="onb-limits">{([["perTrade", "Maximum per trade"], ["daily", "Daily limit"], ["weekly", "Weekly limit"]] as const).map(([key, label]) => <label key={key}>{label} · USD<input type="number" inputMode="decimal" min="0.01" step="0.01" value={profile.limits[key]} onChange={e => update({}, { limits: { ...profile.limits, [key]: e.target.value } })} /></label>)}</div>}
-          </>}
+          {scene === SCENE.rules && <OnboardingRules
+            portrait={onboardingPortrait(a)}
+            permission={profile.permission}
+            configured={profile.permissionConfigured}
+            limits={profile.limits}
+            onPermission={value => update({}, { permission: value, permissionConfigured: true })}
+            onLimit={(key, value) => update({}, { limits: { ...profile.limits, [key]: value } })}
+          />}
         </OnboardingCard>
       </div>
     </div>
+    <OnboardingAgentPeek profile={profile} name={name} />
   </div>;
 }

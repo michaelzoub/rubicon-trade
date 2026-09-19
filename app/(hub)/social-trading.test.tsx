@@ -76,7 +76,7 @@ async function pickFamiliarity(experienced = true) {
   if (experienced) for (const concept of FAMILIARITY_CONCEPTS) await click(concept.label);
   await click("Continue");
 }
-async function foundation(level = "Experienced", confidence = "I have strong convictions") {
+async function foundation(level = "Experienced", confidence = "Strong convictions") {
   await click(confidence); await click("Continue");
   await pickFamiliarity(level === "Experienced");
   await place("Society and work", "84", "6"); await click("Continue");
@@ -103,7 +103,7 @@ async function uncertain() {
 }
 it("requires explicit foundation answers and carries only the views that were actually taken", async () => {
   await render();
-  await foundation("Unknown grounds", "I’m still exploring");
+  await foundation("Unknown grounds", "Exploring");
   await uncertain();
   expect(container.textContent).toContain("Your outlook. Your rules.");
   await click("Meet my agent");
@@ -130,7 +130,7 @@ it("saves disagreement, confidence, horizon, own beliefs and reversible dislikes
   await foundation();
   // The first remaining domain after the AI chart, not a branch off the answer.
   const first = branch(opening());
-  await click("I don’t see it");
+  await click("Unlikely");
   for (let i = 1; i < DECK_SIZE; i++) await click("Not sure");
   await click(first.text); await type("textarea", "Healthcare can improve."); await click("Continue");
   expect(container.textContent).toContain("Draw your prediction");
@@ -153,7 +153,7 @@ it("saves disagreement, confidence, horizon, own beliefs and reversible dislikes
 it("puts the world map in front of everyone and keeps the countries", async () => {
   const complete = vi.fn();
   await act(async () => root.render(<ProfileFlow userId="alice" persist={false} onComplete={complete} />));
-  await click("I have strong convictions"); await click("Continue");
+  await click("Strong convictions"); await click("Continue");
   await pickFamiliarity(true);
   await place("Society and work", "70", "4"); await click("Continue");
   expect(container.textContent).toContain("Where could conflict reshape markets?");
@@ -191,7 +191,7 @@ it("restores a partial swipe deck and allows undo", async () => {
   await render(); await foundation();
   const first = branch(opening());
   expect(container.textContent).toContain(first.text);
-  await click("I see it");
+  await click("Likely →");
   const second = branch(opening(), { ...first, direction: "yes" });
   await act(async () => root.unmount()); root = createRoot(container); await render();
   expect(container.textContent).toContain(second.text);

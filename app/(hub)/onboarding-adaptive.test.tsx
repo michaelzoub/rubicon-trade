@@ -37,7 +37,7 @@ const title = () => container.querySelector(".onb-card-title")?.textContent ?? "
 const statement = () => container.querySelector(".onb-card-swipe[data-depth='0'] h2")?.textContent ?? "";
 
 async function foundations() {
-  await click("I know what I believe"); await click("Continue");
+  await click("Clear views"); await click("Continue");
   for (const concept of FAMILIARITY_CONCEPTS) await click(concept.label);
   await click("Continue");
 }
@@ -65,7 +65,7 @@ it("asks the probe the sequencer returned, and sends the answer back as evidence
   expect(seen[0].model.evidence).toEqual([]);
   expect(seen[0]).toMatchObject({ knowledge: 3, confidence: 3 });
 
-  await click("I see it");
+  await click("Likely →");
 
   // The answer travels as evidence. Beliefs are the model's to write, not the arm's.
   const sent = seen.at(-1)!.model;
@@ -124,7 +124,7 @@ it("stops at the ceiling of seven probes", async () => {
   };
   await render(fetchProbe);
   await foundations();
-  for (let i = 0; i < 7; i++) await click("I see it");
+  for (let i = 0; i < 7; i++) await click("Likely →");
   expect(turn).toBe(7);
   expect(title()).toBe("Your outlook. Your rules.");
 });

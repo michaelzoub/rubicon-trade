@@ -149,9 +149,9 @@ describe("choosing the next probe", () => {
 
   it("picks the claim at the person's knowledge level", () => {
     const one: Belief[] = [{ topic: "robotics", p: 0.6, certainty: 0.4 }];
-    expect(getNextProfileProbe(model(one), ctx({ knowledge: 0 }))!.title).toBe("Robots take more physical jobs than they create.");
-    expect(getNextProfileProbe(model(one), ctx({ knowledge: 3 }))!.title).toBe("Robotics changes the physical economy more than AI changes office work.");
-    expect(getNextProfileProbe(model(one), ctx({ knowledge: 9 }))!.title).toBe("Robotics changes the physical economy more than AI changes office work.");
+    expect(getNextProfileProbe(model(one), ctx({ knowledge: 0 }))!.title).toBe("By 2035, robots take more physical jobs than they create.");
+    expect(getNextProfileProbe(model(one), ctx({ knowledge: 3 }))!.title).toBe("By 2035, robotics changes the physical economy more than AI changes office work.");
+    expect(getNextProfileProbe(model(one), ctx({ knowledge: 9 }))!.title).toBe("By 2035, robotics changes the physical economy more than AI changes office work.");
   });
 
   it("walks the seven domains in order when the model never answered", () => {

@@ -31,8 +31,8 @@ export const KNOWLEDGE_VOICE: Record<VoiceLevel, string> = {
 /** How hard the statement should push, given how settled their views feel. */
 export const CONVICTION_VOICE: Record<VoiceLevel, string> = {
   1: "Conviction 1/4 — still exploring. Tentative. Use 'could' or 'might'. A possibility they can try on, not a claim they must defend.",
-  2: "Conviction 2/4 — a few hunches. Directional. State a likely change without forcing a bet.",
-  3: "Conviction 3/4 — some convictions. A firm, specific change they can agree or disagree with.",
+  2: "Conviction 2/4 — a few ideas. Directional. State a likely change without forcing a bet.",
+  3: "Conviction 3/4 — knows what they believe. A firm, specific change they can agree or disagree with.",
   4: "Conviction 4/4 — strong convictions. A decisive, take-a-side statement. No hedging. Make the disagreement costly.",
 };
 
@@ -41,13 +41,15 @@ export function deckSystem() {
 The person is describing how they think the world will change.
 
 Return ONLY a JSON object, no prose and no code fence:
-{"predictions":[{"category":"Technology","statement":"..."}]}
+{"predictions":[{"category":"Technology","horizon":"By 2035","statement":"..."}]}
 
 The "predictions" array MUST contain exactly ${PREDICTION_COUNT} objects, one for each of these categories, in any order:
 ${CATEGORIES.join(" | ")}
 
 Each "statement" is a single forward-looking sentence they can agree with, disagree with, or be unsure about.
-- Under 140 characters.
+- Under 140 characters, not counting the horizon.
+- MUST open with a judgeable horizon — a year ("By 2035"), a span ("Within five years"), or a decade ("This decade"). Also put that opening phrase in "horizon".
+- "Eventually", "soon", or no horizon is a failure. "By 2035" and "within five years" are different bets; pick one.
 - Declarative. Not a question. No leading "Will" or "Do you think".
 - Normal language. No tickers, company names, or funds.
 - Exactly one statement per category. Never skip a domain.
@@ -65,10 +67,10 @@ The person is describing how they think the world will change, so their agent ca
 Return ONLY a JSON object, no prose and no code fence:
 {"id":"c3","kind":"binary","title":"...","lead":"...","category":"..."}
 
-kind MUST be "binary". Put a single forward-looking statement in "title". They will swipe: agree, disagree, or unsure.
+kind MUST be "binary". Put a single forward-looking statement in "title". They will swipe: likely, unlikely, or unsure.
 "lead" is one short sentence of context under 240 characters. Never a second question.
 category must be exactly one of: ${CATEGORIES.join(" | ")}
-"title" is under 140 characters.
+"title" is under 160 characters and MUST open with a judgeable horizon — a year ("By 2035"), a span ("Within five years"), or a decade ("This decade"). "Eventually", "soon", or no horizon is a failure.
 
 This card covers one domain of the world. Other cards cover the other domains. Do not follow on from a previous swipe; do not mention what they just answered.
 At most one card in a run may mention AI.

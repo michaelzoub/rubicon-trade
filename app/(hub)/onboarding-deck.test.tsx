@@ -44,7 +44,7 @@ it("keeps the tree’s category and uses inferred wording from the knowledge pac
   expect(container.querySelector('.onb-vote[data-dir="yes"]')).toBeTruthy();
   expect(container.querySelector('.onb-vote[data-dir="unsure"]')).toBeTruthy();
   expect(container.textContent).not.toContain("Swipe or tap to take a side");
-  const yes = Array.from(container.querySelectorAll("button")).find(b => b.textContent?.includes("I see it"));
+  const yes = Array.from(container.querySelectorAll("button")).find(b => b.textContent?.includes("Likely →"));
   await act(async () => yes!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
   expect(onVote).toHaveBeenCalledWith("yes", expect.objectContaining({ id: "2-1", category: "Energy", text: "Power will bottleneck AI first." }));
 });
@@ -52,10 +52,11 @@ it("keeps the tree’s category and uses inferred wording from the knowledge pac
 it("falls back to the canned card when inference misses", async () => {
   const fetchDeck = vi.fn().mockRejectedValue(new Error("upstream"));
   await act(async () => root.render(<InferredSwipeDeck
-    upcoming={{ id: "0-0", category: "Technology", text: "Robots take more physical jobs than they create." }}
+    upcoming={{ id: "0-0", category: "Technology", text: "By 2035, robots will eliminate more physical jobs than they create." }}
     knowledge={0} confidence={0} fetchDeck={fetchDeck} onVote={() => {}}
   />));
-  expect(container.textContent).toContain("Robots take more physical jobs than they create.");
+  expect(container.textContent).toContain("Robots will eliminate more physical jobs than they create.");
+  expect(container.textContent).toContain("By 2035");
   expect(container.textContent).not.toContain("Your agent couldn’t write this one");
   expect(container.textContent).not.toContain("Writing your next question");
 });
@@ -64,7 +65,7 @@ it("deals the next card without announcing that it is being written", async () =
   let release: (value: unknown) => void = () => {};
   const pending = new Promise(resolve => { release = resolve; });
   await act(async () => root.render(<InferredSwipeDeck
-    upcoming={{ id: "0-0", category: "Technology", text: "Robots take more physical jobs than they create." }}
+    upcoming={{ id: "0-0", category: "Technology", text: "By 2035, robots will eliminate more physical jobs than they create." }}
     knowledge={0} confidence={0} fetchDeck={() => pending as never} onVote={() => {}}
   />));
   expect(container.textContent).not.toContain("Writing your next question");

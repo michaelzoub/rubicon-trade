@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CATEGORIES, DECK_SIZE, DISLIKES, KEYWORDS, basePrediction, deckProgress, newOnboarding, nextPrediction, onboardingThesis, predictions, readOnboarding, resolveScene, sceneOrder } from "./onboarding";
+import { CATEGORIES, DECK_SIZE, DISLIKES, KEYWORDS, basePrediction, deckProgress, ensureHorizon, newOnboarding, nextPrediction, onboardingPortrait, onboardingThesis, predictions, readOnboarding, resolveScene, sceneOrder, splitPrediction } from "./onboarding";
 import { newProfile, readProfile } from "./profile";
 describe("decision-tree onboarding", () => {
   it("covers seven distinct domains at all four depths", () => {
@@ -21,6 +21,17 @@ describe("decision-tree onboarding", () => {
     expect(onboardingThesis(a)).toContain("90%");
     expect(onboardingThesis(a)).toContain("more than ten");
     expect(onboardingThesis(newOnboarding())).toContain("not settled on a strong conviction");
+  });
+  it("portrays the person in one phrase instead of dumping every answer", () => {
+    expect(onboardingPortrait(newOnboarding())).toBe("Still exploring the future.");
+    const a = newOnboarding();
+    a.confidence = 3;
+    a.responses = [
+      { id: "y", category: "Technology", text: "By 2035, robots will eliminate more physical jobs than they create.", direction: "yes" },
+      { id: "n", category: "Energy", text: "Electricity becomes harder to get than oil.", direction: "no" },
+    ];
+    a.strongest = ["y", "n"];
+    expect(onboardingPortrait(a)).toBe("Strong convictions on Robots, skeptical of Power.");
   });
   it("roundtrips the complete profile and all strong dislikes through server validation", () => {
     const p = newProfile("alice");
@@ -63,14 +74,15 @@ describe("decision-tree onboarding", () => {
   });
   it("writes easier futures at knowledge 1 and sharper tensions at knowledge 4", () => {
     expect(predictions(0).map(p => p.text)).toEqual([
-      "Robots take more physical jobs than they create.",
-      "Electricity becomes harder to get than oil.",
-      "Crypto becomes everyday money, not just something people trade.",
-      "Living healthy into your nineties becomes normal.",
-      "Countries make more of their own goods, even if it costs more.",
-      "We spend more fixing climate damage than preventing it.",
-      "AI takes over more work than it creates.",
+      "By 2035, robots will eliminate more physical jobs than they create.",
+      "By 2030, electricity becomes harder to get than oil.",
+      "By 2032, crypto becomes everyday money, not just something people trade.",
+      "By 2040, living healthy into your nineties becomes normal.",
+      "By 2035, countries make more of their own goods, even if it costs more.",
+      "By 2040, we spend more fixing climate damage than preventing it.",
+      "By 2030, AI takes over more work than it creates.",
     ]);
+    expect(predictions(0).every(p => /^(By \d{4})/.test(p.text))).toBe(true);
     expect(predictions(3).find(p => p.category === "Society and work")!.text).toContain("overestimating");
     expect(predictions(0)[0].text).not.toEqual(predictions(3)[0].text);
   });
@@ -89,5 +101,16 @@ describe("decision-tree onboarding", () => {
     expect(sceneOrder({ ...a, responses: [{ ...energy, direction: "yes", confidence: 70, years: 5 }] })).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
     expect(resolveScene({ ...newOnboarding(), scene: 6 })).toBe(5);
     expect(resolveScene({ ...a, scene: 6 })).toBe(6);
+  });
+  it("splits a horizon off the statement so the card can show it above the claim", () => {
+    expect(splitPrediction("By 2035, robots will eliminate more physical jobs than they create.")).toEqual({
+      horizon: "By 2035", claim: "Robots will eliminate more physical jobs than they create.",
+    });
+    expect(splitPrediction("Within five years the grid runs short.")).toEqual({
+      horizon: "Within five years", claim: "The grid runs short.",
+    });
+    expect(splitPrediction("Robots take the jobs.")).toEqual({ horizon: null, claim: "Robots take the jobs." });
+    expect(ensureHorizon("Robots take the jobs.", "By 2035")).toBe("By 2035, robots take the jobs.");
+    expect(ensureHorizon("By 2030, power runs short.")).toBe("By 2030, power runs short.");
   });
 });

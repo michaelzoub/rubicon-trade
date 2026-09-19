@@ -56,7 +56,12 @@ export function normalizeState(raw: Record<string, unknown>, agentId: string, en
 }
 export async function loadState(userId: string, agentId = "default"): Promise<HubState | null> {
   const { data, error } = await database().from("socialtrading_agents").select("state,revision,enabled").eq("user_id", userId).eq("agent_id", agentId).maybeSingle();
-  if (error) throw new HubError(503, "Your private workspace could not be loaded.");
+  if (error) {
+    console.error("[state] load", error.message, error.code);
+    throw new HubError(503, /invalid api key|jwt/i.test(error.message)
+      ? "Your private workspace is not connected yet. Please try again after setup."
+      : "Your private workspace could not be loaded.");
+  }
   if (!data) return null;
   return normalizeState(data.state, agentId, data.enabled === true, data.revision, userId);
 }

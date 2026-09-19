@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { ChevronsUp, PersonStanding } from "lucide-react";
-import { CONFIDENCE, EXPERIENCE } from "@/lib/socialtrading/onboarding";
-import { gsap, useGSAP, prefersReducedMotion, rubiconMotion } from "../_components/motion";
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { PersonStanding } from "lucide-react";
+import { CONFIDENCE, CONFIDENCE_NOTES, CONFIDENCE_STOPS, EXPERIENCE } from "@/lib/socialtrading/onboarding";
+import { prefersReducedMotion } from "../_components/motion";
 
 export const clamp = (value: number, min = 0, max = 1) => Math.max(min, Math.min(max, value));
 export const intervalAt = (position: number) => Math.min(3, Math.floor(clamp(position) * 4));
@@ -103,338 +103,164 @@ interface ConfidenceJourneyProps {
   onChange: (value: number) => void;
 }
 
-const DISTANCE_STOPS = [0, 333, 667, 1000];
-const CONFIDENCE_DESCRIPTIONS = [
-  "You don’t have firm views yet — you’re open to seeing where things go.",
-  "A few instincts are forming, but they haven’t hardened into convictions.",
-  "You already hold some convictions, even if not everything is settled.",
-  "You have strong convictions about where the world is heading.",
-];
-const STARS = Array.from({ length: 56 }, (_, i) => {
-  const angle = i * 2.399963229728653;
-  const radius = .18 + ((i * 37) % 82) / 100;
-  return { dx: Math.cos(angle) * radius, dy: Math.sin(angle) * radius * .78, size: 1 + i % 3, phase: ((i * 17) % 100) / 100 };
-});
-
-const FOCAL_LENGTHS = [24, 50, 85, 135];
-
-function closestStop(kilometres: number) {
-  return DISTANCE_STOPS.reduce((closest, stop, index) =>
-    Math.abs(stop - kilometres) < Math.abs(DISTANCE_STOPS[closest] - kilometres) ? index : closest, 0);
+export function signalClarity(position: number) {
+  return clamp(position);
 }
 
-/** Scroll starts at the bottom of the runway (wide / 24mm). Moving toward the
- * top of the overflow is a zoom-in: kilometres grow as scrollTop falls. */
-function zoomOf(scrollTop: number, range: number) {
-  return (1 - clamp(scrollTop / Math.max(1, range))) * 1000;
-}
-function scrollOf(kilometres: number, range: number) {
-  return (1 - kilometres / 1000) * Math.max(0, range);
+/** Four stops on a rail that starts and ends on a choice, so Exploring and
+ * Strong convictions sit on the furthest reachable points. */
+export const stopAt = (position: number) => Math.round(clamp(position) * 3);
+export const stopCenter = (value: number) => clamp(Math.min(3, value) / 3);
+
+/** How much of the trace is a real wave. Exploring stays almost all static. */
+export function signalMix(clarity: number) {
+  return Math.pow(clamp(clarity), 1.55);
 }
 
-/** A flight through space. The lens starts wide on the first conviction;
- * scrolling up zooms in, and GSAP keeps each phrase on that ray. */
+export function noiseAmount(clarity: number) {
+  return 1 - signalMix(clarity);
+}
+
+/** Cycles per pixel. Static is fast; a found signal settles to a slower tone. */
+export function waveFrequency(clarity: number) {
+  return .05 - signalMix(clarity) * .034;
+}
+
+function hash(n: number) {
+  const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+function sampleWave(x: number, t: number, clarity: number) {
+  const mix = signalMix(clarity);
+  const signal = Math.sin(x * waveFrequency(clarity) + t * (1.35 + mix * .5));
+  const snow = (hash(x * .85 + Math.floor(t * 46) * .19) - .5) * 2;
+  const spike = hash(x * 2.2 + Math.floor(t * 30)) > .86 ? (hash(x + t * 3) - .5) * 2.8 : 0;
+  const grain = (hash(x * 7.4 + Math.floor(t * 16) * .23) - .5) * .18
+    + (hash(x * 15.1 + Math.floor(t * 21) * .17) - .5) * .08;
+  return snow * (1 - mix) + spike * (1 - mix) * .4 + (signal + grain) * mix;
+}
+
+function drawWaveform(canvas: HTMLCanvasElement, time: number, clarity: number) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const dpr = window.devicePixelRatio || 1;
+  const width = canvas.clientWidth, height = canvas.clientHeight;
+  if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+  const mid = height * .5, amp = height * .28;
+  const mix = signalMix(clarity);
+  const snow = Math.round(width * height * .00055 * (1 - mix));
+  ctx.fillStyle = `rgba(255, 255, 255, ${.1 + (1 - mix) * .22})`;
+  for (let i = 0; i < snow; i++) {
+    ctx.fillRect(hash(i * 13.7 + Math.floor(time * 38)) * width, hash(i * 29.1 + Math.floor(time * 38) + 4) * height, 1.15, 1.15);
+  }
+  ctx.beginPath();
+  let drawing = false;
+  const step = 1.4 - mix * .7;
+  for (let x = 0; x <= width; x += step) {
+    const hold = mix < .18 && hash(x * .6 + Math.floor(time * 40)) > .28 + mix;
+    const y = mid + sampleWave(x, time, clarity) * amp;
+    if (hold) { drawing = false; continue; }
+    if (!drawing) { ctx.moveTo(x, y); drawing = true; }
+    else ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = `rgba(245, 247, 250, ${.35 + mix * .6})`;
+  ctx.lineWidth = 1.35 + mix * .45;
+  ctx.shadowBlur = 4 + mix * 10;
+  ctx.shadowColor = `rgba(255, 255, 255, ${.12 + mix * .28})`;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+}
+
+function tickHaptic(stop: number) {
+  if (typeof navigator === "undefined" || !navigator.vibrate) return;
+  navigator.vibrate(5 + (3 - stop) * 5);
+}
+
+/** A screen you tune: static falls away as a white wave comes into frequency. */
 function ConfidenceJourney({ value, onChange }: ConfidenceJourneyProps) {
-  const root = useRef<HTMLDivElement>(null);
-  const scroller = useRef<HTMLDivElement>(null);
-  const shouldSnap = useRef(false);
-  const valueRef = useRef(value);
-  const onChangeRef = useRef(onChange);
-  valueRef.current = value;
-  onChangeRef.current = onChange;
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const clarityRef = useRef(0);
+  const lastStop = useRef(value ?? 0);
+  const [position, setPosition] = useState(value === null ? 0 : stopCenter(Math.min(3, value)));
+  const selected = value === null ? 0 : stopAt(position);
+  const clarity = signalClarity(position);
+  const spoken = `${CONFIDENCE[selected]}. ${CONFIDENCE_NOTES[selected]}`;
+  clarityRef.current = clarity;
 
-  const { contextSafe } = useGSAP(() => {
-    const viewport = scroller.current;
-    const scene = root.current;
-    if (!viewport || !scene) return;
-    const viewportElement: HTMLDivElement = viewport;
-    const markers = gsap.utils.toArray<HTMLElement>("[data-distance-stop]", scene);
-    const stars = gsap.utils.toArray<HTMLElement>("[data-star]", scene);
-    const rings = scene.querySelector<HTMLElement>(".onb-distance-rings");
-    const nudge = scene.querySelector<HTMLElement>("[data-nudge]");
-    const rail = scene.querySelector<HTMLElement>("[data-rail]");
-    const thumb = scene.querySelector<HTMLElement>("[data-rail-thumb]");
-    const fill = scene.querySelector<HTMLElement>("[data-rail-fill]");
-    const focals = gsap.utils.toArray<HTMLElement>("[data-focal]", scene);
-    const frame = scene.querySelector<HTMLElement>(".onb-distance-frame");
-    const camera = { kilometres: 0 };
-    let cameraTween: gsap.core.Tween | null = null;
-    let scrollTween: gsap.core.Tween | null = null;
-    let snapDelay: gsap.core.Tween | null = null;
-    let isSnapping = false;
-    let railPointer: number | null = null;
+  useEffect(() => {
+    if (value === null) onChange(0);
+  }, [value, onChange]);
 
-    gsap.fromTo(scene, { opacity: 0, y: prefersReducedMotion() ? 0 : 8 }, {
-      opacity: 1, y: 0, duration: prefersReducedMotion() ? 0 : rubiconMotion.duration.state,
-      ease: rubiconMotion.ease.enter,
-    });
-
-    function setRail(kilometres: number) {
-      if (rail && thumb) {
-        const pad = 20;
-        const travel = Math.max(0, rail.clientHeight - thumb.offsetHeight - pad * 2);
-        const y = pad + (1 - kilometres / 1000) * travel;
-        gsap.set(thumb, { y });
-        if (fill) gsap.set(fill, { height: Math.max(thumb.offsetHeight * .4, rail.clientHeight - pad - y) });
-      }
-      focals.forEach((el, i) => {
-        const on = closestStop(kilometres) === FOCAL_LENGTHS.length - 1 - i;
-        gsap.set(el, { color: on ? "#fff" : "rgba(210,224,255,.42)", scale: on ? 1.08 : 1 });
-      });
-      if (nudge) gsap.set(nudge, { autoAlpha: kilometres > 80 ? 0 : .78 });
-      frame?.toggleAttribute("data-scrolled", kilometres > 12);
-    }
-
-    function render(kilometres: number) {
-      const sceneHeight = viewportElement.clientHeight;
-      const sceneWidth = viewportElement.clientWidth;
-      const centerY = sceneHeight * .5;
-      markers.forEach((marker, index) => {
-        const remaining = DISTANCE_STOPS[index] - kilometres;
-        const depth = clamp(1 - Math.max(0, remaining) / 1050);
-        const projection = Math.pow(depth, 2.35);
-        const hasPassed = remaining < 0;
-        const pass = hasPassed ? clamp(-remaining / 145) : 0;
-        const blur = hasPassed ? pass * 9 : clamp((remaining - 90) / 110, 0, 8);
-        const opacity = hasPassed ? Math.pow(1 - pass, 1.7) : .08 + Math.pow(depth, 1.45) * .92;
-        const side = index % 2 === 0 ? -1 : 1;
-        const drift = hasPassed ? pass * sceneWidth * .22 : (1 - projection) * sceneWidth * .055;
-        gsap.set(marker, {
-          x: side * drift,
-          xPercent: -50,
-          y: centerY + pass * sceneHeight * .26,
-          yPercent: -50,
-          scale: .32 + projection * .82 + pass * .42,
-          autoAlpha: opacity,
-          filter: `blur(${blur.toFixed(2)}px)`,
-          zIndex: 10 + Math.round(projection * 100),
-        });
-      });
-      stars.forEach((star, index) => {
-        const spec = STARS[index];
-        const travel = (spec.phase + kilometres / 1000) % 1;
-        const dist = (.03 + travel * travel * 1.2) * Math.max(sceneWidth, sceneHeight);
-        const fade = travel < .05 ? travel / .05 : travel > .8 ? (1 - travel) / .2 : 1;
-        gsap.set(star, {
-          x: spec.dx * dist, y: spec.dy * dist, xPercent: -50, yPercent: -50,
-          scale: .35 + travel * 2.4, autoAlpha: fade * (.25 + travel * .7),
-        });
-      });
-      if (rings) gsap.set(rings, { scale: 1 + kilometres / 1000 * .55, opacity: .5 + kilometres / 1000 * .35 });
-      setRail(kilometres);
-    }
-
-    function selectAt(kilometres: number) {
-      const selected = closestStop(kilometres);
-      if (selected !== valueRef.current) {
-        valueRef.current = selected;
-        onChangeRef.current(selected);
-      }
-    }
-
-    function snapToClosest() {
-      const range = Math.max(1, viewportElement.scrollHeight - viewportElement.clientHeight);
-      const kilometres = zoomOf(viewportElement.scrollTop, range);
-      const closestIndex = closestStop(kilometres);
-      const target = DISTANCE_STOPS[closestIndex];
-      shouldSnap.current = false;
-      isSnapping = true;
-      scrollTween?.kill();
-      scrollTween = gsap.to(viewportElement, {
-        scrollTop: scrollOf(target, range),
-        duration: prefersReducedMotion() ? 0 : .85,
-        ease: "power2.inOut",
-        overwrite: "auto",
-        onComplete: () => {
-          isSnapping = false;
-          valueRef.current = closestIndex;
-          onChangeRef.current(closestIndex);
-        },
-      });
-    }
-
-    function updateFromScroll() {
-      const range = Math.max(1, viewportElement.scrollHeight - viewportElement.clientHeight);
-      const targetKilometres = zoomOf(viewportElement.scrollTop, range);
-      selectAt(targetKilometres);
-      cameraTween?.kill();
-      if (prefersReducedMotion()) {
-        camera.kilometres = targetKilometres;
-        render(camera.kilometres);
-      } else {
-        cameraTween = gsap.to(camera, {
-          kilometres: targetKilometres,
-          duration: .42,
-          ease: "power3.out",
-          overwrite: true,
-          onUpdate: () => render(camera.kilometres),
-        });
-      }
-      if (!shouldSnap.current || isSnapping) return;
-      snapDelay?.kill();
-      snapDelay = gsap.delayedCall(.65, snapToClosest);
-    }
-
-    function beginManualInteraction() {
-      shouldSnap.current = true;
-      if (!isSnapping) return;
-      scrollTween?.kill();
-      isSnapping = false;
-    }
-
-    function railAt(clientY: number) {
-      if (!rail) return;
-      const rect = rail.getBoundingClientRect();
-      const pad = 20;
-      const fraction = clamp((clientY - rect.top - pad) / Math.max(1, rect.height - pad * 2));
-      viewportElement.scrollTop = scrollOf((1 - fraction) * 1000, viewportElement.scrollHeight - viewportElement.clientHeight);
-    }
-    function onRailDown(event: PointerEvent) {
-      if (event.button !== 0 || !rail) return;
-      railPointer = event.pointerId;
-      rail.setPointerCapture(event.pointerId);
-      beginManualInteraction();
-      railAt(event.clientY);
-    }
-    function onRailMove(event: PointerEvent) {
-      if (railPointer !== event.pointerId) return;
-      railAt(event.clientY);
-    }
-    function onRailUp(event: PointerEvent) {
-      if (railPointer !== event.pointerId) return;
-      railPointer = null;
-    }
-    function onRailWheel(event: WheelEvent) {
-      beginManualInteraction();
-      viewportElement.scrollTop += event.deltaY;
-      event.preventDefault();
-    }
-
-    viewportElement.addEventListener("scroll", updateFromScroll, { passive: true });
-    viewportElement.addEventListener("wheel", beginManualInteraction, { passive: true });
-    viewportElement.addEventListener("pointerdown", beginManualInteraction, { passive: true });
-    viewportElement.addEventListener("touchstart", beginManualInteraction, { passive: true });
-    rail?.addEventListener("pointerdown", onRailDown);
-    rail?.addEventListener("pointermove", onRailMove);
-    rail?.addEventListener("pointerup", onRailUp);
-    rail?.addEventListener("pointercancel", onRailUp);
-    rail?.addEventListener("wheel", onRailWheel, { passive: false });
-    const start = valueRef.current ?? 0;
-    if (valueRef.current === null) {
-      valueRef.current = start;
-      onChangeRef.current(start);
-    }
-    const range = Math.max(0, viewportElement.scrollHeight - viewportElement.clientHeight);
-    gsap.set(viewportElement, { scrollTop: scrollOf(DISTANCE_STOPS[start], range) });
-    camera.kilometres = DISTANCE_STOPS[start];
-    render(camera.kilometres);
-    const sync = () => {
-      const next = Math.max(0, viewportElement.scrollHeight - viewportElement.clientHeight);
-      gsap.set(viewportElement, { scrollTop: scrollOf(camera.kilometres, next) });
-      render(camera.kilometres);
+  useEffect(() => {
+    const node = canvas.current;
+    if (!node) return;
+    let frame = 0;
+    const reduced = prefersReducedMotion();
+    const tick = (now: number) => {
+      drawWaveform(node, now / 1000, clarityRef.current);
+      if (!reduced) frame = requestAnimationFrame(tick);
     };
-    const frameSync = requestAnimationFrame(sync);
-    window.addEventListener("resize", sync);
-    return () => {
-      cameraTween?.kill();
-      scrollTween?.kill();
-      snapDelay?.kill();
-      cancelAnimationFrame(frameSync);
-      window.removeEventListener("resize", sync);
-      viewportElement.removeEventListener("scroll", updateFromScroll);
-      viewportElement.removeEventListener("wheel", beginManualInteraction);
-      viewportElement.removeEventListener("pointerdown", beginManualInteraction);
-      viewportElement.removeEventListener("touchstart", beginManualInteraction);
-      rail?.removeEventListener("pointerdown", onRailDown);
-      rail?.removeEventListener("pointermove", onRailMove);
-      rail?.removeEventListener("pointerup", onRailUp);
-      rail?.removeEventListener("pointercancel", onRailUp);
-      rail?.removeEventListener("wheel", onRailWheel);
-    };
-  }, { scope: root });
+    frame = requestAnimationFrame(tick);
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => drawWaveform(node, performance.now() / 1000, clarityRef.current));
+    observer?.observe(node);
+    return () => { cancelAnimationFrame(frame); observer?.disconnect(); };
+  }, []);
 
-  const travelTo = contextSafe((stop: number, index: number) => {
-    const viewport = scroller.current;
-    if (!viewport) return;
-    shouldSnap.current = false;
-    valueRef.current = index;
-    onChangeRef.current(index);
-    gsap.to(viewport, {
-      scrollTop: scrollOf(stop, viewport.scrollHeight - viewport.clientHeight),
-      duration: prefersReducedMotion() ? 0 : rubiconMotion.duration.section,
-      ease: rubiconMotion.ease.enter,
-      overwrite: "auto",
-    });
-  });
-
-  function handleKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
-    const viewport = scroller.current;
-    if (!viewport) return;
-    const range = Math.max(1, viewport.scrollHeight - viewport.clientHeight);
-    const current = zoomOf(viewport.scrollTop, range);
-    const keyTargets: Record<string, number> = {
-      ArrowUp: current + 25,
-      ArrowRight: current + 25,
-      ArrowDown: current - 25,
-      ArrowLeft: current - 25,
-      PageUp: current + 250,
-      PageDown: current - 250,
-      Home: 0,
-      End: 1000,
-    };
-    if (!(event.key in keyTargets)) return;
-    event.preventDefault();
-    shouldSnap.current = true;
-    const target = clamp(keyTargets[event.key], 0, 1000);
-    gsap.to(viewport, {
-      scrollTop: scrollOf(target, range),
-      duration: prefersReducedMotion() ? 0 : .45,
-      ease: rubiconMotion.ease.enter,
-      overwrite: "auto",
-    });
+  function live(next: number) {
+    setPosition(next);
+    const stop = stopAt(next);
+    if (stop !== lastStop.current) {
+      lastStop.current = stop;
+      tickHaptic(stop);
+    }
+    if (value !== stop) onChange(stop);
+  }
+  function commit(next: number) {
+    const stop = stopAt(next);
+    setPosition(stopCenter(stop));
+    lastStop.current = stop;
+    if (value !== stop) onChange(stop);
+  }
+  function pick(index: number) {
+    setPosition(stopCenter(index));
+    lastStop.current = index;
+    tickHaptic(index);
+    if (value !== index) onChange(index);
   }
 
-  const selected = value ?? 0;
-  return <div ref={root} className="onb-distance">
-    <div className="onb-distance-frame">
-      <div ref={scroller} className="onb-distance-scroll" role="slider" tabIndex={0} aria-label="Strength of your convictions"
-        aria-valuemin={24} aria-valuemax={135} aria-valuenow={FOCAL_LENGTHS[selected]}
-        aria-valuetext={`${CONFIDENCE[selected]}, ${FOCAL_LENGTHS[selected]} millimeters`} onKeyDown={handleKeyDown}>
-        <div className="onb-distance-runway">
-          <div className="onb-distance-scene">
-            <div className="onb-distance-space" aria-hidden="true">
-              <div className="onb-distance-nebula" />
-              <div className="onb-distance-rings"><i /><i /><i /></div>
-              {STARS.map((star, i) => <span key={i} data-star style={{ width: star.size, height: star.size }} />)}
-            </div>
-            {CONFIDENCE.map((label, index) => <button className="onb-distance-marker" data-distance-stop key={label}
-              data-confidence={index} type="button" aria-pressed={selected === index} onClick={() => travelTo(DISTANCE_STOPS[index], index)}>
-              {label}
-            </button>)}
-            <div className="onb-distance-nudge" data-nudge aria-hidden="true"><ChevronsUp size={18} strokeWidth={2.2} /></div>
-          </div>
-        </div>
+  const axis = { min: 0, max: 1, value: position, onChange: live, onCommit: commit };
+  const well = useDrag<HTMLDivElement>(axis, null, { pad: 18, placeOnPress: true });
+  const { dragging: tuning, ...wellHandlers } = well;
+
+  return <div className="onb-signal" style={{ "--clarity": clarity } as CSSProperties}>
+    <div className="onb-signal-well" data-dragging={tuning || undefined} tabIndex={0} aria-label="Drag the signal to set how clear your views are" {...wellHandlers}>
+      <div className="onb-signal-graticule" aria-hidden="true" />
+      <canvas ref={canvas} className="onb-signal-wave" aria-hidden="true" />
+    </div>
+    <div className="onb-signal-control">
+      <div className="onb-signal-copy">
+        <strong>{CONFIDENCE[selected]}</strong>
+        <p>{CONFIDENCE_NOTES[selected]}</p>
       </div>
-      <div className="onb-distance-zoom">
-        <ol className="onb-distance-focals" aria-hidden="true">
-          {[...FOCAL_LENGTHS].reverse().map(mm => <li key={mm} data-focal>{mm}mm</li>)}
-        </ol>
-        <div className="onb-distance-rail" data-rail aria-hidden="true">
-          <div className="onb-distance-rail-fill" data-rail-fill />
-          <div className="onb-distance-rail-marks">{DISTANCE_STOPS.map(stop => <i key={stop} />)}</div>
-          <div className="onb-distance-rail-thumb" data-rail-thumb />
-        </div>
+      <div className="onb-signal-stops">
+        <i className="onb-signal-thumb" aria-hidden="true" />
+        {CONFIDENCE_STOPS.map((label, index) => <button key={label} type="button" aria-pressed={selected === index}
+          onClick={() => pick(index)}>{label}</button>)}
+        <SmoothRange className="onb-pad-range" label="How clear your views about the future are" value={position} valueText={spoken}
+          onChange={live} onCommit={commit} />
       </div>
     </div>
-    <div className="onb-distance-meaning">
-      <strong>{CONFIDENCE[selected]}</strong>
-      <span>{CONFIDENCE_DESCRIPTIONS[selected]}</span>
-    </div>
-    <p className="sr-only" role="status" aria-live="polite">{CONFIDENCE[selected]}</p>
+    <p className="sr-only" role="status" aria-live="polite">{spoken}</p>
   </div>;
 }
 
-/** The first foundation is spatial; the second remains a continuous trail. */
+/** The first foundation is a signal you tune; the second remains a trail. */
 export function FoundationScale(props: FoundationScaleProps) {
   if (props.kind === "clarity") return <ConfidenceJourney value={props.value} onChange={props.onChange} />;
   return <KnowledgeScale value={props.value} onChange={props.onChange} />;

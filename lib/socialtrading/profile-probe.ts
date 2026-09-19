@@ -1,4 +1,4 @@
-import { CATEGORIES, type OnboardingAnswers } from "./onboarding";
+import { CATEGORIES, ensureHorizon, type OnboardingAnswers } from "./onboarding";
 import type { ProbeKind, ProfileModel } from "./profile-model";
 import { PROBE_TOPICS, probeTopic, topicName, type ProbeTopic, type TopicId } from "./profile-topics";
 
@@ -113,9 +113,18 @@ function chooseKind(best: Candidate, ranked: Candidate[], model: ProfileModel, c
   return "choice";
 }
 
+const TOPIC_HORIZON: Record<string, string> = {
+  semiconductors: "By 2032", "data-centers": "By 2030", "cloud-software": "By 2035", robotics: "By 2035",
+  "power-grid": "By 2030", "digital-money": "By 2035", stablecoins: "By 2032", "decentralized-finance": "By 2035",
+  biotech: "By 2040", "medical-technology": "By 2035", "defence-sovereignty": "By 2035", "climate-adaptation": "By 2040",
+  "ai-applications": "By 2030", "future-of-work": "By 2035", "consumer-trends": "By 2032",
+};
+const titled = (topic: ProbeTopic, knowledge: number) =>
+  ensureHorizon(topic.claims[level(knowledge)], TOPIC_HORIZON[topic.id] ?? "By 2035");
+
 function build(best: Candidate, ranked: Candidate[], model: ProfileModel, ctx: ProbeContext): Probe {
   const kind = chooseKind(best, ranked, model, ctx);
-  const claim = best.topic.claims[level(ctx.knowledge)];
+  const claim = titled(best.topic, ctx.knowledge);
   const base = { id: probeId(best.topic.id), category: best.topic.category };
   if (kind === "chips") {
     const tied = ranked.slice(0, 3);
@@ -136,7 +145,7 @@ function fallback(model: ProfileModel, ctx: ProbeContext): Probe | null {
   const category = CATEGORIES.find(name => !covered.has(name));
   const topic = category ? PROBE_TOPICS.find(t => t.category === category) : undefined;
   if (!topic || !category) return null;
-  return { id: probeId(topic.id), kind: "choice", title: topic.claims[level(ctx.knowledge)], lead: "Take a side.", topics: [topic.id], category };
+  return { id: probeId(topic.id), kind: "choice", title: titled(topic, ctx.knowledge), lead: "Take a side.", topics: [topic.id], category };
 }
 
 /**

@@ -39,7 +39,7 @@ async function render(fetchDeck: DeckFetcher) {
   await act(async () => root.render(<InferenceOnboarding userId="alice" persist={false} variant="inference" forced={false} fetchDeck={fetchDeck} />));
 }
 async function foundations() {
-  await click("I have strong convictions"); await click("Continue");
+  await click("Strong convictions"); await click("Continue");
   for (const concept of FAMILIARITY_CONCEPTS) await click(concept.label);
   await click("Continue");
 }
@@ -55,7 +55,9 @@ it("asks the model for the seven-domain pack once and carries a swipe into the t
   await foundations();
   expect(title()).toBe(DECK_TITLE);
   expect(statement()).toBe("Generated Technology");
-  expect(container.querySelector(".onb-agent-peek")).toBeNull();
+  expect(container.textContent).toContain("Prediction 1 of 7");
+  expect(container.querySelector(".onb-card-bar")).toBeTruthy();
+  expect(container.querySelector(".onb-agent-peek")).toBeTruthy();
   expect(container.querySelector(".onb-chip")).toBeNull();
   expect(fetchDeck).toHaveBeenCalledTimes(1);
   expect(fetchDeck.mock.calls[0][0]).toMatchObject({ knowledge: 3, confidence: 3 });
@@ -63,7 +65,7 @@ it("asks the model for the seven-domain pack once and carries a swipe into the t
   for (const category of CATEGORIES) {
     expect(title()).toBe(DECK_TITLE);
     expect(statement()).toBe(`Generated ${category}`);
-    await click("I see it");
+    await click("Likely →");
   }
   expect(title()).toBe("Your outlook. Your rules.");
   expect(fetchDeck).toHaveBeenCalledTimes(1);
@@ -81,7 +83,7 @@ it("does not let a swipe change the next domain", async () => {
   await foundations();
   expect(title()).toBe(DECK_TITLE);
   expect(statement()).toBe("Generated Technology");
-  await click("I don’t see it");
+  await click("Unlikely");
   expect(statement()).toBe("Generated Energy");
   expect(fetchDeck).toHaveBeenCalledTimes(1);
 });
