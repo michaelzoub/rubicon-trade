@@ -4,7 +4,7 @@ export type AssetKind = "stock" | "crypto";
 export type Asset = {
   id: string; symbol: string; name: string; kind: AssetKind;
   price: number | null; change: number | null; asOf: string | null;
-  source: "Massive" | "CoinGecko" | "Robinhood"; marketCap?: number; volume?: number;
+  source: "Massive" | "CoinGecko" | "DexScreener" | "Robinhood"; marketCap?: number; volume?: number;
   logo?: string; description?: string; themes: string[]; reason?: string; score?: number;
   /** Crypto only: verified token contract per supported EVM chain id, from CoinGecko platforms. */
   contracts?: Record<string, string>;
