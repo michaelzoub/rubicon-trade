@@ -63,7 +63,7 @@ async function pickFamiliarity(experienced = true) {
   if (experienced) for (const concept of FAMILIARITY_CONCEPTS) await click(concept.label);
   await click("Continue");
 }
-async function foundation(level = "Experienced", confidence = "I know what I believe") {
+async function foundation(level = "Experienced", confidence = "Clear views") {
   await click(confidence); await click("Continue");
   await pickFamiliarity(level === "Experienced");
   await place("Society and work", "84", "6"); await click("Continue");

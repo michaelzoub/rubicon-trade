@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Check, MessageSquare, SlidersHorizontal, Sparkles } from "lucide-react";
-import { profileKey, PERMISSIONS, limitsError, type InvestingProfile, type Permission } from "@/lib/socialtrading/profile";
-import { newOnboarding, onboardingThesis, type OnboardingAnswers } from "@/lib/socialtrading/onboarding";
+import { Check } from "lucide-react";
+import { profileKey, limitsError, type InvestingProfile } from "@/lib/socialtrading/profile";
+import { CONVICTION_LEAD, CONVICTION_TITLE, DECK_LEAD, DECK_TITLE, newOnboarding, onboardingPortrait, onboardingThesis, type OnboardingAnswers } from "@/lib/socialtrading/onboarding";
 import { applyAnswer, type CardKind } from "@/lib/socialtrading/onboarding-cards";
 import { DEFAULT_PLAN } from "@/lib/socialtrading/plans";
 import { suggestedThemes } from "@/lib/socialtrading/themes";
@@ -17,12 +17,13 @@ import { FamiliarityCheck } from "./familiarity-check";
 import { GeographyMap } from "./onboarding-geo";
 import { PredictionPad } from "./onboarding-chart";
 import { PredictionDeck, DealingDeck } from "./onboarding-deck";
+import { OnboardingAgentPeek } from "./onboarding-agent";
 import { OnboardingCard } from "./onboarding-card";
+import { OnboardingRules } from "./onboarding-rules";
 import { fetchNextProbe, type ProbeFetcher } from "./onboarding-client";
 import { useProfileStore, useRunLog, type ArmProps } from "./onboarding-session";
 import "./onboarding.css";
 
-const PERMISSION_ICONS = { notify: Bell, approve: MessageSquare, automatic: SlidersHorizontal };
 /** Two foundations, up to seven probes, then the rules. Seven is a ceiling:
  * a run that runs out of worthwhile questions stops short of it. */
 const TOTAL = 2 + MAX_PROBES + 1;
@@ -44,7 +45,7 @@ const cardKind = (kind: Exclude<Probe["kind"], "map">): CardKind =>
  * returns the next probe from what it still does not know. Nothing here decides
  * what an answer means — that is the model's job, on the next turn.
  */
-export function AdaptiveOnboarding({ userId, onComplete, completing = false, serverError = "", persist = true, agentCreation = false, plan = DEFAULT_PLAN, variant, forced, fetchProbe = fetchNextProbe }: ArmProps & { fetchProbe?: ProbeFetcher }) {
+export function AdaptiveOnboarding({ userId, name, onComplete, completing = false, serverError = "", persist = true, agentCreation = false, plan = DEFAULT_PLAN, variant, forced, fetchProbe = fetchNextProbe }: ArmProps & { fetchProbe?: ProbeFetcher }) {
   const router = useRouter();
   const { profile, setProfile, loaded, storageError } = useProfileStore(userId, persist);
   const log = useRunLog(variant, forced);
@@ -120,7 +121,7 @@ export function AdaptiveOnboarding({ userId, onComplete, completing = false, ser
   useEffect(() => { heading.current?.focus({ preventScroll: true }); }, [index, probe?.id]);
 
   function next() {
-    if (index === SEEDS.clarity && a.confidence === null) return setError("Choose how clear the future feels to you.");
+    if (index === SEEDS.clarity && a.confidence === null) return setError("Choose how sure you are about the future.");
     if (index === SEEDS.knowledge) { completeKnowledge(scoreFamiliarity(profile.investorAnswers.selectedConceptIds ?? [])); return; }
     // Clarity hands over to knowledge; knowledge hands over to the probe loop,
     // which is index 0 and from there is driven by the sequencer, not the index.
@@ -152,19 +153,21 @@ export function AdaptiveOnboarding({ userId, onComplete, completing = false, ser
 
   if (!loaded) return <LoadingState label="Loading…" />;
   const waiting = index >= 0 && !probe && !done;
-  const step = Math.min(TOTAL, model.turn + 3);
-  const title = index === SEEDS.clarity ? "How much of the future already feels clear to you?"
+  const swiping = waiting || (!!probe && !done && probe.kind === "choice");
+  const step = swiping ? model.turn + 1 : Math.min(TOTAL, model.turn + 3);
+  const total = swiping ? MAX_PROBES : TOTAL;
+  const title = index === SEEDS.clarity ? CONVICTION_TITLE
     : index === SEEDS.knowledge ? FAMILIARITY_TITLE
     : done ? "Your outlook. Your rules."
+    : swiping ? DECK_TITLE
     : probe?.title ?? "Reading what you have told us…";
-  // A swipe or a drag explains itself; the kinds that need a second line get one.
-  const lead = probe && !done && ["chips", "text", "map", "pad"].includes(probe.kind) ? probe.lead : "";
+  const lead = index === SEEDS.clarity ? CONVICTION_LEAD : swiping ? DECK_LEAD : probe && !done && ["chips", "text", "map", "pad"].includes(probe.kind) ? probe.lead : "";
 
   return <div className="socialtrading-layout onb" aria-label="Build your Rubicon profile">
     <div className="socialtrading-question">
       <div className="onb-stage" key={`${index}-${probe?.id ?? ""}`}>
         <OnboardingCard
-          title={title} lead={lead || undefined} step={step} total={TOTAL} error={error || serverError}
+          title={title} lead={lead || undefined} step={step} total={total} countLabel={swiping ? "Prediction" : undefined} error={error || serverError}
           onBack={index === SEEDS.clarity ? undefined : back}
           onNext={done ? finish : waiting ? undefined : probe?.kind === "choice" ? undefined : next}
           nextLabel={done ? busy ? "Saving your profile…" : agentCreation ? "Create agent" : "Meet my agent" : "Continue"}
@@ -174,16 +177,20 @@ export function AdaptiveOnboarding({ userId, onComplete, completing = false, ser
           <h1 ref={heading} tabIndex={-1} className="sr-only outline-none">{title}</h1>
           {index === SEEDS.clarity && <FoundationScale kind="clarity" value={a.confidence} onChange={confidence => update({ confidence })} />}
           {index === SEEDS.knowledge && <FamiliarityCheck showTitle={false} hideContinue busy={busy} initialSelectedIds={profile.investorAnswers.selectedConceptIds} onChange={ids => update({}, { investorAnswers: { ...profile.investorAnswers, selectedConceptIds: ids } })} onComplete={completeKnowledge} />}
-          {waiting && <DealingDeck backs={2} answered={model.turn} total={MAX_PROBES} />}
-          {probe && !done && <ProbeInput probe={probe} onAnswer={answer => answerProbe(probe, answer)} />}
-          {done && <>
-            <div className="onb-summary"><Sparkles size={18} strokeWidth={1.6} /><div><p>{onboardingThesis(a)}</p></div></div>
-            <fieldset className="onb-permissions"><legend>How should your agent act?</legend>{(Object.entries(PERMISSIONS) as [Permission, string][]).map(([value, label]) => { const PermissionIcon = PERMISSION_ICONS[value]; const selected = profile.permissionConfigured && profile.permission === value; return <label key={value} className="onb-option"><input type="radio" name="permission" value={value} checked={selected} onChange={() => update({}, { permission: value, permissionConfigured: true })} /><PermissionIcon size={17} strokeWidth={1.5} aria-hidden="true" /><span>{label}</span><span className="onb-check" aria-hidden="true">{selected && <Check size={12} />}</span></label>; })}</fieldset>
-            {profile.permissionConfigured && profile.permission === "automatic" && <div className="onb-limits">{([["perTrade", "Maximum per trade"], ["daily", "Daily limit"], ["weekly", "Weekly limit"]] as const).map(([key, label]) => <label key={key}>{label} · USD<input type="number" inputMode="decimal" min="0.01" step="0.01" value={profile.limits[key]} onChange={e => update({}, { limits: { ...profile.limits, [key]: e.target.value } })} /></label>)}</div>}
-          </>}
+          {waiting && <DealingDeck backs={2} />}
+          {probe && !done && <ProbeInput probe={probe} remaining={Math.max(1, MAX_PROBES - model.turn - 1)} onAnswer={answer => answerProbe(probe, answer)} />}
+          {done && <OnboardingRules
+            portrait={onboardingPortrait(a)}
+            permission={profile.permission}
+            configured={profile.permissionConfigured}
+            limits={profile.limits}
+            onPermission={value => update({}, { permission: value, permissionConfigured: true })}
+            onLimit={(key, value) => update({}, { limits: { ...profile.limits, [key]: value } })}
+          />}
         </OnboardingCard>
       </div>
     </div>
+    <OnboardingAgentPeek profile={profile} name={name} />
   </div>;
 }
 
@@ -191,14 +198,14 @@ export function AdaptiveOnboarding({ userId, onComplete, completing = false, ser
  * arm is a test of the sequencing, not of the widgets. `choice` commits itself
  * on the swipe; every other kind answers on each interaction, so the card's
  * Continue button simply moves on. */
-function ProbeInput({ probe, onAnswer }: { probe: Probe; onAnswer: (value: ProbeAnswer) => void }) {
+function ProbeInput({ probe, remaining = 1, onAnswer }: { probe: Probe; remaining?: number; onAnswer: (value: ProbeAnswer) => void }) {
   const [position, setPosition] = useState(0.5);
   const [regions, setRegions] = useState<string[]>([]);
   const [chips, setChips] = useState<string[]>([]);
   const [text, setText] = useState("");
 
   if (probe.kind === "choice") return <PredictionDeck card={{ id: probe.id, category: probe.category, text: probe.title }}
-    onVote={direction => onAnswer({ kind: "binary", direction })} />;
+    backs={remaining} onVote={direction => onAnswer({ kind: "binary", direction })} />;
 
   if (probe.kind === "spectrum") {
     const stops = probe.options ?? [];

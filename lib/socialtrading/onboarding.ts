@@ -1,5 +1,15 @@
-export const CONVICTION_TITLE = "How strong are your convictions about the future?";
-export const CONFIDENCE = ["I’m still exploring", "I have a few hunches", "I have some convictions", "I have strong convictions"];
+import { suggestedThemes, type ThemeId } from "./themes";
+
+export const CONVICTION_TITLE = "How clear are your views about the future?";
+export const CONVICTION_LEAD = "Think technology, energy, society and money. Move the dial to what sounds like you.";
+export const CONFIDENCE = ["I’m still exploring", "I have a few ideas", "I know what I believe", "I have strong convictions"];
+export const CONFIDENCE_STOPS = ["Exploring", "A few ideas", "Clear views", "Strong convictions"];
+export const CONFIDENCE_NOTES = [
+  "I don’t have specific convictions yet.",
+  "Some trends feel important, but my views are still forming.",
+  "I have clear views about several trends.",
+  "I already know which changes I expect to shape the future.",
+];
 export const EXPERIENCE = ["New to investing", "Getting started", "Comfortable investing", "Experienced investor"];
 export const EXPERIENCE_NOTES = ["I’m new or have barely started.", "I understand stocks, ETFs or crypto.", "I can research and compare investments myself.", "I manage my own portfolio and know what I’m looking at."];
 export const DISLIKES = ["Non-ESG companies", "ESG companies", "Fossil fuels", "Defence and weapons", "Tobacco", "Gambling", "Memecoins", "Highly speculative investments", "Real estate", "Commodities", "Short-term trading"];
@@ -12,12 +22,27 @@ export const KEYWORDS = ["Robots", "Power", "Crypto", "Longevity", "Sovereignty"
  * 3 is a second-order effect, 4 is a sharper opposing view — still in normal
  * language. Every line has a side a reasonable person could reject. */
 const QUESTIONS = [
-  ["Robots take more physical jobs than they create.", "Electricity becomes harder to get than oil.", "Crypto becomes everyday money, not just something people trade.", "Living healthy into your nineties becomes normal.", "Countries make more of their own goods, even if it costs more.", "We spend more fixing climate damage than preventing it.", "AI takes over more work than it creates."],
-  ["Factories and warehouses run with far fewer people.", "New power cannot keep up with AI and electric everything.", "Stablecoins become a normal way to pay, even for people who dislike crypto.", "Caring for ageing populations costs more than any other public service.", "Governments spend more on defence and making things at home than on cheap imports.", "Protecting cities from climate damage becomes as big as cutting emissions.", "People who do not use AI at work fall behind."],
-  ["Robotics creates more value in factories than in homes.", "Power availability holds AI back more than computing chips do.", "Crypto succeeds mainly through systems people barely notice.", "Ageing populations reshape who works more than they reshape healthcare.", "Energy security matters more to governments than cheap energy.", "Climate adaptation grows faster than spending to prevent climate change.", "AI changes old industries more than it creates new ones."],
-  ["Robotics changes the physical economy more than AI changes office work.", "Electricity infrastructure outlasts the current AI boom.", "Digital finance keeps blockchain even if most cryptocurrencies disappear.", "Healthcare innovation accelerates, but rules stop it spreading fast.", "Bringing production home costs more and takes longer than governments expect.", "Climate adaptation attracts more money than preventing climate change.", "The world is overestimating AI’s short-term impact and underestimating its long-term reach."],
+  ["By 2035, robots will eliminate more physical jobs than they create.", "By 2030, electricity becomes harder to get than oil.", "By 2032, crypto becomes everyday money, not just something people trade.", "By 2040, living healthy into your nineties becomes normal.", "By 2035, countries make more of their own goods, even if it costs more.", "By 2040, we spend more fixing climate damage than preventing it.", "By 2030, AI takes over more work than it creates."],
+  ["By 2035, factories and warehouses run with far fewer people.", "By 2030, new power cannot keep up with AI and electric everything.", "By 2032, stablecoins become a normal way to pay, even for people who dislike crypto.", "By 2040, caring for ageing populations costs more than any other public service.", "By 2035, governments spend more on defence and making things at home than on cheap imports.", "By 2040, protecting cities from climate damage becomes as big as cutting emissions.", "By 2030, people who do not use AI at work fall behind."],
+  ["By 2035, robotics creates more value in factories than in homes.", "By 2030, power availability holds AI back more than computing chips do.", "By 2032, crypto succeeds mainly through systems people barely notice.", "By 2040, ageing populations reshape who works more than they reshape healthcare.", "By 2035, energy security matters more to governments than cheap energy.", "By 2040, climate adaptation grows faster than spending to prevent climate change.", "By 2035, AI changes old industries more than it creates new ones."],
+  ["By 2040, robotics changes the physical economy more than AI changes office work.", "By 2035, electricity infrastructure outlasts the current AI boom.", "By 2035, digital finance keeps blockchain even if most cryptocurrencies disappear.", "By 2040, healthcare innovation accelerates, but rules stop it spreading fast.", "By 2035, bringing production home costs more and takes longer than governments expect.", "By 2040, climate adaptation attracts more money than preventing climate change.", "By 2035, the world is overestimating AI’s short-term impact and underestimating its long-term reach."],
 ];
-export const DECK_TITLE = "Which futures do you see?";
+export const DECK_TITLE = "What do you think comes next?";
+export const DECK_LEAD = "Swipe right if it feels likely, left if unlikely, or down if you’re unsure.";
+/** Opening phrase a swipe can judge: a year, a span, or a decade. */
+const SPAN = "(?:\\d+|one|two|three|four|five|six|seven|eight|nine|ten)";
+export const HORIZON_RE = new RegExp(`^(By \\d{4}|Within (?:the next )?${SPAN} years|In the next ${SPAN} years|This decade|By the \\d{4}s)`, "i");
+export function splitPrediction(text: string): { horizon: string | null; claim: string } {
+  const match = text.match(HORIZON_RE);
+  if (!match) return { horizon: null, claim: text };
+  const rest = text.slice(match[0].length).replace(/^,\s*/, "").trim();
+  if (!rest) return { horizon: match[0], claim: text };
+  return { horizon: match[0], claim: rest.charAt(0).toUpperCase() + rest.slice(1) };
+}
+export function ensureHorizon(text: string, horizon = "By 2035"): string {
+  if (HORIZON_RE.test(text)) return text;
+  return `${horizon}, ${text.charAt(0).toLowerCase()}${text.slice(1)}`;
+}
 export type PredictionResponse = { id: string; category: string; text: string; direction: "yes" | "no" | "unsure"; confidence?: number; years?: number };
 export type OnboardingAnswers = { version: 1; scene: number; confidence: number | null; responses: PredictionResponse[]; strongest: string[]; dislikes: string[]; openToEverything: boolean; ownBelief: string };
 export const newOnboarding = (): OnboardingAnswers => ({ version: 1, scene: 0, confidence: null, responses: [], strongest: [], dislikes: [], openToEverything: false, ownBelief: "" });
@@ -78,4 +103,46 @@ export function resolveScene(a: OnboardingAnswers) {
 export function onboardingThesis(a: OnboardingAnswers) {
   const selected = a.responses.filter(r => a.strongest.includes(r.id));
   return [...selected.map(r => `${r.direction === "yes" ? "I expect" : "I do not expect"}: ${r.text}${r.confidence ? ` Confidence in this view: ${r.confidence}%.` : ""}${r.years ? ` Horizon: ${r.years === 11 ? "more than ten" : r.years} years.` : ""}`), a.ownBelief.trim()].filter(Boolean).join("\n") || "I’m exploring possible futures and have not settled on a strong conviction yet.";
+}
+
+/** What the side card should show *now*, from answers already taken. Thesis
+ * stays blank until a view is actually decided, so the card does not invent a
+ * belief the person has not chosen. Before strongest views are picked, the
+ * first decided swipes stand in so the card moves with the deck. */
+export function onboardingPreview(a: OnboardingAnswers): { thesis: string; themes: ThemeId[]; portrait: string } {
+  const decided = a.responses.filter(r => r.direction !== "unsure");
+  const selected = a.strongest.length ? decided.filter(r => a.strongest.includes(r.id)) : decided.slice(0, 2);
+  const thesis = [...selected.map(r => `${r.direction === "yes" ? "I expect" : "I do not expect"}: ${r.text}${r.confidence ? ` Confidence in this view: ${r.confidence}%.` : ""}${r.years ? ` Horizon: ${r.years === 11 ? "more than ten" : r.years} years.` : ""}`), a.ownBelief.trim()].filter(Boolean).join("\n");
+  const yes = a.responses.filter(r => r.direction === "yes");
+  const themes = suggestedThemes([...yes.map(r => `${r.category} ${r.text}`), a.ownBelief].join(" "));
+  return { thesis, themes, portrait: onboardingPortrait(a) };
+}
+
+const STANCE = ["Still exploring", "A few ideas", "Clear views", "Strong convictions"] as const;
+
+function joinAnd(words: string[]) {
+  if (words.length <= 1) return words[0] ?? "";
+  return `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
+}
+
+function lens(category: string) {
+  return KEYWORDS[CATEGORIES.indexOf(category)] ?? category;
+}
+
+/** One phrase for the last screen — who they are, not a dump of what they typed. */
+export function onboardingPortrait(a: OnboardingAnswers): string {
+  const stance = STANCE[a.confidence ?? 0];
+  const decided = a.responses.filter(r => r.direction !== "unsure");
+  const pool = a.strongest.length ? decided.filter(r => a.strongest.includes(r.id)) : decided;
+  const yes = pool.filter(r => r.direction === "yes").slice(0, 2).map(r => lens(r.category));
+  const no = pool.filter(r => r.direction === "no").slice(0, 1).map(r => lens(r.category));
+  if (!yes.length && !no.length) {
+    return a.confidence === 3 ? "Strong convictions, still unnamed."
+      : a.confidence === 2 ? "Clear views, still unnamed."
+      : a.confidence === 1 ? "A few ideas, still looking around."
+      : "Still exploring the future.";
+  }
+  if (yes.length && no.length) return `${stance} on ${joinAnd(yes)}, skeptical of ${no[0]}.`;
+  if (yes.length) return `${stance} around ${joinAnd(yes)}.`;
+  return `${stance}, skeptical of ${joinAnd(no)}.`;
 }

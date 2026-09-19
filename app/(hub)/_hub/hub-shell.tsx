@@ -86,7 +86,7 @@ function Boot({ userId, name, children }: { userId: string; name?: string; child
         try { local = readProfile(localStorage.getItem(profileKey(userId)), userId); } catch { /* storage unavailable */ }
         if (local?.completedAt) { const created = await hubApi.post(token, 0, { action: "initialize", profile: local, userName: name }); if (!cancelled) { if (created.account) setAccount(created.account); setState(created.state); } }
         else setState(null);
-      } catch (e) { if (!cancelled) { setError(e instanceof Error ? e.message : "Your workspace could not be loaded."); setState(null); } }
+      } catch { if (!cancelled) setState(null); }
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps

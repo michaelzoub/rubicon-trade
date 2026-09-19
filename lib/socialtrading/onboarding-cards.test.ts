@@ -15,7 +15,7 @@ describe("generated onboarding cards", () => {
     expect(readCard({ ...valid, kind: "freeform" })).toBeNull();
     expect(readCard({ ...valid, category: "Sports" })).toBeNull();
     expect(readCard({ ...valid, title: "" })).toBeNull();
-    expect(readCard({ ...valid, title: "x".repeat(141) })).toBeNull();
+    expect(readCard({ ...valid, title: "x".repeat(181) })).toBeNull();
     expect(readCard({ ...valid, lead: undefined })).toBeNull();
     // A scale needs exactly four stops, and chips need a usable range.
     expect(readCard({ ...valid, kind: "scale", options: ["a", "b", "c"] })).toBeNull();
@@ -35,6 +35,17 @@ describe("generated onboarding cards", () => {
     expect(pack!.map(c => c.category)).toEqual(CATEGORIES);
     expect(readPredictionDeck({ predictions: predictions.slice(1) })).toBeNull();
     expect(readPredictionDeck({ predictions: [...predictions, { category: "Technology", statement: "A second tech take." }] })).toHaveLength(7);
+  });
+
+  it("folds a horizon field into the statement when the model sent them separately", () => {
+    const pack = readPredictionDeck({
+      predictions: CATEGORIES.map((category, i) => ({
+        category,
+        horizon: "By 2035",
+        statement: i === 0 ? "Robots will eliminate more physical jobs than they create." : `Statement ${i} about ${category}.`,
+      })),
+    });
+    expect(pack?.[0].title).toBe("By 2035, robots will eliminate more physical jobs than they create.");
   });
 });
 

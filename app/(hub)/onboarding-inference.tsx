@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Check, MessageSquare, SlidersHorizontal, Sparkles } from "lucide-react";
-import { profileKey, PERMISSIONS, limitsError, type InvestingProfile, type Permission } from "@/lib/socialtrading/profile";
-import { newOnboarding, onboardingThesis, predictions, PREDICTION_COUNT, CONVICTION_TITLE, DECK_TITLE, type OnboardingAnswers } from "@/lib/socialtrading/onboarding";
+import { Check } from "lucide-react";
+import { profileKey, limitsError, type InvestingProfile } from "@/lib/socialtrading/profile";
+import { newOnboarding, onboardingPortrait, onboardingThesis, predictions, PREDICTION_COUNT, CONVICTION_LEAD, CONVICTION_TITLE, DECK_LEAD, DECK_TITLE, type OnboardingAnswers } from "@/lib/socialtrading/onboarding";
 import { applyAnswer, type Card, type CardAnswer } from "@/lib/socialtrading/onboarding-cards";
 import { DEFAULT_PLAN } from "@/lib/socialtrading/plans";
 import { suggestedThemes } from "@/lib/socialtrading/themes";
@@ -14,12 +14,13 @@ import { FoundationScale } from "./onboarding-drag";
 import { FamiliarityCheck } from "./familiarity-check";
 import { PredictionPad } from "./onboarding-chart";
 import { PredictionDeck, DealingDeck } from "./onboarding-deck";
+import { OnboardingAgentPeek } from "./onboarding-agent";
 import { OnboardingCard } from "./onboarding-card";
+import { OnboardingRules } from "./onboarding-rules";
 import { fetchPredictionDeck, type DeckFetcher } from "./onboarding-client";
 import { useProfileStore, useRunLog, type ArmProps } from "./onboarding-session";
 import "./onboarding.css";
 
-const PERMISSION_ICONS = { notify: Bell, approve: MessageSquare, automatic: SlidersHorizontal };
 /** Two foundations, then seven inferred swipe cards — one per domain — then the rules. */
 const TOTAL = 2 + PREDICTION_COUNT + 1;
 const SEEDS = { clarity: -2, knowledge: -1 } as const;
@@ -29,7 +30,7 @@ const SEEDS = { clarity: -2, knowledge: -1 } as const;
  * profile; they do not choose the next swipe. When the model is unavailable it
  * falls back to the knowledge-level bank and records that, so a fallback run is
  * never counted as inference. */
-export function InferenceOnboarding({ userId, onComplete, completing = false, serverError = "", persist = true, agentCreation = false, plan = DEFAULT_PLAN, variant, forced, fetchDeck = fetchPredictionDeck }: ArmProps & { fetchDeck?: DeckFetcher }) {
+export function InferenceOnboarding({ userId, name, onComplete, completing = false, serverError = "", persist = true, agentCreation = false, plan = DEFAULT_PLAN, variant, forced, fetchDeck = fetchPredictionDeck }: ArmProps & { fetchDeck?: DeckFetcher }) {
   const router = useRouter();
   const { profile, setProfile, loaded, storageError } = useProfileStore(userId, persist);
   const log = useRunLog(variant, forced);
@@ -120,17 +121,17 @@ export function InferenceOnboarding({ userId, onComplete, completing = false, se
 
   if (!loaded) return <LoadingState label="Loading…" />;
   const waiting = index >= 0 && !card && !atRules;
-  const step = Math.min(TOTAL, index + 3);
+  const swiping = waiting || (!!card && !atRules && card.kind === "binary");
+  const step = swiping ? (waiting ? 1 : index + 1) : Math.min(TOTAL, index + 3);
+  const total = swiping ? PREDICTION_COUNT : TOTAL;
   const title = index === SEEDS.clarity ? CONVICTION_TITLE : index === SEEDS.knowledge ? FAMILIARITY_TITLE : atRules ? "Your outlook. Your rules." : DECK_TITLE;
-  // A generated card may need a second line; the fixed scenes never do, and a
-  // card you answer by swiping or dragging explains itself without one.
-  const lead = index >= 0 && card && !["binary", "pad"].includes(card.kind) ? card.lead : "";
+  const lead = index === SEEDS.clarity ? CONVICTION_LEAD : swiping ? DECK_LEAD : index >= 0 && card && !["binary", "pad"].includes(card.kind) ? card.lead : "";
 
   return <div className="socialtrading-layout onb" aria-label="Build your Rubicon profile">
     <div className="socialtrading-question">
       <div className="onb-stage" key={`${index}-${card?.id ?? ""}`}>
         <OnboardingCard
-          title={title} lead={lead || undefined} step={step} total={TOTAL} error={error || serverError}
+          title={title} lead={lead || undefined} step={step} total={total} countLabel={swiping ? "Prediction" : undefined} error={error || serverError}
           onBack={index === SEEDS.clarity ? undefined : back}
           onNext={atRules ? finish : waiting ? undefined : card?.kind === "binary" ? undefined : next}
           nextLabel={atRules ? busy ? "Saving your profile…" : agentCreation ? "Create agent" : "Meet my agent" : "Continue"}
@@ -140,29 +141,33 @@ export function InferenceOnboarding({ userId, onComplete, completing = false, se
           <h1 ref={heading} tabIndex={-1} className="sr-only outline-none">{title}</h1>
           {index === SEEDS.clarity && <FoundationScale kind="clarity" value={a.confidence} onChange={confidence => update({ confidence })} />}
           {index === SEEDS.knowledge && <FamiliarityCheck showTitle={false} hideContinue busy={busy} initialSelectedIds={profile.investorAnswers.selectedConceptIds} onChange={ids => update({}, { investorAnswers: { ...profile.investorAnswers, selectedConceptIds: ids } })} onComplete={completeKnowledge} />}
-          {waiting && <DealingDeck backs={Math.max(0, PREDICTION_COUNT - 1)} answered={0} total={PREDICTION_COUNT} />}
-          {card && !atRules && <CardInput card={card} answers={a} onAnswer={value => { answer(card, value); if (value.kind === "binary") setIndex(i => i + 1); }} />}
-          {atRules && <>
-            <div className="onb-summary"><Sparkles size={18} strokeWidth={1.6} /><div><p>{onboardingThesis(a)}</p></div></div>
-            <fieldset className="onb-permissions"><legend>How should your agent act?</legend>{(Object.entries(PERMISSIONS) as [Permission, string][]).map(([value, label]) => { const PermissionIcon = PERMISSION_ICONS[value]; const selected = profile.permissionConfigured && profile.permission === value; return <label key={value} className="onb-option"><input type="radio" name="permission" value={value} checked={selected} onChange={() => update({}, { permission: value, permissionConfigured: true })} /><PermissionIcon size={17} strokeWidth={1.5} aria-hidden="true" /><span>{label}</span><span className="onb-check" aria-hidden="true">{selected && <Check size={12} />}</span></label>; })}</fieldset>
-            {profile.permissionConfigured && profile.permission === "automatic" && <div className="onb-limits">{([["perTrade", "Maximum per trade"], ["daily", "Daily limit"], ["weekly", "Weekly limit"]] as const).map(([key, label]) => <label key={key}>{label} · USD<input type="number" inputMode="decimal" min="0.01" step="0.01" value={profile.limits[key]} onChange={e => update({}, { limits: { ...profile.limits, [key]: e.target.value } })} /></label>)}</div>}
-          </>}
+          {waiting && <DealingDeck backs={2} />}
+          {card && !atRules && <CardInput card={card} answers={a} remaining={Math.max(0, cards.length - index - 1)} onAnswer={value => { answer(card, value); if (value.kind === "binary") setIndex(i => i + 1); }} />}
+          {atRules && <OnboardingRules
+            portrait={onboardingPortrait(a)}
+            permission={profile.permission}
+            configured={profile.permissionConfigured}
+            limits={profile.limits}
+            onPermission={value => update({}, { permission: value, permissionConfigured: true })}
+            onLimit={(key, value) => update({}, { limits: { ...profile.limits, [key]: value } })}
+          />}
         </OnboardingCard>
       </div>
     </div>
+    <OnboardingAgentPeek profile={profile} name={name} />
   </div>;
 }
 
 /** One generated card's input. Every kind is a plain control — the arm is a test
  * of the questions, not of the widgets. */
-function CardInput({ card, answers, onAnswer }: { card: Card; answers: OnboardingAnswers; onAnswer: (value: CardAnswer) => void }) {
+function CardInput({ card, answers, remaining = 1, onAnswer }: { card: Card; answers: OnboardingAnswers; remaining?: number; onAnswer: (value: CardAnswer) => void }) {
   const [chips, setChips] = useState<string[]>([]);
   const [text, setText] = useState("");
   const [scale, setScale] = useState<number | null>(null);
   // A written question is thrown exactly like one of the deck's, so the two arms
   // ask for an instinct with the same gesture.
   if (card.kind === "binary") return <PredictionDeck card={{ id: card.id, category: card.category, text: card.title }}
-    onVote={direction => onAnswer({ kind: "binary", direction })} />;
+    backs={Math.max(1, remaining)} onVote={direction => onAnswer({ kind: "binary", direction })} />;
   if (card.kind === "pad") {
     const target = [...answers.responses].reverse().find(r => answers.strongest.includes(r.id));
     return <PredictionPad response={target ?? { id: card.id, category: card.category, text: card.title, direction: "yes" }} onChange={patch => onAnswer({ kind: "pad", confidence: patch.confidence ?? 75, years: patch.years ?? 7 })} />;

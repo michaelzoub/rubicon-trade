@@ -1,4 +1,4 @@
-import { CATEGORIES, type OnboardingAnswers } from "./onboarding";
+import { CATEGORIES, ensureHorizon, type OnboardingAnswers } from "./onboarding";
 
 /** The contract both onboarding arms speak. The tree builds these from its own
  * fixed scenes; the inference arm receives them from the model. Whoever renders
@@ -33,7 +33,7 @@ export function readCard(raw: unknown): Card | null {
   if (!raw || typeof raw !== "object") return null;
   const c = raw as Record<string, unknown>;
   const kind = CARD_KINDS.find(k => k === c.kind);
-  const id = string(c.id, 64), title = string(c.title, 140), lead = string(c.lead, 240);
+  const id = string(c.id, 64), title = string(c.title, 180), lead = string(c.lead, 240);
   const category = CATEGORIES.find(name => name === c.category);
   if (!kind || !id || !title || !lead || !category) return null;
   const options = Array.isArray(c.options) ? c.options.map(o => string(o, 80)).filter((o): o is string => !!o) : [];
@@ -59,7 +59,9 @@ export function readPredictionDeck(raw: unknown): Card[] | null {
   for (const item of list) {
     if (!item || typeof item !== "object") continue;
     const row = item as Record<string, unknown>;
-    const title = string(row.statement ?? row.title, 140);
+    const statement = string(row.statement ?? row.title, 180);
+    const horizon = string(row.horizon, 40);
+    const title = statement && horizon ? ensureHorizon(statement, horizon) : statement;
     const category = CATEGORIES.find(name => name === row.category);
     if (!title || !category || byCategory.has(category)) continue;
     const card = readCard({ id: `deck-${category}`, kind: "binary", title, lead: string(row.lead, 240) ?? DECK_LEAD, category });

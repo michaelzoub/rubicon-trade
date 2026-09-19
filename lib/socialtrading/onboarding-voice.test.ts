@@ -16,13 +16,15 @@ describe("onboarding swipe voice", () => {
     const expert = deckPrompt({ knowledge: 3, confidence: 3 });
     expect(beginner).toContain("Knowledge 1/4");
     expect(beginner).toContain("easy directional bets");
-    expect(beginner).toContain("Robots take more physical jobs than they create.");
+    expect(beginner).toContain("By 2035, robots will eliminate more physical jobs than they create.");
     expect(deckSystem()).toContain("almost everyone would accept");
     expect(expert).toContain("Knowledge 4/4");
     expect(expert).toContain("opposing views");
     expect(expert).toContain("overestimating");
     expect(deckSystem()).toContain("exactly 7");
     expect(deckSystem()).toContain("At most ONE statement may mention AI");
+    expect(deckSystem()).toContain("judgeable horizon");
+    expect(swipeSystem()).toContain("judgeable horizon");
   });
 
   it("pins a domain without letting a previous swipe choose the next question", () => {

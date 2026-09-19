@@ -13,7 +13,12 @@ type AccountRow = { plan_id: string; limits: unknown; credits_micros: number | s
 export async function loadAccount(userId: string): Promise<AccountSummary> {
   const { data, error } = await database().rpc("socialtrading_account_get", { p_user_id: userId, p_plan_id: DEFAULT_PLAN.id, p_limits: limitsSnapshot(DEFAULT_PLAN.limits), p_credits: DEFAULT_PLAN.credits.startingMicros });
   const row = (Array.isArray(data) ? data[0] : data) as AccountRow | undefined;
-  if (error || !row) throw new HubError(503, "Your plan could not be loaded. Please retry.");
+  if (error || !row) {
+    console.error("[account] load", error?.message ?? "empty row", error?.code);
+    throw new HubError(503, /invalid api key|jwt/i.test(error?.message ?? "")
+      ? "Your private workspace is not connected yet. Please try again after setup."
+      : "Your plan could not be loaded. Please retry.");
+  }
   const plan = planById(row.plan_id);
   let limits = limitsFromSnapshot(row.limits, plan.limits);
   if (!sameLimits(limits, plan.limits)) {
