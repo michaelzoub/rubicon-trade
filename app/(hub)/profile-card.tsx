@@ -42,17 +42,19 @@ export function learnedThemes(inferred: LearnedInterest[] = [], explicit: ThemeI
 /** The card that builds itself while someone answers the onboarding questions.
  * In `compact` it is also what the agent presence pill reveals on hover, so the
  * rail’s content is still one gesture away without standing on every page. */
-export function ProfileCard({ profile, name, agentName, avatarSeed, inferred = [], compact = false }: {
+export function ProfileCard({ profile, name, agentName, avatarSeed, inferred = [], compact = false, identity: identityOverride }: {
   profile: InvestingProfile; name?: string; agentName?: string; avatarSeed?: string; inferred?: LearnedInterest[];
   /** Hover-card mode: denser, and it names what the agent has picked up on its own. */
   compact?: boolean;
+  /** Replaces the theme line, so onboarding can name what was just chosen. */
+  identity?: string;
 }) {
   const root = useRef<HTMLElement>(null);
   const final = profile.step === 6;
   const themes = THEMES.filter(t => profile.themes.includes(t.id));
   const learned = learnedThemes(inferred, profile.themes);
   const palette = badgePalette(profile.themes, avatarTraits(profile.avatarSeed ?? avatarSeed ?? profile.userId).color, learned);
-  const identity = themes.length ? themes.map(t => t.name).join(" × ") : "Your agent is learning you";
+  const identity = identityOverride ?? (themes.length ? themes.map(t => t.name).join(" × ") : "Your agent is learning you");
   const learnedAssets = inferred.filter(i => !isThemeId(i.id) && i.weight > .25 && i.confidence >= .4).sort((a, b) => b.weight * b.confidence - a.weight * a.confidence).slice(0, 4);
   const status = compact ? (learned.length || learnedAssets.length ? `Learning · ${[...learned.map(t => THEMES.find(x => x.id === t)!.name), ...learnedAssets.map(a => a.id)].slice(0, 3).join(", ")}` : "Learning from how you explore")
     : final ? "Ready to explore your world" : profile.permissionConfigured ? "Your rules are in place" : profile.interests.length ? `${profile.interests.length} interests bringing it into focus` : themes.length ? `${themes.length} themes shaping your agent` : profile.thesis.trim() ? "Your point of view is taking shape" : "Start with what you believe";

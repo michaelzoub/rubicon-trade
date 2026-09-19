@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { newOnboarding, onboardingPreview } from "@/lib/socialtrading/onboarding";
 import type { InvestingProfile } from "@/lib/socialtrading/profile";
 import type { LearnedInterest } from "@/lib/socialtrading/types";
 import { gsap, useGSAP, prefersReducedMotion, rubiconMotion } from "../_components/motion";
@@ -21,6 +22,8 @@ export function OnboardingAgentPeek({ profile, name, agentName, inferred = [] }:
   const closing = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [open, setOpen] = useState(false);
   const id = useId();
+  const preview = onboardingPreview(profile.investorAnswers.onboarding ?? newOnboarding());
+  const live = { ...profile, thesis: preview.thesis, themes: preview.themes };
   const label = agentName ?? (name ? `${name}’s agent` : "Your agent");
 
   function hideX() {
@@ -106,7 +109,7 @@ export function OnboardingAgentPeek({ profile, name, agentName, inferred = [] }:
       if (event.key === "Enter" || event.key === " ") { event.preventDefault(); change(!open); }
     }}>
     <div ref={slide} className="onb-agent-slide" id={id} role="dialog" aria-label={label} tabIndex={0} aria-expanded={open}>
-      <ProfileCard profile={profile} name={name} agentName={agentName} inferred={inferred} compact />
+      <ProfileCard profile={live} name={name} agentName={agentName} inferred={inferred} identity={preview.portrait} compact />
     </div>
   </div>;
 }

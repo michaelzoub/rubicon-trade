@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CATEGORIES, DECK_SIZE, DISLIKES, KEYWORDS, basePrediction, deckProgress, ensureHorizon, newOnboarding, nextPrediction, onboardingPortrait, onboardingThesis, predictions, readOnboarding, resolveScene, sceneOrder, splitPrediction } from "./onboarding";
+import { CATEGORIES, DECK_SIZE, DISLIKES, KEYWORDS, basePrediction, deckProgress, ensureHorizon, newOnboarding, nextPrediction, onboardingPortrait, onboardingPreview, onboardingThesis, predictions, readOnboarding, resolveScene, sceneOrder, splitPrediction } from "./onboarding";
 import { newProfile, readProfile } from "./profile";
 describe("decision-tree onboarding", () => {
   it("covers seven distinct domains at all four depths", () => {
@@ -32,6 +32,24 @@ describe("decision-tree onboarding", () => {
     ];
     a.strongest = ["y", "n"];
     expect(onboardingPortrait(a)).toBe("Strong convictions on Robots, skeptical of Power.");
+  });
+  it("feeds the side card from answers as they are taken", () => {
+    const empty = onboardingPreview(newOnboarding());
+    expect(empty.thesis).toBe("");
+    expect(empty.themes).toEqual([]);
+    expect(empty.portrait).toBe("Still exploring the future.");
+    const a = newOnboarding();
+    a.confidence = 3;
+    a.responses = [
+      { id: "y", category: "Technology", text: "By 2035, robots will eliminate more physical jobs than they create.", direction: "yes" },
+      { id: "n", category: "Energy", text: "By 2030, electricity becomes harder to get than oil.", direction: "no" },
+    ];
+    const live = onboardingPreview(a);
+    expect(live.portrait).toBe("Strong convictions on Robots, skeptical of Power.");
+    expect(live.thesis).toContain("I expect:");
+    expect(live.thesis).toContain("robots");
+    expect(live.thesis).toContain("I do not expect:");
+    expect(live.themes).toEqual(["tech"]);
   });
   it("roundtrips the complete profile and all strong dislikes through server validation", () => {
     const p = newProfile("alice");

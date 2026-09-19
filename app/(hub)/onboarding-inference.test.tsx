@@ -66,6 +66,11 @@ it("asks the model for the seven-domain pack once and carries a swipe into the t
     expect(title()).toBe(DECK_TITLE);
     expect(statement()).toBe(`Generated ${category}`);
     await click("Likely →");
+    if (category === "Technology") {
+      expect(container.textContent).toContain("I expect:");
+      expect(container.textContent).toContain("Generated Technology");
+      expect(container.textContent).toContain("Robots");
+    }
   }
   expect(title()).toBe("Your outlook. Your rules.");
   expect(fetchDeck).toHaveBeenCalledTimes(1);

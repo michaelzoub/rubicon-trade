@@ -1,3 +1,5 @@
+import { suggestedThemes, type ThemeId } from "./themes";
+
 export const CONVICTION_TITLE = "How clear are your views about the future?";
 export const CONVICTION_LEAD = "Think technology, energy, society and money. Move the dial to what sounds like you.";
 export const CONFIDENCE = ["I’m still exploring", "I have a few ideas", "I know what I believe", "I have strong convictions"];
@@ -101,6 +103,19 @@ export function resolveScene(a: OnboardingAnswers) {
 export function onboardingThesis(a: OnboardingAnswers) {
   const selected = a.responses.filter(r => a.strongest.includes(r.id));
   return [...selected.map(r => `${r.direction === "yes" ? "I expect" : "I do not expect"}: ${r.text}${r.confidence ? ` Confidence in this view: ${r.confidence}%.` : ""}${r.years ? ` Horizon: ${r.years === 11 ? "more than ten" : r.years} years.` : ""}`), a.ownBelief.trim()].filter(Boolean).join("\n") || "I’m exploring possible futures and have not settled on a strong conviction yet.";
+}
+
+/** What the side card should show *now*, from answers already taken. Thesis
+ * stays blank until a view is actually decided, so the card does not invent a
+ * belief the person has not chosen. Before strongest views are picked, the
+ * first decided swipes stand in so the card moves with the deck. */
+export function onboardingPreview(a: OnboardingAnswers): { thesis: string; themes: ThemeId[]; portrait: string } {
+  const decided = a.responses.filter(r => r.direction !== "unsure");
+  const selected = a.strongest.length ? decided.filter(r => a.strongest.includes(r.id)) : decided.slice(0, 2);
+  const thesis = [...selected.map(r => `${r.direction === "yes" ? "I expect" : "I do not expect"}: ${r.text}${r.confidence ? ` Confidence in this view: ${r.confidence}%.` : ""}${r.years ? ` Horizon: ${r.years === 11 ? "more than ten" : r.years} years.` : ""}`), a.ownBelief.trim()].filter(Boolean).join("\n");
+  const yes = a.responses.filter(r => r.direction === "yes");
+  const themes = suggestedThemes([...yes.map(r => `${r.category} ${r.text}`), a.ownBelief].join(" "));
+  return { thesis, themes, portrait: onboardingPortrait(a) };
 }
 
 const STANCE = ["Still exploring", "A few ideas", "Clear views", "Strong convictions"] as const;
